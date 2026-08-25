@@ -1,0 +1,61 @@
+{
+  "name": "anachak-pos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "អាណាចក្រPOS (Anachak POS) - Enterprise Multi-Branch ERP & POS System",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
+    "start": "next start",
+    "lint": "next lint",
+    "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && electron electron/main.js\"",
+    "electron:start": "electron electron/main.js",
+    "build:exe": "electron-builder --config electron-builder.json --win",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "cap:sync": "cap sync android",
+    "cap:open": "cap open android",
+    "build:apk": "cd android && .\\gradlew.bat assembleDebug"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@prisma/client": "^5.19.1",
+    "@supabase/supabase-js": "^2.45.4",
+    "bakong-khqr": "^1.0.20",
+    "bcryptjs": "^2.4.3",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.439.0",
+    "next": "14.2.33",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7",
+    "tailwind-merge": "^2.5.2",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.16.5",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "prisma": "^5.19.1",
+    "tailwindcss": "^3.4.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  }
+}

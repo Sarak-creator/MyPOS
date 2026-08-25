@@ -1,0 +1,62 @@
+name: Anachak POS Enterprise CI/CD
+
+on:
+  push:
+    branches: ["main", "release/*"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: anachak_test
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: anachak_test
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Validate Prisma Schema
+        run: npx prisma validate
+
+      - name: Build Production Next.js Bundle
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://anachak_test:testpassword@localhost:5432/anachak_test
+          JWT_SECRET: test_secret_key_ci_cd
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Cloud / VPS Server via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /opt/anachak-pos
+            git pull origin main
+            docker compose -f docker/docker-compose.yml up -d --build
+            docker compose -f docker/docker-compose.yml exec -T app npx prisma migrate deploy

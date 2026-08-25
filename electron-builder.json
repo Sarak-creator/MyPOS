@@ -1,0 +1,47 @@
+{
+  "appId": "com.anachakpos.app",
+  "productName": "AnachakPOS",
+  "copyright": "Copyright © 2026 Anachak POS Enterprise",
+  "npmRebuild": false,
+  "nodeGypRebuild": false,
+  "buildDependenciesFromSource": false,
+  "directories": {
+    "output": "C:/Users/user/AppData/Local/Temp/anachakpos-dist"
+  },
+  "files": [
+    "electron/**/*",
+    {
+      "from": "C:/Users/user/AppData/Local/Temp/mypos-next-build",
+      "to": ".next",
+      "filter": ["**/*"]
+    },
+    "public/**/*",
+    "node_modules/**/*",
+    "package.json",
+    ".env",
+    "fix-fat32.js"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "អាណាចក្រPOS"
+  },
+  "portable": {
+    "artifactName": "AnachakPOS-Portable.exe"
+  }
+}
