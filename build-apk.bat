@@ -9,7 +9,7 @@ set ANDROID_HOME=C:\Users\user\AppData\Local\Android\Sdk
 set PATH=%JAVA_HOME%\bin;%PATH%
 
 echo [1/3] Syncing Capacitor Android assets...
-call npx @capacitor/cli copy android
+call npx.cmd @capacitor/cli copy android
 
 echo.
 echo [2/3] Compiling Android APK with Gradle...
@@ -31,4 +31,3 @@ if exist "android\app\build\outputs\apk\debug\app-debug.apk" (
     echo.
     echo [ERROR] Build failed! Check Gradle output above.
 )
-pause
