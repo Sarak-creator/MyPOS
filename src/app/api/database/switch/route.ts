@@ -12,6 +12,17 @@ export const dynamic = "force-dynamic";
 
 const execAsync = promisify(exec);
 
+// Indirection wrapper so Next.js RSC webpack bundler cannot flag it as
+// "Assigning to rvalue" — we bypass static analysis via globalThis.
+function setEnvVar(key: string, value: string) {
+  try {
+    const env = (globalThis as any).process?.env;
+    if (env) env[key] = value;
+  } catch {
+    // no-op in edge/non-Node environments
+  }
+}
+
 // Helper function to read .env file entries
 async function getEnvEntries(): Promise<Record<string, string>> {
   const envPath = path.join(process.cwd(), ".env");
@@ -201,11 +212,11 @@ export async function POST(request: Request) {
     await updateEnvFile(envUpdates);
     console.log("📝 .env file updated with new credentials.");
 
-    process.env["DATABASE_URL"] = cleanDbUrl;
-    process.env["DIRECT_URL"] = cleanDirectUrl;
-    if (supabaseUrl) (process.env as any)["NEXT_PUBLIC_SUPABASE_URL"] = supabaseUrl.trim();
-    if (supabaseAnonKey) (process.env as any)["NEXT_PUBLIC_SUPABASE_ANON_KEY"] = supabaseAnonKey.trim();
-    if (supabaseServiceKey) process.env["SUPABASE_SERVICE_ROLE_KEY"] = supabaseServiceKey.trim();
+    setEnvVar("DATABASE_URL", cleanDbUrl);
+    setEnvVar("DIRECT_URL", cleanDirectUrl);
+    if (supabaseUrl) setEnvVar("NEXT_PUBLIC_SUPABASE_URL", supabaseUrl.trim());
+    if (supabaseAnonKey) setEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY", supabaseAnonKey.trim());
+    if (supabaseServiceKey) setEnvVar("SUPABASE_SERVICE_ROLE_KEY", supabaseServiceKey.trim());
 
     // Hot-reload active PrismaClient singleton & invalidate all in-memory caches
     await resetPrismaClient(cleanDbUrl);
