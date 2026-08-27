@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { AccountType } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/accounting - Fetch Chart of Accounts, P&L, and Expenses scoped to tenant
 export async function GET(request: Request) {
   try {

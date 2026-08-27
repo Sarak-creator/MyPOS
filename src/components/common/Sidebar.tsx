@@ -119,7 +119,7 @@ export default function Sidebar({
       permission: "inventory:view",
     },
     {
-      label: t.accounting,
+      label: t.accounting || (language === "km" ? "គណនេយ្យ & ហិរញ្ញវត្ថុ" : "Accounting & Finance"),
       href: "/accounting",
       icon: BookOpenCheck,
       badge: null,
@@ -158,6 +158,14 @@ export default function Sidebar({
   // Filter items based on user's granted permissions
   const visibleNavItems = navItems.filter((item) => {
     if (!permissions || permissions.length === 0) return true;
+    if (
+      role === "SUPER_ADMIN" ||
+      role === "ADMIN" ||
+      role === "BRANCH_MANAGER" ||
+      role === "ACCOUNTANT"
+    ) {
+      return true;
+    }
     return checkPermission(permissions, item.permission);
   });
 
