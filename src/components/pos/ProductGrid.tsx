@@ -10,6 +10,7 @@ import {
   Layers,
   Sparkles,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -88,11 +89,11 @@ export default function ProductGrid() {
   }, []);
 
   const categories = [
-    { slug: "ALL", labelKh: "ទាំងអស់", labelEn: "All Items", icon: Layers },
-    { slug: "smartphones", labelKh: "ទូរស័ព្ទដៃ", labelEn: "Smartphones", icon: Smartphone },
-    { slug: "spare-parts", labelKh: "គ្រឿងបន្លាស់", labelEn: "Spare Parts", icon: Cpu },
-    { slug: "repair-services", labelKh: "សេវាកម្មជាង", labelEn: "Services", icon: Wrench },
-    { slug: "accessories", labelKh: "គ្រឿងបន្ថែម", labelEn: "Accessories", icon: Sparkles },
+    { slug: "ALL", label: t.allCategories, icon: Layers },
+    { slug: "smartphones", label: t.catSmartphones, icon: Smartphone },
+    { slug: "spare-parts", label: t.catSpareParts, icon: Cpu },
+    { slug: "repair-services", label: t.catRepairServices, icon: Wrench },
+    { slug: "accessories", label: t.catAccessories, icon: Sparkles },
   ];
 
   const filteredProducts = products.filter((p) => {
@@ -124,27 +125,25 @@ export default function ProductGrid() {
   const handleSelectProduct = (p: ProductItem) => {
     // Check if product is out of stock (for non-service items)
     if (p.type !== "SERVICE_LABOR" && p.stockQty <= 0) {
-      showWarning(`⚠️ ទំនិញ "${p.nameKh}" អស់ពីស្តុកហើយ (ស្តុក 0) មិនអាចលក់បានទេ!`);
+      showWarning(`⚠️ ${t.outOfStock}: "${language === "km" ? p.nameKh : p.nameEn}" (0)!`);
       return;
     }
 
     // Check if current cart quantity already reaches available stock
     const cartItem = items.find((i) => i.id === p.id);
     if (p.type !== "SERVICE_LABOR" && cartItem && cartItem.quantity >= p.stockQty) {
-      showWarning(`⚠️ ទំនិញ "${p.nameKh}" មិនអាចបន្ថែមលើសពីស្តុកដែលមាន (${p.stockQty}) ទេ!`);
+      showWarning(`⚠️ "${language === "km" ? p.nameKh : p.nameEn}" (${p.stockQty}) ${t.maxStockReached}!`);
       return;
     }
 
     const selectedImei =
       p.type === "SERIAL_IMEI_ITEM" && p.imeiList && p.imeiList.length > 0
         ? p.imeiList[0]
-        : p.type === "SERIAL_IMEI_ITEM"
-        ? `358${Math.floor(100000000000 + Math.random() * 900000000000)}`
         : undefined;
 
     addItem({
       id: p.id,
-      productId: p.productId,
+      productId: p.id,
       nameKh: p.nameKh,
       nameEn: p.nameEn,
       sku: p.sku,
@@ -159,34 +158,37 @@ export default function ProductGrid() {
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {/* Out of Stock Floating Warning Toast */}
+      {/* Stock Warning Toast Alert */}
       {stockWarning && (
-        <div className="animate-in fade-in slide-in-from-top-2 duration-200 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 rounded-xl bg-amber-500 text-white px-3.5 py-2 text-xs font-bold shadow-lg animate-in fade-in slide-in-from-top-2">
+          <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{stockWarning}</span>
-          <button
-            type="button"
-            onClick={() => setStockWarning(null)}
-            className="rounded bg-rose-700/50 p-1 hover:bg-rose-800"
-          >
-            ✕
-          </button>
         </div>
       )}
 
-      {/* Search & Barcode Scanner Input */}
+      {/* Search & Barcode Bar */}
       <form onSubmit={handleBarcodeSubmit} className="relative">
-        <div className="relative flex items-center">
-          <ScanBarcode className="absolute left-3.5 h-5 w-5 text-teal-700" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t.barcodeOrSearch}
-            className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-20 text-sm font-medium text-slate-800 placeholder-slate-400 shadow-xs focus:border-teal-600 focus:outline-hidden focus:ring-2 focus:ring-teal-600/20"
-          />
-          <span className="absolute right-3 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 border border-slate-200">
-            F2
+        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={t.barcodeOrSearch}
+          className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-24 text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 shadow-2xs"
+        />
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-xs text-slate-400 hover:text-slate-600 px-1"
+            >
+              ✕
+            </button>
+          )}
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-500">
+            <ScanBarcode className="h-3 w-3" /> F2
           </span>
         </div>
       </form>
@@ -207,7 +209,7 @@ export default function ProductGrid() {
               }`}
             >
               <Icon className={`h-4 w-4 ${isSelected ? "text-white" : "text-slate-500"}`} />
-              <span>{language === "km" ? cat.labelKh : cat.labelEn}</span>
+              <span>{cat.label}</span>
             </button>
           );
         })}
@@ -218,11 +220,11 @@ export default function ProductGrid() {
         {loading ? (
           <div className="flex h-64 items-center justify-center gap-2 text-slate-400">
             <Loader2 className="h-6 w-6 animate-spin text-teal-700" />
-            <span className="text-xs font-semibold">កំពុងទាញទំនិញ...</span>
+            <span className="text-xs font-semibold">{t.fetchingProducts}</span>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="flex h-64 flex-col items-center justify-center text-slate-400">
-            <p className="text-xs font-bold text-slate-600">រកមិនឃើញទំនិញទេ</p>
+            <p className="text-xs font-bold text-slate-600">{t.noProductsFound}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
@@ -265,10 +267,10 @@ export default function ProductGrid() {
                         }`}
                       >
                         {p.type === "SERVICE_LABOR"
-                          ? "សេវា"
+                          ? t.service
                           : isOutOfStock
-                          ? "អស់ស្តុក (0)"
-                          : `ស្តុក: ${p.stockQty}`}
+                          ? `${t.outOfStock} (0)`
+                          : `${t.stock}: ${p.stockQty}`}
                       </span>
                     </div>
 
@@ -284,7 +286,7 @@ export default function ProductGrid() {
 
                     {cartItem && cartItem.quantity > 0 && (
                       <span className="mt-1 inline-block rounded bg-teal-100 px-1.5 py-0.2 text-[9px] font-extrabold text-teal-800">
-                        ក្នុងកន្ត្រក: {cartItem.quantity}
+                        {t.inCart}: {cartItem.quantity}
                       </span>
                     )}
                   </div>

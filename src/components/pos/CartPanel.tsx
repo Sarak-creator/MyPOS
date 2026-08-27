@@ -188,9 +188,7 @@ export default function CartPanel({ onOpenPayment }: CartPanelProps) {
             <ShoppingBag className="h-12 w-12 text-slate-300 stroke-1 mb-2" />
             <p className="text-sm font-semibold text-slate-600">{t.emptyCart}</p>
             <p className="text-xs text-slate-400 mt-1 max-w-[200px]">
-              {language === "km"
-                ? "សូមជ្រើសរើសទំនិញពីតារាងខាងឆ្វេង ឬស្កេនបាកូដ (F2)"
-                : "Select items from the catalog or scan barcodes (F2)"}
+              {t.selectItemsHint}
             </p>
           </div>
         ) : (
@@ -208,10 +206,10 @@ export default function CartPanel({ onOpenPayment }: CartPanelProps) {
                       {language === "km" ? item.nameKh : item.nameEn}
                     </p>
                     <p className="text-[10px] text-slate-400 font-mono">
-                      SKU: {item.sku} • ${Number(item.priceUsd || 0).toFixed(2)}/ឯកតា
+                      SKU: {item.sku} • ${Number(item.priceUsd || 0).toFixed(2)}/{t.perUnit}
                       {item.type !== "SERVICE_LABOR" && item.stockQty !== undefined && (
                         <span className={`ml-1 font-sans ${isMaxStockReached ? "text-rose-600 font-bold" : "text-slate-500"}`}>
-                          • (ស្តុក: {item.stockQty})
+                          • ({t.stock}: {item.stockQty})
                         </span>
                       )}
                     </p>
@@ -236,7 +234,7 @@ export default function CartPanel({ onOpenPayment }: CartPanelProps) {
                     <button
                       onClick={() => updateQuantity(item.id, 1)}
                       disabled={isMaxStockReached}
-                      title={isMaxStockReached ? "បានដល់ចំនួនអតិបរមាក្នុងស្តុកហើយ" : "បន្ថែមចំនួន"}
+                      title={isMaxStockReached ? t.maxStockReached : t.add}
                       className={`flex h-6 w-6 items-center justify-center rounded-md border text-xs font-bold transition ${
                         isMaxStockReached
                           ? "border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed"

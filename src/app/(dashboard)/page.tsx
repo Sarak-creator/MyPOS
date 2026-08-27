@@ -59,33 +59,33 @@ export default function DashboardPage() {
 
   const stats = [
     {
-      title: language === "km" ? "ចំណូលលក់ថ្ងៃនេះ" : "Today's Gross Sales",
+      title: t.todaySales,
       valueUsd: statsData.todaySalesUsd,
-      change: `ថ្ងៃនេះ (${statsData.totalTransactions} ប្រតិបត្តិការ)`,
+      change: `${statsData.totalTransactions} ${t.todayTransactions}`,
       isPositive: true,
       icon: DollarSign,
       color: "from-teal-600 to-emerald-700",
     },
     {
-      title: language === "km" ? "ទំនិញក្នុងស្តុកសរុប" : "Total Products",
+      title: t.totalProducts,
       value: statsData.totalProductsCount.toString(),
-      change: `${statsData.lowStockCount} ជិតអស់ស្តុក`,
+      change: `${statsData.lowStockCount} ${t.lowStockCountText}`,
       isPositive: statsData.lowStockCount === 0,
       icon: Package,
       color: "from-blue-600 to-indigo-700",
     },
     {
-      title: language === "km" ? "សេវាជួសជុលសកម្ម" : "Active Repair Tickets",
+      title: t.activeRepairs,
       value: statsData.activeRepairsCount.toString(),
-      change: "កំពុងដំណើរការ",
+      change: t.inProgress,
       isPositive: true,
       icon: Wrench,
       color: "from-amber-500 to-orange-600",
     },
     {
-      title: language === "km" ? "បំណុលអតិថិជនសរុប (AR)" : "Total Accounts Receivable",
+      title: t.totalArDebt,
       valueUsd: statsData.totalDebtUsd,
-      change: "បំណុលមិនទាន់ទូទាត់",
+      change: t.unpaidDebt,
       isPositive: false,
       icon: CreditCard,
       color: "from-rose-500 to-red-700",
@@ -102,101 +102,90 @@ export default function DashboardPage() {
             <span>{currentBranchName}</span>
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight">
-            {language === "km" ? "ផ្ទាំងគ្រប់គ្រងប្រតិបត្តិការទូទៅ" : "Central Enterprise Dashboard"}
+            {t.centralDashboard}
           </h2>
           <p className="text-xs text-slate-300 mt-1 max-w-xl">
-            ទិដ្ឋភាពរួមនៃការលក់ សេវាកម្មជួសជុល ស្ថានភាពឃ្លាំងស្តុក និងទិន្នន័យផ្ទាល់ពី Supabase
+            {t.appSubtitle}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={fetchDashboardStats}
-            className="flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/20 transition"
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/20 transition shadow-xs"
           >
-            <RefreshCw className={`h-3.5 w-3.5 text-teal-400 ${loading ? "animate-spin" : ""}`} />
-            ធ្វើបច្ចុប្បន្នភាព
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <span>{t.loading.replace("...", "")}</span>
           </button>
-          <div className="flex items-center gap-3 bg-white/10 p-3 rounded-xl backdrop-blur-xs border border-white/10">
-            <div className="h-10 w-10 rounded-lg bg-teal-500/20 text-teal-300 flex items-center justify-center">
-              <QrCode className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-[10px] text-slate-300 font-semibold">Supabase & ABA KHQR</p>
-              <p className="text-xs font-bold text-teal-300">Connected</p>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* 4 Primary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((st, idx) => {
-          const Icon = st.icon;
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat, i) => {
+          const Icon = stat.icon;
           return (
             <div
-              key={idx}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs hover:shadow-md transition space-y-3"
+              key={i}
+              className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition hover:shadow-md"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500">{st.title}</span>
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${st.color} text-white shadow-xs`}
-                >
+                <p className="text-xs font-bold text-slate-500">{stat.title}</p>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${stat.color} text-white shadow-xs`}>
                   <Icon className="h-5 w-5" />
                 </div>
               </div>
 
-              <div>
-                <p className="text-2xl font-black font-mono text-slate-900">
-                  {st.valueUsd !== undefined ? formatUSD(st.valueUsd) : st.value}
-                </p>
-                {st.valueUsd !== undefined && (
-                  <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-                    {formatKHR(st.valueUsd, exchangeRateKhr)}
-                  </p>
+              <div className="mt-3">
+                {stat.valueUsd !== undefined ? (
+                  <div>
+                    <h3 className="text-xl font-black font-mono text-slate-900">
+                      {formatUSD(stat.valueUsd)}
+                    </h3>
+                    <p className="text-xs text-slate-400 font-sans mt-0.5">
+                      {formatKHR(stat.valueUsd, exchangeRateKhr)}
+                    </p>
+                  </div>
+                ) : (
+                  <h3 className="text-2xl font-black font-mono text-slate-900">
+                    {stat.value}
+                  </h3>
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs">
-                <span
-                  className={`flex items-center font-bold ${
-                    st.isPositive ? "text-emerald-600" : "text-amber-600"
-                  }`}
-                >
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                  {st.change}
-                </span>
+              <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                <span>{stat.change}</span>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Main Content Grid: Recent Transactions & Low Stock Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent POS Sales Invoices */}
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Recent Transactions Table */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <ShoppingCart className="h-4 w-4 text-teal-700" />
-              {language === "km" ? "ប្រតិបត្តិការលក់ចុងក្រោយ" : "Recent Sales Transactions"}
+              {t.recentSales}
             </h3>
           </div>
 
           {recentOrders.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs font-medium">
-              មិនទាន់មានវិក្កយបត្រលក់នៅឡើយទេ
+              {t.noProductsFound}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-100 bg-slate-50/70 text-slate-400 uppercase text-[10px] font-bold">
                   <tr>
-                    <th className="py-2.5 px-3">លេខវិក្កយបត្រ</th>
-                    <th className="py-2.5 px-3">អតិថិជន</th>
-                    <th className="py-2.5 px-3 text-right">ទឹកប្រាក់ ($)</th>
-                    <th className="py-2.5 px-3 text-center">ស្ថានភាព</th>
+                    <th className="py-2.5 px-3">{t.receiptNumber}</th>
+                    <th className="py-2.5 px-3">{t.customer}</th>
+                    <th className="py-2.5 px-3 text-right">{t.grandTotal} ($)</th>
+                    <th className="py-2.5 px-3 text-center">{t.status}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -225,10 +214,10 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
-              {language === "km" ? "ទំនិញជិតអស់ពីស្តុក" : "Low Stock Alerts"}
+              {t.lowStockAlerts}
             </h3>
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-              {statsData.lowStockCount} មុខ
+              {statsData.lowStockCount} {t.perUnit}
             </span>
           </div>
 

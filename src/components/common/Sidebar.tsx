@@ -91,14 +91,14 @@ export default function Sidebar({
       permission: "pos:access",
     },
     {
-      label: (t as any).sales || "ការលក់",
+      label: t.sales,
       href: "/sales",
       icon: TrendingUp,
       badge: null,
       permission: "sales:view",
     },
     {
-      label: (t as any).purchases || "ការទិញចូល",
+      label: t.purchases,
       href: "/purchases",
       icon: ShoppingBag,
       badge: null,
@@ -108,7 +108,7 @@ export default function Sidebar({
       label: t.repairs,
       href: "/repairs",
       icon: Wrench,
-      badge: "3 ថ្មី",
+      badge: null,
       permission: "repairs:view",
     },
     {
@@ -119,28 +119,28 @@ export default function Sidebar({
       permission: "inventory:view",
     },
     {
-      label: t.accounting || (language === "km" ? "គណនេយ្យ & ហិរញ្ញវត្ថុ" : "Accounting & Finance"),
+      label: t.accounting,
       href: "/accounting",
       icon: BookOpenCheck,
       badge: null,
       permission: "accounting:view",
     },
     {
-      label: t.crm || "អតិថិជន & បំណុល",
+      label: t.crm,
       href: "/crm",
       icon: Users2,
       badge: null,
       permission: "customers:view",
     },
     {
-      label: t.hrm || "ធនធានមនុស្ស (HRM)",
+      label: t.hrm,
       href: "/hrm",
       icon: Contact2,
       badge: null,
       permission: "hrm:view",
     },
     {
-      label: (t as any).auditLogs || "កំណត់ត្រាសុវត្ថិភាព",
+      label: t.auditLogs,
       href: "/audit-logs",
       icon: ShieldAlert,
       badge: null,
@@ -185,7 +185,7 @@ export default function Sidebar({
               </span>
             </h1>
             <p className="text-[11px] text-slate-400 truncate max-w-[130px]">
-              {language === "km" ? "ប្រព័ន្ធ ERP & POS" : "Enterprise ERP POS"}
+              {t.appSubtitle}
             </p>
           </div>
         </div>
@@ -206,7 +206,7 @@ export default function Sidebar({
         <div className="px-6 py-2 bg-slate-950/40 border-b border-slate-800/50 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-400 truncate max-w-[140px]">
             <Shield className="h-3.5 w-3.5 text-teal-400 shrink-0" />
-            <span className="text-slate-300 font-semibold truncate">{fullName || "គណនី"}</span>
+            <span className="text-slate-300 font-semibold truncate">{fullName || "User"}</span>
           </div>
           <span className="rounded-md bg-teal-950 text-teal-300 border border-teal-800/60 px-2 py-0.5 text-[9px] font-mono font-bold shrink-0">
             {role}
@@ -262,10 +262,10 @@ export default function Sidebar({
         <div className="rounded-xl bg-gradient-to-r from-slate-800/90 to-slate-800/40 p-2.5 border border-slate-700/50">
           <div className="flex items-center gap-2 text-teal-400 text-xs font-semibold">
             <Sparkles className="h-4 w-4" />
-            <span>Bakong KHQR Active</span>
+            <span>Bakong KHQR</span>
           </div>
           <p className="mt-0.5 text-[10px] text-slate-400 leading-snug">
-            {language === "km" ? "គាំទ្រការទូទាត់ KHQR ស្វ័យប្រវត្តិ" : "Auto Bakong EMVCo Enabled"}
+            {t.autoBakongEnabled}
           </p>
         </div>
 
@@ -277,7 +277,7 @@ export default function Sidebar({
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-2 text-xs font-bold text-slate-400 hover:bg-red-950/40 hover:border-red-800/60 hover:text-red-400 transition cursor-pointer"
         >
           <LogOut className="h-4 w-4" />
-          <span>{language === "km" ? "ចាកចេញ (Sign Out)" : "Sign Out"}</span>
+          <span>{t.logout}</span>
         </button>
       </div>
     </div>

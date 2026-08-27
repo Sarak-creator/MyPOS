@@ -356,10 +356,10 @@ export default function LoginPage() {
               <ShieldCheck className="h-7 w-7" />
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white">
-              {language === "km" ? "អាណាចក្រPOS" : "Anachak POS"}
+              {t.appName}
             </h1>
             <p className="text-xs text-slate-400 max-w-xs mx-auto">
-              ប្រព័ន្ធគ្រប់គ្រងការលក់ និងសេវាកម្មជួសជុលកម្រិតសហគ្រាស (Enterprise Multi-Tenant ERP)
+              {t.appSubtitle}
             </p>
           </div>
 
@@ -375,9 +375,9 @@ export default function LoginPage() {
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-bold text-white">ការតភ្ជាប់ Database</p>
+                  <p className="text-xs font-bold text-white">Database</p>
                   <span className="rounded-md bg-teal-500/20 px-1.5 py-0.5 text-[9px] font-mono text-teal-300 font-bold border border-teal-500/30">
-                    {dbStatus?.connected ? "🟢 PostgreSQL Connected" : "🟡 Not Connected"}
+                    {dbStatus?.connected ? "🟢 Connected" : "🟡 Offline"}
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 truncate max-w-[200px] sm:max-w-xs font-mono">
@@ -398,7 +398,7 @@ export default function LoginPage() {
               className="shrink-0 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:from-teal-500 hover:to-emerald-500 transition shadow-md shadow-teal-700/30 flex items-center gap-1.5 active:scale-95"
             >
               <Zap className="h-3.5 w-3.5" />
-              <span>ភ្ជាប់ DB</span>
+              <span>DB</span>
             </button>
           </div>
 
@@ -418,7 +418,7 @@ export default function LoginPage() {
               }`}
             >
               <User className="h-3.5 w-3.5" />
-              <span>{language === "km" ? "ចូលប្រព័ន្ធ (Sign In)" : "Sign In"}</span>
+              <span>{t.signIn}</span>
             </button>
 
             <button
@@ -435,7 +435,7 @@ export default function LoginPage() {
               }`}
             >
               <Store className="h-3.5 w-3.5" />
-              <span>{language === "km" ? "ចុះឈ្មោះបង្កើតហាង (Register Store)" : "Register Store"}</span>
+              <span>{t.registerStore}</span>
             </button>
           </div>
 
@@ -461,7 +461,7 @@ export default function LoginPage() {
                 {/* Store Address */}
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">
-                    {language === "km" ? "អាសយដ្ឋានហាង (Store Address)" : "Store Address"} *
+                    {t.storeAddress} *
                   </label>
                   <div className="relative flex items-center">
                     <AtSign className="absolute left-3.5 h-4 w-4 text-teal-400" />
@@ -475,14 +475,14 @@ export default function LoginPage() {
                     />
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1 pl-1">
-                    ហាងគំរូទូទៅ: <span className="font-mono text-slate-400">anajak@anajak.com</span>
+                    Default: <span className="font-mono text-slate-400">anajak@anajak.com</span>
                   </p>
                 </div>
 
                 {/* Username */}
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">
-                    {language === "km" ? "ឈ្មោះគណនី ឬ អ៊ីមែល" : "Username or Email"} *
+                    {t.usernameOrEmail} *
                   </label>
                   <div className="relative flex items-center">
                     <User className="absolute left-3.5 h-4 w-4 text-slate-400" />
@@ -500,7 +500,7 @@ export default function LoginPage() {
                 {/* Password */}
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">
-                    {language === "km" ? "ពាក្យសម្ងាត់" : "Password"} *
+                    {t.password} *
                   </label>
                   <div className="relative flex items-center">
                     <Lock className="absolute left-3.5 h-4 w-4 text-slate-400" />
@@ -531,7 +531,7 @@ export default function LoginPage() {
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <>
-                      <span>{language === "km" ? "ចូលប្រើប្រព័ន្ធ (Sign In)" : "Sign In to Store"}</span>
+                      <span>{t.signInToStore}</span>
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}

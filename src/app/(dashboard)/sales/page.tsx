@@ -202,12 +202,10 @@ export default function SalesPage() {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
             <TrendingUp className="h-7 w-7 text-teal-700" />
-            <span>{language === "km" ? "ការលក់ & ប្រវត្តិវិក្កយបត្រ" : "Sales & Invoices Management"}</span>
+            <span>{t.salesHistory}</span>
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            {language === "km"
-              ? "តាមដានរាល់ប្រតិបត្តិការលក់ វិក្កយបត្រ POS និងរបាយការណ៍ចំណូលទូទាត់ប្រាក់"
-              : "Track all point of sale transactions, customer invoices, payment breakdowns & refunds"}
+            {t.salesSubtitle}
           </p>
         </div>
 
@@ -225,7 +223,7 @@ export default function SalesPage() {
             className="flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-xs font-extrabold text-white shadow-md shadow-teal-900/20 hover:bg-teal-800 transition active:scale-98"
           >
             <ShoppingCart className="h-4 w-4" />
-            <span>{language === "km" ? "បើកផ្ទាំង POS (F8)" : "Open POS (F8)"}</span>
+            <span>{t.openPos}</span>
           </Link>
         </div>
       </div>
@@ -335,7 +333,7 @@ export default function SalesPage() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder={language === "km" ? "ស្វែងរកលេខវិក្កយបត្រ, អតិថិជន, បេឡាករ..." : "Search invoice #, customer, cashier..."}
+              placeholder={t.searchInvoicesPlaceholder}
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);

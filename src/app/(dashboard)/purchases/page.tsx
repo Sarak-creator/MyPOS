@@ -309,12 +309,10 @@ export default function PurchasesPage() {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
             <ShoppingBag className="h-7 w-7 text-teal-700" />
-            <span>{language === "km" ? "ការទិញចូល & គ្រប់គ្រងស្តុក" : "Purchases & Stock Replenishment"}</span>
+            <span>{t.purchases}</span>
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            {language === "km"
-              ? "គ្រប់គ្រងការបញ្ជាទិញចូលពីអ្នកផ្គត់ផ្គង់ បញ្ចូលស្តុកទំនិញ និងតាមដានបំណុលត្រូវសង"
-              : "Manage supplier purchase orders, restock inventory, and track accounts payable balances"}
+            {t.purchasesSubtitle}
           </p>
         </div>
 
@@ -332,7 +330,7 @@ export default function PurchasesPage() {
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-xs"
           >
             <Building2 className="h-4 w-4 text-slate-600" />
-            <span>+ អ្នកផ្គត់ផ្គង់ (Supplier)</span>
+            <span>+ {t.suppliers}</span>
           </button>
 
           <button
@@ -344,7 +342,7 @@ export default function PurchasesPage() {
             className="flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-xs font-extrabold text-white shadow-md shadow-teal-900/20 hover:bg-teal-800 transition active:scale-98"
           >
             <Plus className="h-4 w-4" />
-            <span>{language === "km" ? "បង្កើតបញ្ជាទិញ (New PO)" : "New Purchase Order"}</span>
+            <span>{t.newPurchaseOrder}</span>
           </button>
         </div>
       </div>
