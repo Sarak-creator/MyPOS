@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">អាណាចក្រPOS</string>
+    <string name="title_activity_main">អាណាចក្រPOS</string>
+    <string name="package_name">com.anachak.pos</string>
+    <string name="custom_url_scheme">com.anachak.pos</string>
+</resources>

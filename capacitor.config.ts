@@ -1,9 +1,11 @@
-const config = {
+import type { CapacitorConfig } from "@capacitor/cli";
+
+const config: CapacitorConfig = {
   appId: "com.anachak.pos",
   appName: "អាណាចក្រPOS",
   webDir: "public",
   server: {
-    url: "http://localhost:3000",
+    url: "https://anajakpos.vercel.app",
     cleartext: true,
   },
   android: {
