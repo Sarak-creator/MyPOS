@@ -8,6 +8,8 @@ import bcrypt from "bcryptjs";
 import { prisma, resetPrismaClient, normalizeDatabaseUrl } from "@/lib/prisma";
 import { CacheManager } from "@/lib/cache";
 
+export const dynamic = "force-dynamic";
+
 const execAsync = promisify(exec);
 
 // Helper function to read .env file entries

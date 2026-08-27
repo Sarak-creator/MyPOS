@@ -4,6 +4,8 @@ import { PaymentMethod, OrderStatus } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
 import { CacheManager } from "@/lib/cache";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/sales - Search, filter, and fetch sales invoices scoped to tenant and branch
 export async function GET(request: Request) {
   try {

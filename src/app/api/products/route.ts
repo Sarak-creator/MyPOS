@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 import { CacheManager } from "@/lib/cache";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/products - List all products scoped to the authenticated tenant and branch
 export async function GET(request: Request) {
   try {
