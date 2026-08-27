@@ -201,11 +201,11 @@ export async function POST(request: Request) {
     await updateEnvFile(envUpdates);
     console.log("📝 .env file updated with new credentials.");
 
-    process.env.DATABASE_URL = cleanDbUrl;
-    process.env.DIRECT_URL = cleanDirectUrl;
-    if (supabaseUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = supabaseUrl.trim();
-    if (supabaseAnonKey) process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = supabaseAnonKey.trim();
-    if (supabaseServiceKey) process.env.SUPABASE_SERVICE_ROLE_KEY = supabaseServiceKey.trim();
+    process.env["DATABASE_URL"] = cleanDbUrl;
+    process.env["DIRECT_URL"] = cleanDirectUrl;
+    if (supabaseUrl) (process.env as any)["NEXT_PUBLIC_SUPABASE_URL"] = supabaseUrl.trim();
+    if (supabaseAnonKey) (process.env as any)["NEXT_PUBLIC_SUPABASE_ANON_KEY"] = supabaseAnonKey.trim();
+    if (supabaseServiceKey) process.env["SUPABASE_SERVICE_ROLE_KEY"] = supabaseServiceKey.trim();
 
     // Hot-reload active PrismaClient singleton & invalidate all in-memory caches
     await resetPrismaClient(cleanDbUrl);
