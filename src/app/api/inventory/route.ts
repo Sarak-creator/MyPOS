@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/inventory - Fetch products, warehouses, stock items, and transfers scoped to tenant
 export async function GET(request: Request) {
   try {

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { PaymentMethod } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/customers - List customers and debts scoped to caller's tenant
 export async function GET(request: Request) {
   try {

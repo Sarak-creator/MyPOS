@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { RepairStatus } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 // PATCH /api/repairs/[id] - Update status, diagnostic notes, technician, or parts
 export async function PATCH(
   request: Request,

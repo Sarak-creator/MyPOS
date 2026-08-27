@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { deleteTenantData, deleteAllDatabaseData } from "../../../../../prisma/seed";
+import { deleteTenantData, deleteAllDatabaseData } from "@/lib/seed-helpers";
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 // POST /api/system/reset - Delete all data scoped to caller's store / tenant
 export async function POST(request: Request) {

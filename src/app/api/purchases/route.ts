@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { POStatus } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // Helper to generate PO Number
 function generatePONumber(count: number): string {
   const now = new Date();

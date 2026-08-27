@@ -5,6 +5,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { AccountType, ProductType, RoleType } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 const execAsync = promisify(exec);
 
 // GET /api/database/setup - Check DB connection and initialization status

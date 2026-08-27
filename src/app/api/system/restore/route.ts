@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { restoreTenantData, restoreMasterData } from "../../../../../prisma/seed";
+import { restoreTenantData, restoreMasterData } from "@/lib/seed-helpers";
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 // POST /api/system/restore - Restore fresh master enterprise data scoped to caller's tenant
 export async function POST(request: Request) {

@@ -4,6 +4,8 @@ import { verifyJwtToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getEffectivePermissions } from "@/lib/permissions";
 
+export const dynamic = "force-dynamic";
+
 // Fast in-memory cache for user sessions (TTL: 15 seconds)
 const userSessionCache = new Map<string, { user: any; expiresAt: number }>();
 

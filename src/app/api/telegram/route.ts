@@ -12,6 +12,8 @@ import {
 } from "@/lib/telegram";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/telegram - Check current Telegram Bot configuration status and retrieve saved config
 export async function GET(request: Request) {
   try {

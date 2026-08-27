@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 // PUT or PATCH /api/products/[id] - Update product
 export async function PATCH(
   request: Request,

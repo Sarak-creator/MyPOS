@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/suppliers - List suppliers scoped to caller's tenant
 export async function GET(request: Request) {
   try {

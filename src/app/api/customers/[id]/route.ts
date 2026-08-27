@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PaymentMethod } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 // PATCH /api/customers/[id] - Update customer or record debt repayment
 export async function PATCH(
   request: Request,

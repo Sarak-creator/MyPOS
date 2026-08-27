@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { RepairStatus } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/repairs - Scoped to caller's tenant & branch
 export async function GET(request: Request) {
   try {

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // Fast in-memory cache for branches (TTL: 30 seconds)
 const branchesCache = new Map<string, { data: any; expiresAt: number }>();
 

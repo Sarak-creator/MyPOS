@@ -4,6 +4,8 @@ import { hashPassword, getAuthSession } from "@/lib/auth";
 import { RoleType } from "@prisma/client";
 import { getEffectivePermissions } from "@/lib/permissions";
 
+export const dynamic = "force-dynamic";
+
 // In-memory cache for tenant settings (TTL: 15 seconds)
 const settingsCache = new Map<string, { data: any; expiresAt: number }>();
 
