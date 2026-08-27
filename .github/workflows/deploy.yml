@@ -49,7 +49,7 @@ jobs:
 
   deploy:
     needs: build-and-test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.SERVER_HOST != ''
     runs-on: ubuntu-latest
 
     steps:
