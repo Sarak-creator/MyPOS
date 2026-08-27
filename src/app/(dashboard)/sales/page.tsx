@@ -71,9 +71,14 @@ export default function SalesPage() {
       const data = await res.json();
 
       if (data.success) {
-        setSales(data.orders || []);
+        setSales(data.orders || data.invoices || data.sales || []);
         setStats(data.stats || null);
-        setPagination(data.pagination || { totalPages: 1, totalCount: 0 });
+        setPagination(
+          data.pagination || {
+            totalPages: data.totalPages || 1,
+            totalCount: data.total || 0,
+          }
+        );
       }
     } catch (err) {
       console.error("Failed to fetch sales:", err);

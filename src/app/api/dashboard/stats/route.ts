@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
-
-// Fast in-memory cache for dashboard stats (TTL: 10 seconds)
-const dashboardStatsCache = new Map<string, { data: any; expiresAt: number }>();
-
-function invalidateDashboardStatsCache() {
-  dashboardStatsCache.clear();
-}
+import { CacheManager } from "@/lib/cache";
 
 export async function GET(request: Request) {
   try {
@@ -39,11 +33,10 @@ export async function GET(request: Request) {
     }
 
     const effectiveBranchId = reqBranchId || session?.branchId || "ALL";
-    const cacheKey = `${tenantId}:${effectiveBranchId}`;
-    const now = Date.now();
-    const cached = dashboardStatsCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      return NextResponse.json(cached.data);
+    const cacheKey = `dashboard:${tenantId}:${effectiveBranchId}`;
+    const cached = CacheManager.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const today = new Date();
@@ -153,7 +146,7 @@ export async function GET(request: Request) {
       },
     };
 
-    dashboardStatsCache.set(cacheKey, { data: responseData, expiresAt: now + 10000 });
+    CacheManager.set(cacheKey, responseData, 10000);
 
     return NextResponse.json(responseData);
   } catch (error: any) {

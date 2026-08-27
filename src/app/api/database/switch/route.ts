@@ -5,7 +5,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { PrismaClient, AccountType, ProductType, RoleType } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { prisma, resetPrismaClient, normalizeDatabaseUrl } from "@/lib/prisma";
+import { CacheManager } from "@/lib/cache";
 
 const execAsync = promisify(exec);
 
@@ -130,7 +131,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const cleanDbUrl = databaseUrl.trim();
+    const cleanDbUrl = normalizeDatabaseUrl(databaseUrl.trim());
 
     // Auto-derive directUrl if not provided
     let cleanDirectUrl = directUrl?.trim() || "";
@@ -198,6 +199,16 @@ export async function POST(request: Request) {
     await updateEnvFile(envUpdates);
     console.log("📝 .env file updated with new credentials.");
 
+    process.env.DATABASE_URL = cleanDbUrl;
+    process.env.DIRECT_URL = cleanDirectUrl;
+    if (supabaseUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = supabaseUrl.trim();
+    if (supabaseAnonKey) process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = supabaseAnonKey.trim();
+    if (supabaseServiceKey) process.env.SUPABASE_SERVICE_ROLE_KEY = supabaseServiceKey.trim();
+
+    // Hot-reload active PrismaClient singleton & invalidate all in-memory caches
+    await resetPrismaClient(cleanDbUrl);
+    CacheManager.invalidateAll();
+
     const envVars = {
       ...process.env,
       DATABASE_URL: cleanDbUrl,
@@ -209,23 +220,35 @@ export async function POST(request: Request) {
       console.log("🔗 Connecting to existing Old Database without dropping data...");
       try {
         // Sync any missing tables safely
-        await execAsync("npx prisma db push --skip-generate", { env: envVars });
+        await execAsync("npx prisma db push --skip-generate --accept-data-loss", { env: envVars });
       } catch (pushErr: any) {
         console.warn("Prisma push warning on old DB:", pushErr.message);
       }
 
-      // Check existing tenant in Old DB
-      let existingTenant = await tempPrisma.tenant.findFirst({
+      // Check existing tenants in Old DB
+      const existingTenants = await tempPrisma.tenant.findMany({
         orderBy: { createdAt: "asc" },
+        include: {
+          users: {
+            select: { id: true, username: true, fullName: true, role: true },
+          },
+        },
       });
+
+      const defaultTenant = existingTenants[0];
 
       await tempPrisma.$disconnect();
 
       return NextResponse.json({
         success: true,
         action: "OLD_DATABASE",
-        message: "✅ បានភ្ជាប់ទៅកាន់ Database ចាស់ជោគជ័យ 100%! អ្នកអាចចូលប្រើប្រាស់គណនីដែលមានស្រាប់របស់អ្នកបាន។",
-        defaultStoreAddress: existingTenant?.storeAddress || "anajak@anajak.com",
+        message: "✅ បានភ្ជាប់ទៅកាន់ Database ចាស់ជោគជ័យ 100%! ទិន្នន័យត្រូវបានផ្ទុកមកប្រើប្រាស់ភ្លាមៗ។",
+        defaultStoreAddress: defaultTenant?.storeAddress || "anajak@anajak.com",
+        tenants: existingTenants.map((t) => ({
+          name: t.name,
+          storeAddress: t.storeAddress,
+          users: t.users.map((u) => u.username),
+        })),
       });
     }
 

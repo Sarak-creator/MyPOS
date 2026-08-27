@@ -15,6 +15,7 @@ export interface CartItem {
   discountAmount: number;
   type: "STANDARD_ITEM" | "SERIAL_IMEI_ITEM" | "VARIANT_ITEM" | "SERVICE_LABOR" | "SPARE_PART";
   selectedImei?: string;
+  stockQty?: number;
 }
 
 export interface CustomerOption {
@@ -235,7 +236,20 @@ export const usePOSStore = create<POSState>()(
         const { items } = get();
         const existingIndex = items.findIndex((i) => i.id === product.id);
 
+        // Check if product is out of stock (non-service items)
+        if (product.type !== "SERVICE_LABOR" && product.stockQty !== undefined && product.stockQty <= 0) {
+          return;
+        }
+
         if (existingIndex > -1 && product.type !== "SERIAL_IMEI_ITEM") {
+          const currentQty = items[existingIndex].quantity;
+          const maxStock = product.stockQty ?? items[existingIndex].stockQty;
+
+          // Prevent adding beyond available stock
+          if (product.type !== "SERVICE_LABOR" && maxStock !== undefined && currentQty >= maxStock) {
+            return;
+          }
+
           const updated = [...items];
           updated[existingIndex].quantity += 1;
           set({ items: updated });
@@ -259,6 +273,9 @@ export const usePOSStore = create<POSState>()(
           .map((item) => {
             if (item.id === id) {
               const newQty = item.quantity + delta;
+              if (delta > 0 && item.type !== "SERVICE_LABOR" && item.stockQty !== undefined && newQty > item.stockQty) {
+                return item;
+              }
               return newQty > 0 ? { ...item, quantity: newQty } : null;
             }
             return item;

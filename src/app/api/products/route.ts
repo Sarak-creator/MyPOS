@@ -1,19 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
-
-// Fast in-memory cache for products catalog (TTL: 15 seconds)
-const productsCache = new Map<string, { data: any; expiresAt: number }>();
-
-function invalidateProductsCache(tenantId?: string) {
-  if (tenantId) {
-    Array.from(productsCache.keys()).forEach((key) => {
-      if (key.startsWith(tenantId)) productsCache.delete(key);
-    });
-  } else {
-    productsCache.clear();
-  }
-}
+import { CacheManager } from "@/lib/cache";
 
 // GET /api/products - List all products scoped to the authenticated tenant and branch
 export async function GET(request: Request) {
@@ -37,11 +25,10 @@ export async function GET(request: Request) {
     }
 
     const scopedBranchId = reqBranchId || session?.branchId || undefined;
-    const cacheKey = `${tenantId}:${scopedBranchId || "ALL"}:${categorySlug}:${search}`;
-    const now = Date.now();
-    const cached = productsCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      return NextResponse.json(cached.data);
+    const cacheKey = `products:${tenantId}:${scopedBranchId || "ALL"}:${categorySlug}:${search}`;
+    const cached = CacheManager.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const whereClause: any = {
@@ -127,7 +114,7 @@ export async function GET(request: Request) {
       warehouses,
     };
 
-    productsCache.set(cacheKey, { data: responseData, expiresAt: now + 15000 });
+    CacheManager.set(cacheKey, responseData, 15000);
 
     return NextResponse.json(responseData);
   } catch (error: any) {
@@ -272,7 +259,8 @@ export async function POST(request: Request) {
       }
     }
 
-    invalidateProductsCache(tenantId);
+    CacheManager.invalidatePrefix(`products:${tenantId}`);
+    CacheManager.invalidatePrefix(`dashboard:${tenantId}`);
 
     return NextResponse.json({
       success: true,

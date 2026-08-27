@@ -196,48 +196,64 @@ export default function CartPanel({ onOpenPayment }: CartPanelProps) {
         ) : (
           items.map((item) => {
             const lineTotal = item.priceUsd * item.quantity - item.discountAmount;
-            return (
-              <div key={item.id} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-800 truncate leading-snug">
-                    {language === "km" ? item.nameKh : item.nameEn}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-mono">
-                    SKU: {item.sku} • ${Number(item.priceUsd || 0).toFixed(2)}/ឯកតា
-                  </p>
-                  {item.selectedImei && (
-                    <span className="inline-block text-[9px] font-mono bg-teal-50 text-teal-700 px-1.5 rounded">
-                      IMEI: {item.selectedImei}
+              const isMaxStockReached =
+                item.type !== "SERVICE_LABOR" &&
+                item.stockQty !== undefined &&
+                item.quantity >= item.stockQty;
+
+              return (
+                <div key={item.id} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-800 truncate leading-snug">
+                      {language === "km" ? item.nameKh : item.nameEn}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      SKU: {item.sku} • ${Number(item.priceUsd || 0).toFixed(2)}/ឯកតា
+                      {item.type !== "SERVICE_LABOR" && item.stockQty !== undefined && (
+                        <span className={`ml-1 font-sans ${isMaxStockReached ? "text-rose-600 font-bold" : "text-slate-500"}`}>
+                          • (ស្តុក: {item.stockQty})
+                        </span>
+                      )}
+                    </p>
+                    {item.selectedImei && (
+                      <span className="inline-block text-[9px] font-mono bg-teal-50 text-teal-700 px-1.5 rounded">
+                        IMEI: {item.selectedImei}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Qty Stepper */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => updateQuantity(item.id, -1)}
+                      className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200 transition text-xs font-bold"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="w-6 text-center text-xs font-bold font-mono text-slate-800">
+                      {item.quantity}
                     </span>
-                  )}
-                </div>
+                    <button
+                      onClick={() => updateQuantity(item.id, 1)}
+                      disabled={isMaxStockReached}
+                      title={isMaxStockReached ? "បានដល់ចំនួនអតិបរមាក្នុងស្តុកហើយ" : "បន្ថែមចំនួន"}
+                      className={`flex h-6 w-6 items-center justify-center rounded-md border text-xs font-bold transition ${
+                        isMaxStockReached
+                          ? "border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed"
+                          : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
 
-                {/* Qty Stepper */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => updateQuantity(item.id, -1)}
-                    className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200 transition text-xs font-bold"
-                  >
-                    <Minus className="h-3 w-3" />
-                  </button>
-                  <span className="w-6 text-center text-xs font-bold font-mono text-slate-800">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => updateQuantity(item.id, 1)}
-                    className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200 transition text-xs font-bold"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {/* Line Price & Remove */}
-                <div className="text-right min-w-[70px]">
-                  <p className="text-xs font-extrabold font-mono text-slate-900">${Number(lineTotal || 0).toFixed(2)}</p>
-                  <p className="text-[10px] text-slate-400 font-sans">
-                    {formatKHR(lineTotal, exchangeRateKhr)}
-                  </p>
-                </div>
+                  {/* Line Price & Remove */}
+                  <div className="text-right min-w-[70px]">
+                    <p className="text-xs font-extrabold font-mono text-slate-900">${Number(lineTotal || 0).toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      {formatKHR(lineTotal, exchangeRateKhr)}
+                    </p>
+                  </div>
 
                 <button
                   onClick={() => removeItem(item.id)}

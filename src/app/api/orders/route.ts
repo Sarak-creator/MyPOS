@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PaymentMethod } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
+import { CacheManager } from "@/lib/cache";
 
 // GET /api/orders - Fetch recent orders scoped to tenant and branch
 export async function GET(request: Request) {
@@ -28,7 +29,11 @@ export async function GET(request: Request) {
       where: {
         branch: {
           tenantId,
-          ...(effectiveBranchId ? { id: effectiveBranchId } : {}),
+          ...(effectiveBranchId
+            ? {
+                OR: [{ id: effectiveBranchId }, { code: effectiveBranchId }],
+              }
+            : {}),
         },
       },
       take: limit,
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
 
     if (!items || items.length === 0) {
       return NextResponse.json(
-        { success: false, error: "Cannot process empty order." },
+        { success: false, error: "មិនអាចដំណើរការកន្ត្រកទទេបានឡើយ (Empty cart)." },
         { status: 400 }
       );
     }
@@ -105,12 +110,12 @@ export async function POST(request: Request) {
     }
 
     if (!tenant || tenant.branches.length === 0) {
-      return NextResponse.json({ success: false, error: "No branch configured." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "មិនមានសាខាដែលបានកំណត់រចនាសម្ព័ន្ធឡើយ (No branch configured)." }, { status: 400 });
     }
 
     const targetBranch = customBranchId
-      ? tenant.branches.find((b: any) => b.id === customBranchId) || tenant.branches[0]
-      : (session?.branchId ? tenant.branches.find((b: any) => b.id === session.branchId) : tenant.branches[0]);
+      ? tenant.branches.find((b: any) => b.id === customBranchId || b.code === customBranchId) || tenant.branches[0]
+      : (session?.branchId ? tenant.branches.find((b: any) => b.id === session.branchId || b.code === session.branchId) : tenant.branches[0]);
 
     const targetCashier = session?.userId
       ? tenant.users.find((u: any) => u.id === session.userId) || tenant.users[0]
@@ -127,9 +132,62 @@ export async function POST(request: Request) {
       finalInvoiceNumber = `INV-${monthStr}-${String(count + 1).padStart(4, "0")}`;
     }
 
-    // Execute transaction
+    // Execute atomic transaction with strict stock check & deduction
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Create Order
+      // 1. Pre-validate stock availability for ALL items before creating anything
+      for (const item of items) {
+        const prodId = item.productId || item.id;
+        const requestedQty = Number(item.quantity || 1);
+
+        const product = await tx.product.findUnique({
+          where: { id: prodId },
+          include: {
+            stockItems: {
+              where: {
+                branchId: targetBranch.id,
+                status: "IN_STOCK",
+              },
+            },
+          },
+        });
+
+        if (!product) {
+          throw new Error(`រកមិនឃើញទំនិញ (ID: ${prodId}) ក្នុងប្រព័ន្ធឡើយ`);
+        }
+
+        // Service/Labor does not require stock verification
+        if (product.type !== "SERVICE_LABOR") {
+          if (item.selectedImei) {
+            const imeiRecord = product.stockItems.find(
+              (s) => s.serialOrImei === item.selectedImei && s.status === "IN_STOCK"
+            );
+            if (!imeiRecord) {
+              throw new Error(
+                `ទំនិញ "${product.nameKh}" (IMEI: ${item.selectedImei}) មិនមានក្នុងស្តុក ឬត្រូវបានលក់រួចហើយ`
+              );
+            }
+          } else {
+            const totalAvailableStock = product.stockItems.reduce(
+              (sum, s) => sum + s.quantity,
+              0
+            );
+
+            if (totalAvailableStock <= 0) {
+              throw new Error(
+                `ទំនិញ "${product.nameKh}" អស់ពីស្តុកហើយ (ស្តុកនៅសល់ 0) មិនអាចលក់បានទេ!`
+              );
+            }
+
+            if (totalAvailableStock < requestedQty) {
+              throw new Error(
+                `ទំនិញ "${product.nameKh}" មិនមានចំនួនគ្រប់គ្រាន់ក្នុងស្តុកទេ (ក្នុងស្តុកនៅសល់: ${totalAvailableStock}, ចំនួនបញ្ជាទិញ: ${requestedQty})`
+              );
+            }
+          }
+        }
+      }
+
+      // 2. Create Order Header
       const order = await tx.order.create({
         data: {
           invoiceNumber: finalInvoiceNumber,
@@ -151,55 +209,75 @@ export async function POST(request: Request) {
         },
       });
 
-      // 2. Create Order Items & deduct stock
+      // 3. Create Order Items & deduct stock accurately
       for (const item of items) {
+        const prodId = item.productId || item.id;
+        const requestedQty = Number(item.quantity || 1);
+
         const createdOrderItem = await tx.orderItem.create({
           data: {
             orderId: order.id,
-            productId: item.productId || item.id,
+            productId: prodId,
             unitCostUsd: Number(item.costPriceUsd || 0),
             unitPriceUsd: Number(item.priceUsd || 0),
             unitPriceKhr: Number(item.priceUsd || 0) * exchangeRateKhr,
-            quantity: Number(item.quantity || 1),
+            quantity: requestedQty,
             discountAmount: Number(item.discountAmount || 0),
             totalPriceUsd:
-              Number(item.priceUsd || 0) * Number(item.quantity || 1) -
+              Number(item.priceUsd || 0) * requestedQty -
               Number(item.discountAmount || 0),
           },
         });
 
         // Deduct inventory stock
         if (item.selectedImei) {
-          await tx.stockItem.updateMany({
+          const imeiItem = await tx.stockItem.findFirst({
             where: {
-              productId: item.productId || item.id,
+              productId: prodId,
               serialOrImei: item.selectedImei,
               branchId: targetBranch.id,
               status: "IN_STOCK",
             },
-            data: { status: "SOLD", orderItemId: createdOrderItem.id },
           });
+
+          if (imeiItem) {
+            await tx.stockItem.update({
+              where: { id: imeiItem.id },
+              data: { status: "SOLD", orderItemId: createdOrderItem.id },
+            });
+          }
         } else {
-          // Deduct from standard stock item
-          const stock = await tx.stockItem.findFirst({
+          // Sequential deduction for standard / variant / spare part items
+          let remainingToDeduct = requestedQty;
+          const stockRecords = await tx.stockItem.findMany({
             where: {
-              productId: item.productId || item.id,
+              productId: prodId,
               branchId: targetBranch.id,
               status: "IN_STOCK",
             },
+            orderBy: { createdAt: "asc" },
           });
 
-          if (stock) {
-            const newQty = Math.max(0, stock.quantity - Number(item.quantity || 1));
-            await tx.stockItem.update({
-              where: { id: stock.id },
-              data: { quantity: newQty },
-            });
+          for (const stockRec of stockRecords) {
+            if (remainingToDeduct <= 0) break;
+            if (stockRec.quantity <= remainingToDeduct) {
+              remainingToDeduct -= stockRec.quantity;
+              await tx.stockItem.update({
+                where: { id: stockRec.id },
+                data: { quantity: 0, status: "SOLD" },
+              });
+            } else {
+              await tx.stockItem.update({
+                where: { id: stockRec.id },
+                data: { quantity: stockRec.quantity - remainingToDeduct },
+              });
+              remainingToDeduct = 0;
+            }
           }
         }
       }
 
-      // 3. Create Payment record
+      // 4. Create Payment record
       const payment = await tx.payment.create({
         data: {
           orderId: order.id,
@@ -213,7 +291,7 @@ export async function POST(request: Request) {
         },
       });
 
-      // 4. If Customer Credit / Debt, record debt schedule
+      // 5. If Customer Credit / Debt, record debt schedule
       if (paymentMethod === "CUSTOMER_CREDIT" && customerId) {
         await tx.debtPaymentSchedule.create({
           data: {
@@ -235,6 +313,12 @@ export async function POST(request: Request) {
       return { order, payment };
     });
 
+    // Invalidate caches so UI sees updated stock & stats immediately
+    if (tenantId) {
+      CacheManager.invalidatePrefix(`products:${tenantId}`);
+      CacheManager.invalidatePrefix(`dashboard:${tenantId}`);
+    }
+
     return NextResponse.json({
       success: true,
       order: result.order,
@@ -243,6 +327,9 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("POST /api/orders error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to process order" },
+      { status: 400 }
+    );
   }
 }

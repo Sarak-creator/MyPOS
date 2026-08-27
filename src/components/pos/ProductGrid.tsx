@@ -32,13 +32,14 @@ export interface ProductItem {
 }
 
 export default function ProductGrid() {
-  const { language, addItem, exchangeRateKhr } = usePOSStore();
+  const { language, addItem, items, exchangeRateKhr } = usePOSStore();
   const t = translations[language];
 
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
+  const [stockWarning, setStockWarning] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchLiveProducts = async () => {
@@ -57,7 +58,7 @@ export default function ProductGrid() {
           priceUsd: Number(p.salePriceUsd),
           costPriceUsd: Number(p.costPriceUsd),
           categorySlug: p.categorySlug || "smartphones",
-          stockQty: p.stockQty || 0,
+          stockQty: Number(p.stockQty || 0),
           type: p.type || "STANDARD_ITEM",
           imeiList: p.imeiList || [],
         }));
@@ -107,6 +108,11 @@ export default function ProductGrid() {
     return matchesCategory && matchesSearch;
   });
 
+  const showWarning = (msg: string) => {
+    setStockWarning(msg);
+    setTimeout(() => setStockWarning(null), 3500);
+  };
+
   const handleBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (filteredProducts.length === 1) {
@@ -116,6 +122,19 @@ export default function ProductGrid() {
   };
 
   const handleSelectProduct = (p: ProductItem) => {
+    // Check if product is out of stock (for non-service items)
+    if (p.type !== "SERVICE_LABOR" && p.stockQty <= 0) {
+      showWarning(`⚠️ ទំនិញ "${p.nameKh}" អស់ពីស្តុកហើយ (ស្តុក 0) មិនអាចលក់បានទេ!`);
+      return;
+    }
+
+    // Check if current cart quantity already reaches available stock
+    const cartItem = items.find((i) => i.id === p.id);
+    if (p.type !== "SERVICE_LABOR" && cartItem && cartItem.quantity >= p.stockQty) {
+      showWarning(`⚠️ ទំនិញ "${p.nameKh}" មិនអាចបន្ថែមលើសពីស្តុកដែលមាន (${p.stockQty}) ទេ!`);
+      return;
+    }
+
     const selectedImei =
       p.type === "SERIAL_IMEI_ITEM" && p.imeiList && p.imeiList.length > 0
         ? p.imeiList[0]
@@ -134,11 +153,26 @@ export default function ProductGrid() {
       costPriceUsd: p.costPriceUsd,
       type: p.type,
       selectedImei,
+      stockQty: p.stockQty,
     });
   };
 
   return (
     <div className="flex h-full flex-col gap-3">
+      {/* Out of Stock Floating Warning Toast */}
+      {stockWarning && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg flex items-center justify-between gap-2">
+          <span>{stockWarning}</span>
+          <button
+            type="button"
+            onClick={() => setStockWarning(null)}
+            className="rounded bg-rose-700/50 p-1 hover:bg-rose-800"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Search & Barcode Scanner Input */}
       <form onSubmit={handleBarcodeSubmit} className="relative">
         <div className="relative flex items-center">
@@ -192,50 +226,91 @@ export default function ProductGrid() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredProducts.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handleSelectProduct(p)}
-                className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-xs transition hover:border-teal-500 hover:shadow-md active:scale-[0.98]"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1 mb-1.5">
-                    <span className="text-[10px] font-bold font-mono text-slate-400 truncate">
-                      {p.sku}
-                    </span>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
-                        p.stockQty > 5
-                          ? "bg-emerald-50 text-emerald-700"
-                          : p.stockQty > 0
-                          ? "bg-amber-50 text-amber-700"
-                          : "bg-red-50 text-red-700"
+            {filteredProducts.map((p) => {
+              const isOutOfStock = p.type !== "SERVICE_LABOR" && p.stockQty <= 0;
+              const cartItem = items.find((i) => i.id === p.id);
+              const isMaxInCart =
+                p.type !== "SERVICE_LABOR" &&
+                !isOutOfStock &&
+                cartItem &&
+                cartItem.quantity >= p.stockQty;
+
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectProduct(p)}
+                  disabled={isOutOfStock}
+                  className={`group relative flex flex-col justify-between rounded-2xl border p-3.5 text-left shadow-xs transition ${
+                    isOutOfStock
+                      ? "border-rose-200 bg-rose-50/30 opacity-70 cursor-not-allowed"
+                      : isMaxInCart
+                      ? "border-amber-300 bg-amber-50/20 hover:border-amber-400"
+                      : "border-slate-200 bg-white hover:border-teal-500 hover:shadow-md active:scale-[0.98]"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span className="text-[10px] font-bold font-mono text-slate-400 truncate">
+                        {p.sku}
+                      </span>
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
+                          p.type === "SERVICE_LABOR"
+                            ? "bg-purple-50 text-purple-700"
+                            : isOutOfStock
+                            ? "bg-rose-100 text-rose-700 font-extrabold"
+                            : p.stockQty > 5
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {p.type === "SERVICE_LABOR"
+                          ? "សេវា"
+                          : isOutOfStock
+                          ? "អស់ស្តុក (0)"
+                          : `ស្តុក: ${p.stockQty}`}
+                      </span>
+                    </div>
+
+                    <h4
+                      className={`text-xs font-bold line-clamp-2 leading-snug transition ${
+                        isOutOfStock
+                          ? "text-slate-400 line-through"
+                          : "text-slate-800 group-hover:text-teal-700"
                       }`}
                     >
-                      {p.type === "SERVICE_LABOR" ? "សេវា" : `ស្តុក: ${p.stockQty}`}
-                    </span>
+                      {language === "km" ? p.nameKh : p.nameEn}
+                    </h4>
+
+                    {cartItem && cartItem.quantity > 0 && (
+                      <span className="mt-1 inline-block rounded bg-teal-100 px-1.5 py-0.2 text-[9px] font-extrabold text-teal-800">
+                        ក្នុងកន្ត្រក: {cartItem.quantity}
+                      </span>
+                    )}
                   </div>
 
-                  <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug group-hover:text-teal-700 transition">
-                    {language === "km" ? p.nameKh : p.nameEn}
-                  </h4>
-                </div>
-
-                <div className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-2">
-                  <div>
-                    <p className="text-sm font-black font-mono text-teal-800">
-                      {formatUSD(p.priceUsd)}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-sans">
-                      {formatKHR(p.priceUsd, exchangeRateKhr)}
-                    </p>
+                  <div className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-2">
+                    <div>
+                      <p className={`text-sm font-black font-mono ${isOutOfStock ? "text-slate-400" : "text-teal-800"}`}>
+                        {formatUSD(p.priceUsd)}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-sans">
+                        {formatKHR(p.priceUsd, exchangeRateKhr)}
+                      </p>
+                    </div>
+                    <div
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition ${
+                        isOutOfStock
+                          ? "bg-slate-100 text-slate-400"
+                          : "bg-teal-50 text-teal-700 group-hover:bg-teal-700 group-hover:text-white"
+                      }`}
+                    >
+                      {isOutOfStock ? "✕" : "+"}
+                    </div>
                   </div>
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50 text-teal-700 group-hover:bg-teal-700 group-hover:text-white transition">
-                    +
-                  </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

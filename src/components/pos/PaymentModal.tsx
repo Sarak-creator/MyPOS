@@ -54,6 +54,8 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const [khqrString, setKhqrString] = useState<string>("");
   const [khqrQrUrl, setKhqrQrUrl] = useState<string>("");
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [completedReceipt, setCompletedReceipt] = useState<ReceiptData | null>(null);
 
   // Generate KHQR on load or amount change
@@ -90,7 +92,11 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const tenderedKhrNum = parseFloat(tenderedKhr) || 0;
   const changeKhr = Math.max(0, tenderedKhrNum - grandTotalKhr);
 
-  const handleProcessPayment = () => {
+  const handleProcessPayment = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setErrorMessage("");
+
     const invoiceNumber = generateInvoiceNumber();
 
     const receipt: ReceiptData = {
@@ -115,88 +121,112 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
 
     const posState = usePOSStore.getState();
     const orderData = {
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `ORD-${Date.now()}`,
       invoiceNumber,
       branchId: currentBranchId,
       customerId: selectedCustomer?.id || null,
       items: items.map((i) => ({
-        productId: i.productId,
-        quantity: i.quantity,
+        productId: i.productId || i.id,
+        costPriceUsd: i.costPriceUsd || 0,
         priceUsd: i.priceUsd,
-        discountAmount: i.discountAmount,
+        quantity: i.quantity,
+        discountAmount: i.discountAmount || 0,
+        selectedImei: i.selectedImei,
       })),
+      subtotalUsd: getSubtotal(),
+      discountAmount: getDiscountTotal(),
+      taxAmountUsd: getTaxTotal(),
+      taxRatePercent: posState.taxRatePercent || 0,
       totalUsd: grandTotalUsd,
       totalKhr: grandTotalKhr,
+      exchangeRateKhr,
       paymentMethod: activeTab,
-      tenderedUsd: activeTab === "CASH_USD" ? tenderedUsdNum : undefined,
-      changeUsd: activeTab === "CASH_USD" ? changeUsd : undefined,
+      tenderedUsd: activeTab === "CASH_USD" ? tenderedUsdNum : grandTotalUsd,
+      changeUsd: activeTab === "CASH_USD" ? changeUsd : 0,
+      notes: posState.orderNotes || "",
+      khqrQrString: activeTab === "KHQR_ABA" ? khqrString : undefined,
       createdAt: new Date().toISOString(),
     };
 
-    // Store in offline sync queue or persist directly to backend
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...orderData,
-          subtotalUsd: getSubtotal(),
-          discountAmount: getDiscountTotal(),
-          taxAmountUsd: getTaxTotal(),
-          taxRatePercent: posState.taxRatePercent || 0,
-          notes: posState.orderNotes || "",
-          khqrQrString: activeTab === "KHQR_ABA" ? khqrString : undefined,
-        }),
-      }).catch(() => {
-        OfflineSyncManager.queueOrder(orderData);
-      });
-    } else {
-      OfflineSyncManager.queueOrder(orderData);
-    }
+    try {
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(orderData),
+        });
 
-    // Dispatch automated Telegram Bot Notification
-    if (posState.telegramNotifyOnSale !== false) {
-      const tgPayload = {
-        action: "NOTIFY_SALE",
-        config: {
-          botToken: posState.telegramBotToken?.trim(),
-          chatId: posState.telegramChatId?.trim(),
-        },
-        payload: {
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.success) {
+          setErrorMessage(data.error || "ការទូទាត់មិនជោគជ័យ សូមពិនិត្យស្តុក ឬព័ត៌មានម្តងទៀត");
+          setIsProcessing(false);
+          return;
+        }
+
+        // If backend returned final invoiceNumber, update receipt
+        if (data.order?.invoiceNumber) {
+          receipt.invoiceNumber = data.order.invoiceNumber;
+        }
+      } else {
+        OfflineSyncManager.queueOrder({
+          id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `ORD-${Date.now()}`,
           invoiceNumber,
-          branchName: currentBranchName,
-          cashierName: posState.currentUser?.fullName || "បុគ្គលិក POS",
-          customerName: selectedCustomer?.name || "អតិថិជនទូទៅ",
+          branchId: currentBranchId,
+          customerId: selectedCustomer?.id || null,
+          items: items.map((i) => ({
+            productId: i.productId || i.id,
+            quantity: i.quantity,
+            priceUsd: i.priceUsd,
+            discountAmount: i.discountAmount || 0,
+          })),
           totalUsd: grandTotalUsd,
           totalKhr: grandTotalKhr,
           paymentMethod: activeTab,
-          items: items.map((i) => ({
-            name: i.nameKh || i.nameEn,
-            quantity: i.quantity,
-            priceUsd: i.priceUsd,
-          })),
-        },
-      };
+          tenderedUsd: activeTab === "CASH_USD" ? tenderedUsdNum : undefined,
+          changeUsd: activeTab === "CASH_USD" ? changeUsd : undefined,
+          createdAt: new Date().toISOString(),
+        });
+      }
 
-      fetch("/api/telegram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tgPayload),
-      })
-        .then(async (res) => {
-          const resData = await res.json().catch(() => ({}));
-          if (!res.ok || !resData.success) {
-            console.warn("⚠️ Telegram Notification Alert:", resData?.error || "Failed to deliver message");
-          } else {
-            console.log("✅ Telegram Notification sent successfully for:", invoiceNumber);
-          }
-        })
-        .catch((err) => console.warn("Telegram notification network send error:", err));
+      // Dispatch automated Telegram Bot Notification
+      if (posState.telegramNotifyOnSale !== false) {
+        const tgPayload = {
+          action: "NOTIFY_SALE",
+          config: {
+            botToken: posState.telegramBotToken?.trim(),
+            chatId: posState.telegramChatId?.trim(),
+          },
+          payload: {
+            invoiceNumber: receipt.invoiceNumber,
+            branchName: currentBranchName,
+            cashierName: posState.currentUser?.fullName || "បុគ្គលិក POS",
+            customerName: selectedCustomer?.name || "អតិថិជនទូទៅ",
+            totalUsd: grandTotalUsd,
+            totalKhr: grandTotalKhr,
+            paymentMethod: activeTab,
+            items: items.map((i) => ({
+              name: i.nameKh || i.nameEn,
+              quantity: i.quantity,
+              priceUsd: i.priceUsd,
+            })),
+          },
+        };
+
+        fetch("/api/telegram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(tgPayload),
+        }).catch((err) => console.warn("Telegram notification network send error:", err));
+      }
+
+      setCompletedReceipt(receipt);
+      setIsSuccess(true);
+      clearCart();
+    } catch (err: any) {
+      setErrorMessage(err.message || "មានបញ្ហាបច្ចេកទេសក្នុងការទូទាត់");
+    } finally {
+      setIsProcessing(false);
     }
-
-    setCompletedReceipt(receipt);
-    setIsSuccess(true);
-    clearCart();
   };
 
   const handlePrint = () => {
@@ -480,16 +510,43 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
               </div>
             )}
 
+            {/* Error Banner */}
+            {errorMessage && (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 p-3.5 flex items-start gap-2.5 text-rose-800 text-xs font-bold animate-in fade-in">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p>{errorMessage}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setErrorMessage("")}
+                  className="text-rose-500 hover:text-rose-700"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             {/* Process Button */}
             <div className="pt-2">
               <button
                 onClick={handleProcessPayment}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-700 py-3.5 text-base font-extrabold text-white shadow-lg shadow-teal-900/30 hover:bg-teal-800 transition active:scale-[0.99]"
+                disabled={isProcessing}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-700 py-3.5 text-base font-extrabold text-white shadow-lg shadow-teal-900/30 hover:bg-teal-800 disabled:opacity-50 transition active:scale-[0.99]"
               >
-                <CheckCircle2 className="h-5 w-5" />
-                <span>
-                  {activeTab === "KHQR_ABA" ? "បញ្ជាក់ការទូទាត់ QR" : "ទទួលប្រាក់ និងចេញវិក្កយបត្រ"} (Enter)
-                </span>
+                {isProcessing ? (
+                  <>
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span>កំពុងដំណើរការទូទាត់...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span>
+                      {activeTab === "KHQR_ABA" ? "បញ្ជាក់ការទូទាត់ QR" : "ទទួលប្រាក់ និងចេញវិក្កយបត្រ"} (Enter)
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>

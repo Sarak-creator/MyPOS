@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PaymentMethod, OrderStatus } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
+import { CacheManager } from "@/lib/cache";
 
 // GET /api/sales - Search, filter, and fetch sales invoices scoped to tenant and branch
 export async function GET(request: Request) {
@@ -177,21 +178,41 @@ export async function GET(request: Request) {
       }
     }
 
+    const averageOrderValue = completedCount > 0 ? totalRevenueUsd / completedCount : 0;
+
     return NextResponse.json({
       success: true,
+      orders,
       invoices: orders,
+      sales: orders,
       total: totalCount,
       page,
-      totalPages: Math.ceil(totalCount / limit),
+      totalPages: Math.ceil(totalCount / limit) || 1,
+      pagination: {
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit) || 1,
+        page,
+        limit,
+      },
       stats: {
         totalRevenueUsd,
         totalRevenueKhr,
         completedCount,
+        completedOrdersCount: completedCount,
         refundedCount,
+        refundedOrdersCount: refundedCount,
         khqrRevenueUsd,
         cashRevenueUsd,
         debtRevenueUsd,
         itemsSold,
+        totalItemsSold: itemsSold,
+        averageOrderValue,
+        paymentBreakdown: {
+          KHQR_ABA: khqrRevenueUsd,
+          CASH_USD: cashRevenueUsd,
+          CASH_KHR: 0,
+          CUSTOMER_CREDIT: debtRevenueUsd,
+        },
       },
     });
   } catch (error: any) {
@@ -293,6 +314,11 @@ export async function PATCH(request: Request) {
 
         return updated;
       });
+
+      if (order.branch?.tenantId) {
+        CacheManager.invalidatePrefix(`products:${order.branch.tenantId}`);
+        CacheManager.invalidatePrefix(`dashboard:${order.branch.tenantId}`);
+      }
 
       return NextResponse.json({
         success: true,
