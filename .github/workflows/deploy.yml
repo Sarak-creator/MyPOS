@@ -47,14 +47,30 @@ jobs:
       - name: Build Production Next.js Bundle
         run: npm run build
 
+  # ──────────────────────────────────────────────────────────────────────
+  # This job deploys to a self-hosted VPS via SSH.
+  # It will be SKIPPED automatically if the SERVER_HOST secret is not set.
+  # To enable: add SERVER_HOST, SERVER_USER, SERVER_SSH_KEY in
+  #   GitHub → Settings → Secrets → Actions
+  # ──────────────────────────────────────────────────────────────────────
   deploy:
     needs: build-and-test
-    if: github.ref == 'refs/heads/main' && secrets.SERVER_HOST != ''
+    # secrets cannot be evaluated in `if`; use a workaround via env
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy to Cloud / VPS Server via SSH
-        uses: appleboy/ssh-action@master
+      - name: Skip if no VPS server configured
+        id: check_secret
+        run: |
+          if [ -z "${{ secrets.SERVER_HOST }}" ]; then
+            echo "No SERVER_HOST secret set — skipping VPS deployment."
+            exit 0
+          fi
+
+      - name: Deploy to VPS Server via SSH
+        if: ${{ secrets.SERVER_HOST != '' }}
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
