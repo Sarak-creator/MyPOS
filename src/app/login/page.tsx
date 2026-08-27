@@ -333,10 +333,17 @@ export default function LoginPage() {
       {/* Language Switcher */}
       <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
         <button
-          onClick={() => setLanguage(language === "km" ? "en" : "km")}
+          onClick={() => {
+            const next: Record<"km" | "en" | "zh", "km" | "en" | "zh"> = { km: "en", en: "zh", zh: "km" };
+            setLanguage(next[language] || "km");
+          }}
           className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-md px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-white/10 transition"
         >
-          {language === "km" ? "🇰🇭 ភាសាខ្មែរ (KH)" : "🇺🇸 English (EN)"}
+          {language === "km"
+            ? "🇰🇭 ភាសាខ្មែរ (KH)"
+            : language === "zh"
+            ? "🇨🇳 中文 (ZH)"
+            : "🇺🇸 English (EN)"}
         </button>
       </div>
 

@@ -282,13 +282,20 @@ export default function Header({ currentUser: initialUser, onToggleSidebar }: He
 
         {/* Language Switcher */}
         <button
-          onClick={() => setLanguage(language === "km" ? "en" : "km")}
+          onClick={() => {
+            const next: Record<"km" | "en" | "zh", "km" | "en" | "zh"> = { km: "en", en: "zh", zh: "km" };
+            setLanguage(next[language] || "km");
+          }}
           className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
-          title="Switch Language"
+          title="Switch Language (ភាសាខ្មែរ / English / 中文)"
         >
           <Globe className="h-3.5 w-3.5 text-blue-600" />
-          <span className="hidden sm:inline">{language === "km" ? "ខ្មែរ" : "EN"}</span>
-          <span className="sm:hidden">{language === "km" ? "KH" : "EN"}</span>
+          <span className="hidden sm:inline">
+            {language === "km" ? "ខ្មែរ" : language === "zh" ? "中文" : "EN"}
+          </span>
+          <span className="sm:hidden">
+            {language === "km" ? "KH" : language === "zh" ? "ZH" : "EN"}
+          </span>
         </button>
 
         {/* User Profile Dropdown */}
