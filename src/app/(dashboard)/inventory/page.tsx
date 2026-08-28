@@ -18,6 +18,18 @@ import {
   Tag,
   FolderPlus,
   Check,
+  Building2,
+  Truck,
+  Printer,
+  Clock,
+  FileText,
+  Eye,
+  ArrowRight,
+  Boxes,
+  Store,
+  MapPin,
+  Calendar,
+  Send,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -54,6 +66,59 @@ interface CategoryItem {
   createdAt?: string;
 }
 
+interface BranchItem {
+  id: string;
+  code: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  isHeadOffice?: boolean;
+}
+
+interface TransferItemProduct {
+  id: string;
+  productId: string;
+  quantity: number;
+  serialOrImeis: string[];
+  productNameKh: string;
+  productNameEn: string;
+  sku: string;
+  barcode: string;
+  unit: string;
+  imageUrl?: string | null;
+  salePriceUsd: number;
+  costPriceUsd: number;
+}
+
+interface TransferItem {
+  id: string;
+  transferNumber: string;
+  fromBranchId: string;
+  toBranchId: string;
+  fromBranch: {
+    id: string;
+    name: string;
+    code: string;
+    phone?: string;
+    address?: string;
+  };
+  toBranch: {
+    id: string;
+    name: string;
+    code: string;
+    phone?: string;
+    address?: string;
+  };
+  status: "PENDING" | "APPROVED" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
+  notes?: string;
+  approvedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  items: TransferItemProduct[];
+  itemCount: number;
+  totalQuantity: number;
+}
+
 export default function InventoryPage() {
   const { language } = usePOSStore();
   const t = translations[language];
@@ -64,8 +129,38 @@ export default function InventoryPage() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("ALL");
   const [products, setProducts] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [branches, setBranches] = useState<BranchItem[]>([]);
+  const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Transfers Tab State
+  const [transferSearch, setTransferSearch] = useState("");
+  const [transferFilterStatus, setTransferFilterStatus] = useState("ALL");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [isCreateTransferModalOpen, setIsCreateTransferModalOpen] = useState(false);
+  const [selectedTransfer, setSelectedTransfer] = useState<TransferItem | null>(null);
+  const [isPrintTransferOpen, setIsPrintTransferOpen] = useState(false);
+  const [transferActionLoading, setTransferActionLoading] = useState(false);
+
+  // New Transfer Form State
+  const [transferForm, setTransferForm] = useState<{
+    fromBranchId: string;
+    toBranchId: string;
+    notes: string;
+    status: "PENDING" | "IN_TRANSIT";
+    items: Array<{
+      productId: string;
+      quantity: number;
+      serialOrImeis: string[];
+    }>;
+  }>({
+    fromBranchId: "",
+    toBranchId: "",
+    notes: "",
+    status: "IN_TRANSIT",
+    items: [{ productId: "", quantity: 1, serialOrImeis: [] }],
+  });
 
   // Category CRUD State
   const [categoryForm, setCategoryForm] = useState({
@@ -101,6 +196,40 @@ export default function InventoryPage() {
     imeiText: "",
   });
 
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch("/api/branches");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.branches)) {
+        setBranches(data.branches);
+        if (data.branches.length >= 2 && !transferForm.fromBranchId) {
+          setTransferForm((prev) => ({
+            ...prev,
+            fromBranchId: data.branches[0].id,
+            toBranchId: data.branches[1].id,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load branches:", err);
+    }
+  };
+
+  const fetchTransfers = async () => {
+    try {
+      setTransferLoading(true);
+      const res = await fetch("/api/transfers");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.transfers)) {
+        setTransfers(data.transfers);
+      }
+    } catch (err) {
+      console.error("Failed to load transfers:", err);
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   const fetchCategories = async () => {
     try {
       const res = await fetch("/api/categories");
@@ -134,6 +263,8 @@ export default function InventoryPage() {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchBranches();
+    fetchTransfers();
   }, []);
 
   // Category Handlers: Add / Update
@@ -228,6 +359,142 @@ export default function InventoryPage() {
       await fetchProducts();
     } catch (err: any) {
       alert("បរាជ័យក្នុងការលុបប្រភេទ: " + err.message);
+    }
+  };
+
+  // Transfer Handlers
+  const handleOpenCreateTransferModal = () => {
+    const fromId = branches[0]?.id || "";
+    const toId = branches.length > 1 ? branches[1].id : "";
+    setTransferForm({
+      fromBranchId: fromId,
+      toBranchId: toId,
+      notes: "",
+      status: "IN_TRANSIT",
+      items: [{ productId: products[0]?.id || "", quantity: 1, serialOrImeis: [] }],
+    });
+    setIsCreateTransferModalOpen(true);
+  };
+
+  const handleAddTransferItemRow = () => {
+    setTransferForm((prev) => ({
+      ...prev,
+      items: [...prev.items, { productId: products[0]?.id || "", quantity: 1, serialOrImeis: [] }],
+    }));
+  };
+
+  const handleRemoveTransferItemRow = (index: number) => {
+    setTransferForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleTransferItemChange = (
+    index: number,
+    field: "productId" | "quantity" | "serialOrImeis",
+    value: any
+  ) => {
+    setTransferForm((prev) => {
+      const newItems = [...prev.items];
+      newItems[index] = { ...newItems[index], [field]: value };
+      if (field === "productId") {
+        newItems[index].serialOrImeis = [];
+      }
+      return { ...prev, items: newItems };
+    });
+  };
+
+  const handleCreateTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferForm.fromBranchId || !transferForm.toBranchId) {
+      alert("សូមជ្រើសរើសសាខាដើម និងសាខាគោលដៅ!");
+      return;
+    }
+    if (transferForm.fromBranchId === transferForm.toBranchId) {
+      alert("សាខាដើម និងសាខាគោលដៅមិនអាចដូចគ្នាបានទេ!");
+      return;
+    }
+    if (transferForm.items.length === 0 || transferForm.items.some((i) => !i.productId || i.quantity <= 0)) {
+      alert("សូមជ្រើសរើសទំនិញ និងចំនួនផ្ទេរឲ្យបានត្រឹមត្រូវ!");
+      return;
+    }
+
+    try {
+      setTransferActionLoading(true);
+      const res = await fetch("/api/transfers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(transferForm),
+      });
+
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      alert("🎉 បានបង្កើតសំណើផ្ទេរស្តុកដោយជោគជ័យ!");
+      setIsCreateTransferModalOpen(false);
+      await fetchTransfers();
+      await fetchProducts();
+    } catch (err: any) {
+      alert("បរាជ័យក្នុងការផ្ទេរស្តុក: " + err.message);
+    } finally {
+      setTransferActionLoading(false);
+    }
+  };
+
+  const handleUpdateTransferStatus = async (transferId: string, newStatus: string) => {
+    const statusLabels: Record<string, string> = {
+      APPROVED: "អនុម័ត",
+      IN_TRANSIT: "បញ្ជូនចេញ (In Transit)",
+      COMPLETED: "ទទួលទំនិញចូលស្តុក (Complete)",
+      CANCELLED: "បោះបង់ (Cancel)",
+    };
+
+    if (!confirm(`តើអ្នកពិតជាចង់ប្តូរស្ថានភាពផ្ទេរទៅជា "${statusLabels[newStatus] || newStatus}" មែនទេ?`)) {
+      return;
+    }
+
+    try {
+      setTransferActionLoading(true);
+      const res = await fetch(`/api/transfers/${transferId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      await fetchTransfers();
+      await fetchProducts();
+
+      if (selectedTransfer && selectedTransfer.id === transferId) {
+        setSelectedTransfer(data.transfer);
+      }
+    } catch (err: any) {
+      alert("បរាជ័យក្នុងការកែប្រែស្ថានភាព: " + err.message);
+    } finally {
+      setTransferActionLoading(false);
+    }
+  };
+
+  const handleDeleteTransfer = async (transferId: string, transferNumber: string) => {
+    if (!confirm(`តើអ្នកពិតជាចង់លុបប័ណ្ណផ្ទេរ "${transferNumber}" នេះមែនទេ?`)) return;
+
+    try {
+      setTransferActionLoading(true);
+      const res = await fetch(`/api/transfers/${transferId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      if (selectedTransfer?.id === transferId) {
+        setSelectedTransfer(null);
+      }
+      await fetchTransfers();
+    } catch (err: any) {
+      alert("បរាជ័យក្នុងការលុប: " + err.message);
+    } finally {
+      setTransferActionLoading(false);
     }
   };
 
@@ -373,6 +640,34 @@ export default function InventoryPage() {
       c.slug.toLowerCase().includes(query)
     );
   });
+
+  const filteredTransfers = transfers.filter((t) => {
+    const query = transferSearch.toLowerCase().trim();
+    const matchesSearch =
+      query === "" ||
+      t.transferNumber.toLowerCase().includes(query) ||
+      t.fromBranch.name.toLowerCase().includes(query) ||
+      t.toBranch.name.toLowerCase().includes(query) ||
+      (t.notes && t.notes.toLowerCase().includes(query)) ||
+      t.items.some(
+        (i) =>
+          i.productNameKh.toLowerCase().includes(query) ||
+          i.sku.toLowerCase().includes(query) ||
+          i.serialOrImeis.some((imei) => imei.toLowerCase().includes(query))
+      );
+
+    const matchesStatus =
+      transferFilterStatus === "ALL" || t.status === transferFilterStatus;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const transferStats = {
+    total: transfers.length,
+    pending: transfers.filter((t) => t.status === "PENDING").length,
+    inTransit: transfers.filter((t) => t.status === "IN_TRANSIT" || t.status === "APPROVED").length,
+    completed: transfers.filter((t) => t.status === "COMPLETED").length,
+  };
 
   const totalStockCost = products.reduce((acc, p) => acc + p.costPriceUsd * p.stockQty, 0);
 
@@ -806,12 +1101,300 @@ export default function InventoryPage() {
 
       {/* 3. STOCK TRANSFER VIEW */}
       {activeTab === "TRANSFERS" && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xs">
-          <ArrowRightLeft className="h-10 w-10 mx-auto text-teal-700 mb-2" />
-          <h3 className="text-sm font-bold text-slate-800">ការផ្ទេរស្តុកអន្តរសាខា</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-            ផ្ទេរផលិតផល និង IMEI រវាងសាខា ភ្នំពេញ សៀមរាប និងបាត់ដំបង ដោយមានលេខកូដ TR ច្បាស់លាស់
-          </p>
+        <div className="space-y-6">
+          {/* Top Metrics Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4.5 shadow-xs flex items-center gap-3.5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-50 text-teal-700 font-bold shrink-0">
+                <ArrowRightLeft className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">សរុបការផ្ទេរ (Total)</p>
+                <h4 className="text-xl font-extrabold text-slate-900 font-mono mt-0.5">{transferStats.total}</h4>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-4.5 shadow-xs flex items-center gap-3.5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-800 font-bold shrink-0">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">រង់ចាំអនុម័ត (Pending)</p>
+                <h4 className="text-xl font-extrabold text-amber-950 font-mono mt-0.5">{transferStats.pending}</h4>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-sky-200/80 bg-sky-50/40 p-4.5 shadow-xs flex items-center gap-3.5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-100 text-sky-800 font-bold shrink-0">
+                <Truck className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-sky-900 uppercase tracking-wider">កំពុងដឹកជញ្ជូន (In Transit)</p>
+                <h4 className="text-xl font-extrabold text-sky-950 font-mono mt-0.5">{transferStats.inTransit}</h4>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-4.5 shadow-xs flex items-center gap-3.5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">បានបញ្ចប់ (Completed)</p>
+                <h4 className="text-xl font-extrabold text-emerald-950 font-mono mt-0.5">{transferStats.completed}</h4>
+              </div>
+            </div>
+          </div>
+
+          {/* Transfers Table Card */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/50">
+              <div className="flex items-center gap-2.5 flex-wrap flex-1">
+                {/* Search */}
+                <div className="flex items-center gap-2 w-full sm:w-64 rounded-xl border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                  <Search className="h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={transferSearch}
+                    onChange={(e) => setTransferSearch(e.target.value)}
+                    placeholder="ស្វែងរកលេខ TR, សាខា, ទំនិញ..."
+                    className="w-full bg-transparent text-xs focus:outline-hidden"
+                  />
+                </div>
+
+                {/* Status Filter Buttons */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                  {[
+                    { id: "ALL", label: "ទាំងអស់" },
+                    { id: "PENDING", label: "រង់ចាំ", count: transferStats.pending },
+                    { id: "IN_TRANSIT", label: "កំពុងដឹក", count: transferStats.inTransit },
+                    { id: "COMPLETED", label: "ជោគជ័យ", count: transferStats.completed },
+                    { id: "CANCELLED", label: "បោះបង់" },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setTransferFilterStatus(s.id)}
+                      className={`px-2.5 py-1 rounded-lg transition ${
+                        transferFilterStatus === s.id
+                          ? "bg-white text-teal-800 shadow-2xs font-extrabold"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {s.label}
+                      {s.count !== undefined && s.count > 0 ? (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-teal-100 text-teal-800 font-mono">
+                          {s.count}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchTransfers}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                  title="Reload transfers"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 text-teal-700 ${transferLoading ? "animate-spin" : ""}`} />
+                  ផ្ទុកឡើងវិញ
+                </button>
+                <button
+                  onClick={handleOpenCreateTransferModal}
+                  className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-1.5 text-xs font-bold text-white hover:bg-teal-800 transition shadow-xs active:scale-95"
+                >
+                  <Plus className="h-4 w-4" />
+                  បង្កើតសំណើផ្ទេរថ្មី
+                </button>
+              </div>
+            </div>
+
+            {transferLoading ? (
+              <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-teal-700" />
+                <span className="text-xs font-semibold">កំពុងទាញទិន្នន័យផ្ទេរស្តុក...</span>
+              </div>
+            ) : filteredTransfers.length === 0 ? (
+              <div className="p-12 text-center text-slate-400">
+                <ArrowRightLeft className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                <p className="text-xs font-bold text-slate-600">មិនមានទិន្នន័យផ្ទេរស្តុកឡើយ</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  ចុចប៊ូតុង &quot;បង្កើតសំណើផ្ទេរថ្មី&quot; ដើម្បីចាប់ផ្តើមផ្ទេរទំនិញ និង IMEI រវាងសាខា
+                </p>
+                <button
+                  onClick={handleOpenCreateTransferModal}
+                  className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:underline"
+                >
+                  <Plus className="h-3.5 w-3.5" /> បង្កើតសំណើផ្ទេរដំបូង
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+                    <tr>
+                      <th className="py-3.5 px-4">លេខប័ណ្ណផ្ទេរ (Transfer #)</th>
+                      <th className="py-3.5 px-4">ផ្លូវផ្ទេរ (From ➔ To)</th>
+                      <th className="py-3.5 px-4">មុខទំនិញ & បរិមាណ</th>
+                      <th className="py-3.5 px-4">កាលបរិច្ឆេទ & អ្នកអនុម័ត</th>
+                      <th className="py-3.5 px-4 text-center">ស្ថានភាព</th>
+                      <th className="py-3.5 px-4 text-right">សកម្មភាព</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {filteredTransfers.map((t) => {
+                      const statusStyles: Record<string, { bg: string; text: string; label: string; icon: any }> = {
+                        PENDING: {
+                          bg: "bg-amber-50 border-amber-200",
+                          text: "text-amber-800",
+                          label: "រង់ចាំអនុម័ត",
+                          icon: Clock,
+                        },
+                        APPROVED: {
+                          bg: "bg-sky-50 border-sky-200",
+                          text: "text-sky-800",
+                          label: "បានអនុម័ត",
+                          icon: CheckCircle2,
+                        },
+                        IN_TRANSIT: {
+                          bg: "bg-indigo-50 border-indigo-200",
+                          text: "text-indigo-800",
+                          label: "កំពុងដឹកជញ្ជូន",
+                          icon: Truck,
+                        },
+                        COMPLETED: {
+                          bg: "bg-emerald-50 border-emerald-200",
+                          text: "text-emerald-800",
+                          label: "បានបញ្ចប់ជោគជ័យ",
+                          icon: CheckCircle2,
+                        },
+                        CANCELLED: {
+                          bg: "bg-rose-50 border-rose-200",
+                          text: "text-rose-700",
+                          label: "បានបោះបង់",
+                          icon: AlertTriangle,
+                        },
+                      };
+
+                      const currentStatus = statusStyles[t.status] || statusStyles.PENDING;
+                      const StatusIcon = currentStatus.icon;
+
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-50/70 transition">
+                          <td className="py-3.5 px-4">
+                            <button
+                              onClick={() => setSelectedTransfer(t)}
+                              className="font-mono font-bold text-teal-700 bg-teal-50/80 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-200 transition text-left"
+                            >
+                              #{t.transferNumber}
+                            </button>
+                            {t.notes && (
+                              <p className="text-[10px] text-slate-400 truncate max-w-[180px] mt-0.5">
+                                {t.notes}
+                              </p>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700 border border-slate-200">
+                                <Building2 className="h-3 w-3 text-slate-500" />
+                                {t.fromBranch.name}
+                              </span>
+                              <ArrowRight className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                              <span className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-[11px] font-bold text-teal-900 border border-teal-200">
+                                <MapPin className="h-3 w-3 text-teal-600" />
+                                {t.toBranch.name}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <p className="font-bold text-slate-900">
+                              {t.itemCount} មុខទំនិញ ({t.totalQuantity} ឯកតា)
+                            </p>
+                            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">
+                              {t.items.map((i) => `${i.productNameKh} (x${i.quantity})`).join(", ")}
+                            </p>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-xs text-slate-600">
+                            <p className="font-mono text-[11px]">
+                              {new Date(t.createdAt).toLocaleDateString("km-KH", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              ដោយ: <span className="font-bold text-slate-600">{t.approvedBy || "Admin"}</span>
+                            </p>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-center">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold ${currentStatus.bg} ${currentStatus.text}`}
+                            >
+                              <StatusIcon className="h-3 w-3" />
+                              {currentStatus.label}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => setSelectedTransfer(t)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                                title="មើលព័ត៌មានលម្អិត"
+                              >
+                                <Eye className="h-3 w-3 text-teal-700" />
+                                លម្អិត
+                              </button>
+
+                              {t.status === "PENDING" && (
+                                <button
+                                  onClick={() => handleUpdateTransferStatus(t.id, "IN_TRANSIT")}
+                                  disabled={transferActionLoading}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-sky-700 transition shadow-2xs"
+                                  title="អនុម័ត & បញ្ជូនចេញ"
+                                >
+                                  <Truck className="h-3 w-3" />
+                                  បញ្ជូន
+                                </button>
+                              )}
+
+                              {t.status === "IN_TRANSIT" && (
+                                <button
+                                  onClick={() => handleUpdateTransferStatus(t.id, "COMPLETED")}
+                                  disabled={transferActionLoading}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
+                                  title="ទទួលទំនិញចូលស្តុក"
+                                >
+                                  <Check className="h-3 w-3" />
+                                  ទទួល
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => {
+                                  setSelectedTransfer(t);
+                                  setIsPrintTransferOpen(true);
+                                }}
+                                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                                title="បោះពុម្ពប័ណ្ណផ្ទេរ"
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1053,6 +1636,547 @@ export default function InventoryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE STOCK TRANSFER MODAL */}
+      {isCreateTransferModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-700 font-bold">
+                  <ArrowRightLeft className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-800">
+                    បង្កើតសំណើផ្ទេរស្តុកអន្តរសាខា (New Stock Transfer)
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    ផ្ទេរទំនិញ និងលេខ IMEI ពីសាខាដើម ទៅកាន់សាខាគោលដៅ
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCreateTransferModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTransfer} className="space-y-4">
+              {/* Branch Route Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80">
+                <div>
+                  <label className="block font-bold text-slate-700 text-xs mb-1">
+                    🏢 សាខាដើម (From Origin Branch) *
+                  </label>
+                  <select
+                    required
+                    value={transferForm.fromBranchId}
+                    onChange={(e) => setTransferForm({ ...transferForm, fromBranchId: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-800 focus:border-teal-700 focus:outline-hidden"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.code}){b.isHeadOffice ? " [HQ]" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 text-xs mb-1">
+                    📍 សាខាគោលដៅ (To Destination Branch) *
+                  </label>
+                  <select
+                    required
+                    value={transferForm.toBranchId}
+                    onChange={(e) => setTransferForm({ ...transferForm, toBranchId: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-800 focus:border-teal-700 focus:outline-hidden"
+                  >
+                    <option value="">ជ្រើសរើសសាខាគោលដៅ...</option>
+                    {branches
+                      .filter((b) => b.id !== transferForm.fromBranchId)
+                      .map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Boxes className="h-4 w-4 text-teal-700" />
+                    មុខទំនិញដែលត្រូវផ្ទេរ (Transfer Items)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddTransferItemRow}
+                    className="text-xs font-bold text-teal-700 hover:text-teal-800 flex items-center gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    បន្ថែមមុខទំនិញ
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                  {transferForm.items.map((row, idx) => {
+                    const selectedProd = products.find((p) => p.id === row.productId);
+                    const isSerialized = selectedProd?.type === "SERIAL_IMEI_ITEM";
+                    const availableImeis = selectedProd?.imeiList || [];
+
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-2xl border border-slate-200 bg-white p-3 shadow-2xs space-y-2.5"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <select
+                              required
+                              value={row.productId}
+                              onChange={(e) => handleTransferItemChange(idx, "productId", e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 p-2 text-xs font-bold text-slate-800 focus:border-teal-700 focus:outline-hidden"
+                            >
+                              <option value="">ជ្រើសរើសទំនិញ...</option>
+                              {products.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.nameKh} ({p.sku}) — ស្តុក: {p.stockQty} {p.unit}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="w-24">
+                            <input
+                              type="number"
+                              min="1"
+                              max={isSerialized ? availableImeis.length || 1 : selectedProd?.stockQty || 999}
+                              value={row.quantity}
+                              onChange={(e) =>
+                                handleTransferItemChange(
+                                  idx,
+                                  "quantity",
+                                  Math.max(1, parseInt(e.target.value) || 1)
+                                )
+                              }
+                              placeholder="ចំនួន"
+                              className="w-full rounded-xl border border-slate-200 p-2 text-xs font-mono font-bold text-center focus:border-teal-700 focus:outline-hidden"
+                            />
+                          </div>
+
+                          {transferForm.items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTransferItemRow(idx)}
+                              className="p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* IMEI Selection Chips for serialized products */}
+                        {isSerialized && availableImeis.length > 0 && (
+                          <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 space-y-1">
+                            <p className="text-[10px] font-bold text-slate-500">
+                              ជ្រើសរើសលេខ IMEI ដែលត្រូវផ្ទេរ (បានជ្រើស: {row.serialOrImeis.length}/{row.quantity}):
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {availableImeis.map((imei) => {
+                                const isChecked = row.serialOrImeis.includes(imei);
+                                return (
+                                  <button
+                                    key={imei}
+                                    type="button"
+                                    onClick={() => {
+                                      const newImeis = isChecked
+                                        ? row.serialOrImeis.filter((i) => i !== imei)
+                                        : [...row.serialOrImeis, imei];
+                                      handleTransferItemChange(idx, "serialOrImeis", newImeis);
+                                      handleTransferItemChange(idx, "quantity", newImeis.length || 1);
+                                    }}
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-mono transition border ${
+                                      isChecked
+                                        ? "bg-teal-700 text-white border-teal-800 font-bold shadow-2xs"
+                                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                                    }`}
+                                  >
+                                    {isChecked ? "✓ " : "+ "}{imei}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Status and Notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 text-xs mb-1">
+                    ដំណើរការផ្ទេរ (Initial Status)
+                  </label>
+                  <select
+                    value={transferForm.status}
+                    onChange={(e) => setTransferForm({ ...transferForm, status: e.target.value as any })}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-800 focus:border-teal-700 focus:outline-hidden"
+                  >
+                    <option value="IN_TRANSIT">🚚 បញ្ជូនចេញភ្លាមៗ (Instant Dispatch - In Transit)</option>
+                    <option value="PENDING">⏳ រក្សាទុកជាសំណើរង់ចាំអនុម័ត (Save as Pending)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 text-xs mb-1">
+                    កំណត់សម្គាល់ / ហេតុផលផ្ទេរ
+                  </label>
+                  <input
+                    type="text"
+                    value={transferForm.notes}
+                    onChange={(e) => setTransferForm({ ...transferForm, notes: e.target.value })}
+                    placeholder="ឧ. ផ្ទេរទំនិញបន្ថែមសម្រាប់ចុងសប្តាហ៍..."
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTransferModalOpen(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                >
+                  បោះបង់
+                </button>
+                <button
+                  type="submit"
+                  disabled={transferActionLoading}
+                  className="flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2 text-xs font-bold text-white hover:bg-teal-800 transition active:scale-95 disabled:opacity-50 shadow-xs"
+                >
+                  {transferActionLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  បញ្ជាក់ការផ្ទេរស្តុក
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TRANSFER DETAIL MODAL */}
+      {selectedTransfer && !isPrintTransferOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 my-8 space-y-5">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="font-mono text-xs font-extrabold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+                  #{selectedTransfer.transferNumber}
+                </span>
+                <h3 className="text-base font-extrabold text-slate-900 mt-1">
+                  ព័ត៌មានលម្អិតនៃការផ្ទេរស្តុក
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedTransfer(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Route & Status Stepper */}
+            <div className="rounded-2xl bg-gradient-to-r from-teal-50/70 via-slate-50 to-indigo-50/70 p-4 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-slate-800 font-bold shadow-2xs border border-slate-200">
+                    <Store className="h-4 w-4 text-teal-700" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">សាខាដើម (From)</p>
+                    <p className="font-bold text-slate-900">{selectedTransfer.fromBranch.name}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] font-mono font-bold text-teal-700 bg-white px-2 py-0.5 rounded-full border border-teal-200 shadow-2xs">
+                    {selectedTransfer.status}
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-teal-600 my-0.5" />
+                </div>
+
+                <div className="flex items-center gap-2 text-right">
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">សាខាគោលដៅ (To)</p>
+                    <p className="font-bold text-slate-900">{selectedTransfer.toBranch.name}</p>
+                  </div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-slate-800 font-bold shadow-2xs border border-slate-200">
+                    <MapPin className="h-4 w-4 text-indigo-700" />
+                  </div>
+                </div>
+              </div>
+
+              {selectedTransfer.notes && (
+                <div className="pt-2 border-t border-slate-200/60 text-xs text-slate-600">
+                  <span className="font-bold">កំណត់សម្គាល់:</span> {selectedTransfer.notes}
+                </div>
+              )}
+            </div>
+
+            {/* Items Table */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                <span>បញ្ជីទំនិញក្នុងប័ណ្ណផ្ទេរ ({selectedTransfer.itemCount} មុខ)</span>
+                <span className="font-mono text-teal-800 font-extrabold">
+                  សរុប: {selectedTransfer.totalQuantity} ឯកតា
+                </span>
+              </h4>
+
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+                    <tr>
+                      <th className="py-2.5 px-3">មុខទំនិញ</th>
+                      <th className="py-2.5 px-3">SKU</th>
+                      <th className="py-2.5 px-3 text-center">បរិមាណ</th>
+                      <th className="py-2.5 px-3">លេខ IMEI / Serials</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {selectedTransfer.items.map((item, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">
+                          {item.productNameKh}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px]">
+                          {item.sku}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-teal-800">
+                          {item.quantity} {item.unit}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {item.serialOrImeis?.length ? (
+                            <div className="flex flex-wrap gap-1">
+                              {item.serialOrImeis.map((imei, idx) => (
+                                <span
+                                  key={idx}
+                                  className="font-mono text-[9px] bg-slate-100 border border-slate-200 text-slate-800 px-1.5 py-0.5 rounded font-bold"
+                                >
+                                  {imei}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">ទំនិញស្តង់ដារ</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Workflow Action Buttons */}
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsPrintTransferOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+              >
+                <Printer className="h-4 w-4 text-slate-500" />
+                បោះពុម្ពប័ណ្ណផ្ទេរ (Waybill)
+              </button>
+
+              <div className="flex items-center gap-2">
+                {selectedTransfer.status === "PENDING" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateTransferStatus(selectedTransfer.id, "CANCELLED")}
+                      disabled={transferActionLoading}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
+                    >
+                      បោះបង់សំណើ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateTransferStatus(selectedTransfer.id, "IN_TRANSIT")}
+                      disabled={transferActionLoading}
+                      className="flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white hover:bg-sky-700 transition active:scale-95 shadow-xs"
+                    >
+                      <Truck className="h-4 w-4" />
+                      អនុម័ត & បញ្ជូនចេញ
+                    </button>
+                  </>
+                )}
+
+                {selectedTransfer.status === "IN_TRANSIT" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateTransferStatus(selectedTransfer.id, "CANCELLED")}
+                      disabled={transferActionLoading}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
+                    >
+                      បោះបង់ & ត្រឡប់ស្តុក
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateTransferStatus(selectedTransfer.id, "COMPLETED")}
+                      disabled={transferActionLoading}
+                      className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition active:scale-95 shadow-xs"
+                    >
+                      <Check className="h-4 w-4" />
+                      ទទួលទំនិញចូលស្តុក
+                    </button>
+                  </>
+                )}
+
+                {(selectedTransfer.status === "CANCELLED" || selectedTransfer.status === "PENDING") && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteTransfer(selectedTransfer.id, selectedTransfer.transferNumber)}
+                    disabled={transferActionLoading}
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                    title="លុបប័ណ្ណផ្ទេរ"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRINTABLE TRANSFER WAYBILL SLIP */}
+      {isPrintTransferOpen && selectedTransfer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-xl rounded-3xl bg-white p-8 shadow-2xl animate-in fade-in zoom-in-95 my-8 space-y-6 print:m-0 print:p-0 print:shadow-none">
+            {/* Action Bar (hidden in print) */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 print:hidden">
+              <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                <Printer className="h-4 w-4 text-teal-700" />
+                ទម្រង់ប័ណ្ណផ្ទេរស្តុក (Printable Stock Transfer Slip)
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="rounded-xl bg-teal-700 px-4 py-1.5 text-xs font-bold text-white hover:bg-teal-800 transition"
+                >
+                  បោះពុម្ពឥឡូវនេះ (Print)
+                </button>
+                <button
+                  onClick={() => setIsPrintTransferOpen(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Waybill Sheet */}
+            <div className="border border-slate-300 p-6 rounded-2xl font-sans text-slate-900 space-y-4">
+              <div className="text-center border-b border-slate-200 pb-3 space-y-1">
+                <h2 className="text-lg font-black text-slate-900">អាណាចក្រPOS • ANACHAK POS</h2>
+                <h3 className="text-sm font-extrabold text-teal-800 uppercase tracking-wide">
+                  ប័ណ្ណផ្ទេរស្តុកអន្តរសាខា (STOCK TRANSFER NOTE)
+                </h3>
+                <p className="font-mono text-xs font-bold text-slate-700">
+                  លេខប័ណ្ណ: #{selectedTransfer.transferNumber}
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  កាលបរិច្ឆេទ: {new Date(selectedTransfer.createdAt).toLocaleString("km-KH")}
+                </p>
+              </div>
+
+              {/* Branch Routing Box */}
+              <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <p className="font-bold text-slate-500 uppercase text-[10px]">សាខាដើម (From Origin):</p>
+                  <p className="font-black text-slate-900 text-sm">{selectedTransfer.fromBranch.name}</p>
+                  <p className="text-[11px] text-slate-500">ទូរស័ព្ទ: {selectedTransfer.fromBranch.phone || "-"}</p>
+                  <p className="text-[11px] text-slate-500">{selectedTransfer.fromBranch.address || "ភ្នំពេញ"}</p>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-500 uppercase text-[10px]">សាខាគោលដៅ (To Destination):</p>
+                  <p className="font-black text-slate-900 text-sm">{selectedTransfer.toBranch.name}</p>
+                  <p className="text-[11px] text-slate-500">ទូរស័ព្ទ: {selectedTransfer.toBranch.phone || "-"}</p>
+                  <p className="text-[11px] text-slate-500">{selectedTransfer.toBranch.address || "-"}</p>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <table className="w-full text-left text-xs border border-slate-200">
+                <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-200">
+                  <tr>
+                    <th className="py-2 px-2.5 border-r border-slate-200">ល.រ</th>
+                    <th className="py-2 px-2.5 border-r border-slate-200">មុខទំនិញ / SKU</th>
+                    <th className="py-2 px-2.5 text-center border-r border-slate-200">បរិមាណ</th>
+                    <th className="py-2 px-2.5">លេខ IMEI / Serial</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 font-medium">
+                  {selectedTransfer.items.map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="py-2 px-2.5 border-r border-slate-200 text-center font-mono">{idx + 1}</td>
+                      <td className="py-2 px-2.5 border-r border-slate-200">
+                        <p className="font-bold text-slate-900">{item.productNameKh}</p>
+                        <p className="font-mono text-[10px] text-slate-500">{item.sku}</p>
+                      </td>
+                      <td className="py-2 px-2.5 text-center border-r border-slate-200 font-mono font-bold">
+                        {item.quantity} {item.unit}
+                      </td>
+                      <td className="py-2 px-2.5 font-mono text-[10px]">
+                        {item.serialOrImeis?.length ? item.serialOrImeis.join(", ") : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {selectedTransfer.notes && (
+                <p className="text-xs text-slate-600">
+                  <span className="font-bold">កំណត់សម្គាល់:</span> {selectedTransfer.notes}
+                </p>
+              )}
+
+              {/* Signatures Section */}
+              <div className="grid grid-cols-3 gap-3 pt-8 text-center text-xs">
+                <div>
+                  <p className="font-bold text-slate-800">អ្នកប្រគល់ទំនិញ</p>
+                  <p className="text-[10px] text-slate-400">(Sender / Dispatched by)</p>
+                  <div className="mt-12 border-t border-slate-300 mx-4"></div>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800">អ្នកដឹកជញ្ជូន</p>
+                  <p className="text-[10px] text-slate-400">(Driver / Transporter)</p>
+                  <div className="mt-12 border-t border-slate-300 mx-4"></div>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800">អ្នកទទួលទំនិញ</p>
+                  <p className="text-[10px] text-slate-400">(Receiver / Checked by)</p>
+                  <div className="mt-12 border-t border-slate-300 mx-4"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

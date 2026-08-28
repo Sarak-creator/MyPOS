@@ -320,6 +320,52 @@ ${payload.estimatedCostUsd ? `💰 <b>តម្លៃសេវាជួសជុ
 }
 
 /**
+ * Format & Send Inter-Branch Stock Transfer Notification
+ */
+export interface StockTransferNotificationPayload {
+  transferNumber: string;
+  fromBranchName: string;
+  toBranchName: string;
+  status: string;
+  itemCount: number;
+  totalQuantity: number;
+  itemsSummary: string;
+  notes?: string;
+  approvedBy?: string;
+}
+
+export async function notifyStockTransfer(
+  payload: StockTransferNotificationPayload,
+  config?: Partial<TelegramConfig>
+) {
+  const statusEmojiMap: Record<string, string> = {
+    PENDING: "⏳ រង់ចាំអនុម័ត (PENDING)",
+    APPROVED: "✅ បានអនុម័ត (APPROVED)",
+    IN_TRANSIT: "🚚 កំពុងដឹកជញ្ជូន (IN TRANSIT)",
+    COMPLETED: "🎉 បានទទួលចូលស្តុក (COMPLETED)",
+    CANCELLED: "❌ បានបោះបង់ (CANCELLED)",
+  };
+
+  const statusDisplay = statusEmojiMap[payload.status] || payload.status;
+
+  const message = `
+🚚 <b>ការផ្ទេរស្តុកអន្តរសាខា (STOCK TRANSFER)</b>
+━━━━━━━━━━━━━━━━━━━
+📋 <b>លេខប័ណ្ណផ្ទេរ:</b> <code>#${escapeHtml(payload.transferNumber)}</code>
+🏢 <b>សាខាដើម:</b> ${escapeHtml(payload.fromBranchName)}
+📍 <b>សាខាគោលដៅ:</b> <b>${escapeHtml(payload.toBranchName)}</b>
+🏷️ <b>ស្ថានភាព:</b> <b>${escapeHtml(statusDisplay)}</b>
+📦 <b>ចំនួនមុខទំនិញ:</b> ${payload.itemCount} មុខ (សរុប ${payload.totalQuantity} ឯកតា)
+📝 <b>ទំនិញផ្ទេរ:</b>
+${escapeHtml(payload.itemsSummary)}
+${payload.notes ? `💬 <b>កំណត់សម្គាល់:</b> <i>${escapeHtml(payload.notes)}</i>\n` : ""}${payload.approvedBy ? `👤 <b>អ្នករៀបចំ/អនុម័ត:</b> ${escapeHtml(payload.approvedBy)}\n` : ""}━━━━━━━━━━━━━━━━━━━
+<i>អាណាចក្រPOS • Multi-Branch Inventory Transfer</i>
+`.trim();
+
+  return sendTelegramMessage(message, config, "HTML");
+}
+
+/**
  * Test Connection & Verify Bot Token / Chat ID
  */
 export async function testTelegramConnection(botToken: string, chatId: string) {
@@ -336,3 +382,4 @@ export async function testTelegramConnection(botToken: string, chatId: string) {
 
   return sendTelegramMessage(testMsg, { botToken, chatId }, "HTML");
 }
+
