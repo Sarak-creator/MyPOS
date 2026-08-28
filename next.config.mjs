@@ -4,8 +4,13 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "date-fns", "recharts"],
   },
-  webpack: (config) => {
+  webpack: (config, { dev }) => {
     config.resolve.symlinks = false;
+    if (dev) {
+      config.cache = {
+        type: "memory",
+      };
+    }
     return config;
   },
 };

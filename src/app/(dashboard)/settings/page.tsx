@@ -680,6 +680,7 @@ export default function SettingsPage() {
           fullNameKh: editingUser.fullNameKh,
           phone: editingUser.phone,
           role: editingUser.role,
+          branchId: editingUser.branchId || "",
           isActive: editingUser.isActive,
         }),
       });
@@ -1616,56 +1617,78 @@ export default function SettingsPage() {
                   <th className="py-3 px-4">ឈ្មោះគណនី (Username)</th>
                   <th className="py-3 px-4">ឈ្មោះពេញ (Full Name)</th>
                   <th className="py-3 px-4">តួនាទី (Role)</th>
+                  <th className="py-3 px-4">សាខាបំពេញការងារ (Branch)</th>
                   <th className="py-3 px-4 text-center">ស្ថានភាព</th>
                   <th className="py-3 px-4 text-right">សកម្មភាព</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50/70 transition">
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">@{u.username}</td>
-                    <td className="py-3 px-4 font-bold text-slate-800">{u.fullNameKh || u.fullName}</td>
-                    <td className="py-3 px-4">
-                      <span className="rounded-md bg-teal-50 text-teal-800 font-mono font-bold px-2 py-0.5 text-[10px]">
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                          u.isActive
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-rose-50 text-rose-700 border border-rose-200"
-                        }`}
-                      >
-                        {u.isActive ? "សកម្ម (Active)" : "អសកម្ម (Disabled)"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right space-x-1.5">
-                      <button
-                        onClick={() => setResettingUser(u)}
-                        title="Reset Password"
-                        className="inline-flex items-center gap-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1 text-[10px] font-bold hover:bg-amber-100 transition"
-                      >
-                        <KeyRound className="h-3 w-3" /> ប្តូរលេខកូដ
-                      </button>
-                      <button
-                        onClick={() => setEditingUser(u)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-50 transition"
-                      >
-                        <Edit2 className="h-3 w-3" /> កែប្រែ
-                      </button>
-                      {u.username !== "admin" && (
-                        <button
-                          onClick={() => handleDeleteUser(u.id)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 px-2 py-1 text-[10px] font-bold hover:bg-rose-100 transition"
+                {users.map((u) => {
+                  const assignedBranch = u.branch || branches.find((b) => b.id === u.branchId);
+                  return (
+                    <tr key={u.id} className="hover:bg-slate-50/70 transition">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900">@{u.username}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{u.fullNameKh || u.fullName}</td>
+                      <td className="py-3 px-4">
+                        <span className="rounded-md bg-teal-50 text-teal-800 font-mono font-bold px-2 py-0.5 text-[10px]">
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        {assignedBranch ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-[11px] font-bold text-indigo-800">
+                            <Building2 className="h-3.5 w-3.5 text-indigo-600" />
+                            <span>{assignedBranch.name}</span>
+                            {assignedBranch.code && (
+                              <span className="text-[9px] font-mono text-indigo-500 bg-indigo-100/70 px-1 py-0.2 rounded">
+                                {assignedBranch.code}
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                            <Store className="h-3.5 w-3.5 text-slate-400" />
+                            គ្រប់សាខាទាំងអស់ (HQ / All)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                            u.isActive
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border border-rose-200"
+                          }`}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          {u.isActive ? "សកម្ម (Active)" : "អសកម្ម (Disabled)"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-1.5">
+                        <button
+                          onClick={() => setResettingUser(u)}
+                          title="Reset Password"
+                          className="inline-flex items-center gap-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1 text-[10px] font-bold hover:bg-amber-100 transition"
+                        >
+                          <KeyRound className="h-3 w-3" /> ប្តូរលេខកូដ
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        <button
+                          onClick={() => setEditingUser(u)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-50 transition"
+                        >
+                          <Edit2 className="h-3 w-3" /> កែប្រែ
+                        </button>
+                        {u.username !== "admin" && (
+                          <button
+                            onClick={() => handleDeleteUser(u.id)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 px-2 py-1 text-[10px] font-bold hover:bg-rose-100 transition"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -2195,6 +2218,24 @@ export default function SettingsPage() {
                   <option value="SUPER_ADMIN">SUPER_ADMIN (អភិបាលជាន់ខ្ពស់)</option>
                 </select>
               </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">សាខាបំពេញការងារ (Assigned Branch)</label>
+                <select
+                  value={userForm.branchId || ""}
+                  onChange={(e) => setUserForm({ ...userForm, branchId: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 font-medium"
+                >
+                  <option value="">គ្រប់សាខាទាំងអស់ (All Branches / Head Office)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  * បើកំណត់សាខា អ្នកប្រើប្រាស់នេះនឹងដំណើរការតែនៅក្នុងសាខាដែលបានជ្រើសរើសប៉ុណ្ណោះ។
+                </p>
+              </div>
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -2264,6 +2305,24 @@ export default function SettingsPage() {
                   <option value="ACCOUNTANT">ACCOUNTANT (គណនេយ្យករ)</option>
                   <option value="INVENTORY_CLERK">INVENTORY_CLERK (បុគ្គលិកគ្រប់គ្រងស្តុក)</option>
                 </select>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">សាខាបំពេញការងារ (Assigned Branch)</label>
+                <select
+                  value={editingUser.branchId || ""}
+                  onChange={(e) => setEditingUser({ ...editingUser, branchId: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 font-medium"
+                >
+                  <option value="">គ្រប់សាខាទាំងអស់ (All Branches / Head Office)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  * ជ្រើសរើសសាខាជាក់លាក់ ឬ "គ្រប់សាខាទាំងអស់" សម្រាប់ Admin / HQ។
+                </p>
               </div>
               <div className="flex items-center gap-2 pt-1">
                 <input

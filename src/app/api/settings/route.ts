@@ -60,6 +60,13 @@ export async function GET(request: Request) {
             role: true,
             permissions: true,
             branchId: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
             isActive: true,
             createdAt: true,
           },
@@ -85,7 +92,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/settings - Update Tenant or Add/Edit/Delete Branch or User scoped to caller's tenant
+// POST /api/settings - Update Tenant profile, branches, and users
 export async function POST(request: Request) {
   try {
     const session = await getAuthSession(request);
@@ -138,10 +145,12 @@ export async function POST(request: Request) {
           phone: phone || undefined,
           address: address || undefined,
           warehouses: {
-            create: [{ name: `ឃ្លាំង ${name}`, isDefault: true }],
+            create: {
+              name: `ឃ្លាំង ${name.trim()}`,
+              isDefault: true,
+            },
           },
         },
-        include: { warehouses: true },
       });
 
       return NextResponse.json({ success: true, branch: newBranch, message: "Branch created" });
@@ -162,7 +171,6 @@ export async function POST(request: Request) {
           phone: phone || undefined,
           address: address || undefined,
         },
-        include: { warehouses: true },
       });
 
       return NextResponse.json({ success: true, branch: updated, message: "Branch updated" });
@@ -213,8 +221,17 @@ export async function POST(request: Request) {
           fullNameKh: fullNameKh || fullName,
           phone: phone || undefined,
           role: role as RoleType,
-          branchId: branchId || undefined,
+          branchId: branchId && branchId.trim() !== "" ? branchId.trim() : null,
           permissions: effectivePermissions,
+        },
+        include: {
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
         },
       });
 
@@ -237,9 +254,18 @@ export async function POST(request: Request) {
           fullNameKh: fullNameKh || undefined,
           phone: phone || undefined,
           role: role ? (role as RoleType) : undefined,
-          branchId: branchId !== undefined ? branchId : undefined,
+          branchId: branchId !== undefined ? (branchId && String(branchId).trim() !== "" ? String(branchId).trim() : null) : undefined,
           isActive: isActive !== undefined ? isActive : undefined,
           permissions: effectivePermissions || undefined,
+        },
+        include: {
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
         },
       });
 

@@ -5,6 +5,11 @@ export const metadata: Metadata = {
   title: "អាណាចក្រPOS (Anachak POS) - Enterprise ERP & POS System",
   description: "Comprehensive multi-branch ERP & POS with Repair Management, Accounting, HRM and Bakong KHQR.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.ico",
+    apple: "/icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
