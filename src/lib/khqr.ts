@@ -6,8 +6,8 @@
 import { BakongKHQR, IndividualInfo, MerchantInfo, khqrData } from "bakong-khqr";
 
 export interface KHQROptions {
-  bakongAccount: string;          // e.g. "khqr@aclb" or "012888999@aba"
-  merchantName: string;            // e.g. "IEM SARAK"
+  bakongAccount: string;          // e.g. "store@aclb" or "012888999@aba"
+  merchantName: string;            // e.g. "My Store Name"
   merchantCity?: string;           // e.g. "Phnom Penh"
   amount?: number;                 // e.g. 25.50 (for dynamic QR)
   currency?: "USD" | "KHR";        // USD or KHR
@@ -17,13 +17,13 @@ export interface KHQROptions {
   merchantID?: string;             // e.g. "85514965629"
   accountInformation?: string;     // e.g. "85514965629"
   acquiringBank?: string;          // e.g. "ACLEDA"
-  mobileNumber?: string;           // e.g. "0963760229"
+  mobileNumber?: string;           // e.g. "012888999"
   merchantCategoryCode?: string;   // e.g. "5999" or "1520"
   customKhqrRawString?: string;
 }
 
 export const CAMBODIA_BANKS = [
-  { id: "aclb", name: "ACLEDA Bank", domain: "khqr@aclb" },
+  { id: "aclb", name: "ACLEDA Bank", domain: "@aclb" },
   { id: "aba", name: "ABA Bank", domain: "@aba" },
   { id: "wing", name: "Wing Bank", domain: "@wing" },
   { id: "cnba", name: "Canadia Bank", domain: "@cnba" },
@@ -37,12 +37,14 @@ export const CAMBODIA_BANKS = [
 /**
  * Ensures Bakong Account ID has a valid bank domain suffix
  */
-export function formatBakongAccountId(account: string, defaultBankDomain: string = "khqr@aclb"): string {
-  const cleaned = account.trim();
-  if (!cleaned) return "khqr@aclb";
+export function formatBakongAccountId(account: string, defaultBankDomain: string = ""): string {
+  const cleaned = (account || "").trim();
+  if (!cleaned) return "";
   if (cleaned.includes("@")) return cleaned;
-  if (cleaned === "aclb" || cleaned === "ACLEDA") return "khqr@aclb";
-  return `${cleaned}${defaultBankDomain.startsWith("@") ? defaultBankDomain : `@${defaultBankDomain}`}`;
+  if (defaultBankDomain) {
+    return `${cleaned}${defaultBankDomain.startsWith("@") ? defaultBankDomain : `@${defaultBankDomain}`}`;
+  }
+  return cleaned;
 }
 
 /**
@@ -68,35 +70,39 @@ export function decodeKHQR(qrString: string) {
  */
 export function generateBakongKHQR(options: KHQROptions): string {
   const {
-    bakongAccount = "khqr@aclb",
-    merchantName = "IEM SARAK",
+    bakongAccount = "",
+    merchantName = "",
     merchantCity = "Phnom Penh",
     amount,
     currency = "USD",
     billNumber = "INV-000000",
     storeLabel = "Store",
     terminalLabel,
-    merchantID = "85514965629",
-    accountInformation = "85514965629",
-    acquiringBank = "ACLEDA",
-    mobileNumber = "0963760229",
+    merchantID = "",
+    accountInformation = "",
+    acquiringBank = "",
+    mobileNumber = "",
     merchantCategoryCode = "5999",
   } = options;
 
   const formattedAccount = formatBakongAccountId(bakongAccount);
+  if (!formattedAccount) {
+    return "";
+  }
+
   const isDynamic = amount !== undefined && amount > 0;
   const khqrCurrency = currency === "USD" ? khqrData.currency.usd : khqrData.currency.khr;
 
   try {
     const khqr = new BakongKHQR();
 
-    // 1. If merchantID is provided and not khqr@aclb, attempt Merchant Info Tag 30
-    if (merchantID && merchantID.trim().length > 0 && formattedAccount !== "khqr@aclb") {
+    // 1. If merchantID is provided, attempt Merchant Info Tag 30
+    if (merchantID && merchantID.trim().length > 0) {
       const mInfo = new MerchantInfo();
       mInfo.bakongAccountID = formattedAccount;
       mInfo.merchantID = merchantID.trim();
       mInfo.acquiringBank = acquiringBank || "ACLEDA";
-      mInfo.merchantName = (merchantName || "IEM SARAK").trim();
+      mInfo.merchantName = (merchantName || "MERCHANT").trim();
       mInfo.merchantCity = (merchantCity || "Phnom Penh").trim();
       mInfo.merchantCategoryCode = merchantCategoryCode || "5999";
       mInfo.currency = khqrCurrency;
@@ -123,7 +129,7 @@ export function generateBakongKHQR(options: KHQROptions): string {
     }
     if (acquiringBank) info.acquiringBank = acquiringBank.trim();
     if (mobileNumber) info.mobileNumber = mobileNumber.trim();
-    info.merchantName = (merchantName || "IEM SARAK").trim();
+    info.merchantName = (merchantName || "MERCHANT").trim();
     info.merchantCity = (merchantCity || "Phnom Penh").trim();
     info.merchantCategoryCode = merchantCategoryCode || "5999";
     info.currency = khqrCurrency;
@@ -153,7 +159,7 @@ export function generateBakongKHQR(options: KHQROptions): string {
  */
 function generateFallbackTLV(options: KHQROptions, formattedAccount: string): string {
   const {
-    merchantName = "IEM SARAK",
+    merchantName = "MERCHANT",
     merchantCity = "Phnom Penh",
     amount,
     currency = "USD",
@@ -173,7 +179,7 @@ function generateFallbackTLV(options: KHQROptions, formattedAccount: string): st
   payload += pad("01", isDynamic ? "12" : "11"); // Point of Initiation (12 = Dynamic, 11 = Static)
 
   // Tag 29: Merchant Account Info (Individual)
-  const tag29 = pad("00", formattedAccount) + pad("01", options.merchantID || "85514965629") + pad("02", options.acquiringBank || "ACLEDA");
+  const tag29 = pad("00", formattedAccount) + pad("01", options.merchantID || "") + pad("02", options.acquiringBank || "");
   payload += pad("29", tag29);
 
   payload += pad("52", options.merchantCategoryCode || "5999");

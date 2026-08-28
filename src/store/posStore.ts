@@ -138,16 +138,16 @@ export const usePOSStore = create<POSState>()(
       currentBranchId: "BR-PP01",
       currentBranchName: "សាខាកណ្តាល ភ្នំពេញ (Phnom Penh Main)",
 
-      // Default KHQR settings (ACLEDA / Bakong)
-      bakongMerchantId: "khqr@aclb",
-      bakongMerchantName: "IEM SARAK",
-      bakongMerchantCity: "Phnom Penh",
-      merchantID: "85514965629",
-      acquiringBank: "ACLEDA",
-      mobileNumber: "0963760229",
-      customKhqrRawString: "00020101021129380009khqr@aclb0111855149656290206ACLEDA391300042CCY01014520459995802KH53031165909IEM SARAK6010Phnom Penh6214021009637602296304009A",
-      enableBakongKhqr: true,
-      enableAbaKhqr: true,
+      // Default KHQR settings (Empty by default)
+      bakongMerchantId: "",
+      bakongMerchantName: "",
+      bakongMerchantCity: "",
+      merchantID: "",
+      acquiringBank: "",
+      mobileNumber: "",
+      customKhqrRawString: "",
+      enableBakongKhqr: false,
+      enableAbaKhqr: false,
       enableCashUsd: true,
       enableCashKhr: true,
       enableCustomerCredit: true,
@@ -165,17 +165,17 @@ export const usePOSStore = create<POSState>()(
             set({
               exchangeRateKhr: Number(s.exchangeRateKhr) || 4100,
               taxRatePercent: Number(s.vatRatePercent) || 0,
-              bakongMerchantId: s.bakongMerchantId || "khqr@aclb",
-              bakongMerchantName: s.bakongMerchantName || "IEM SARAK",
-              bakongMerchantCity: s.bakongMerchantCity || "Phnom Penh",
-              merchantID: s.merchantID || "85514965629",
-              acquiringBank: s.acquiringBank || "ACLEDA",
-              merchantCategoryCode: s.merchantCategoryCode || "5999",
+              bakongMerchantId: s.bakongMerchantId || "",
+              bakongMerchantName: s.bakongMerchantName || "",
+              bakongMerchantCity: s.bakongMerchantCity || "",
+              merchantID: s.merchantID || "",
+              acquiringBank: s.acquiringBank || "",
+              merchantCategoryCode: s.merchantCategoryCode || "",
               terminalLabel: s.terminalLabel,
               bakongOpenApiToken: s.bakongOpenApiToken,
-              customKhqrRawString: s.customKhqrRawString || "00020101021129380009khqr@aclb0111855149656290206ACLEDA391300042CCY01014520459995802KH53031165909IEM SARAK6010Phnom Penh6214021009637602296304009A",
-              enableBakongKhqr: s.enableBakongKhqr ?? true,
-              enableAbaKhqr: s.enableAbaKhqr ?? true,
+              customKhqrRawString: s.customKhqrRawString || "",
+              enableBakongKhqr: s.enableBakongKhqr ?? false,
+              enableAbaKhqr: s.enableAbaKhqr ?? false,
               enableCashUsd: s.enableCashUsd ?? true,
               enableCashKhr: s.enableCashKhr ?? true,
               enableCustomerCredit: s.enableCustomerCredit ?? true,
@@ -186,13 +186,13 @@ export const usePOSStore = create<POSState>()(
           try {
             const tgRes = await fetch("/api/telegram");
             const tgData = await tgRes.json();
-            if (tgData.success && (tgData.botToken || tgData.chatId)) {
+            if (tgData.success) {
               set({
-                telegramBotToken: tgData.botToken,
-                telegramChatId: tgData.chatId,
-                telegramNotifyOnSale: tgData.notifyOnSale ?? true,
-                telegramNotifyOnLowStock: tgData.notifyOnLowStock ?? true,
-                telegramNotifyOnRepair: tgData.notifyOnRepair ?? true,
+                telegramBotToken: tgData.botToken || "",
+                telegramChatId: tgData.chatId || "",
+                telegramNotifyOnSale: tgData.notifyOnSale ?? false,
+                telegramNotifyOnLowStock: tgData.notifyOnLowStock ?? false,
+                telegramNotifyOnRepair: tgData.notifyOnRepair ?? false,
               });
             }
           } catch {}
@@ -201,12 +201,12 @@ export const usePOSStore = create<POSState>()(
         }
       },
 
-      // Telegram Bot Defaults
+      // Telegram Bot Defaults (Empty by default)
       telegramBotToken: "",
       telegramChatId: "",
-      telegramNotifyOnSale: true,
-      telegramNotifyOnLowStock: true,
-      telegramNotifyOnRepair: true,
+      telegramNotifyOnSale: false,
+      telegramNotifyOnLowStock: false,
+      telegramNotifyOnRepair: false,
       setTelegramConfig: (cfg) =>
         set((state) => ({
           telegramBotToken: cfg.botToken !== undefined ? cfg.botToken : state.telegramBotToken,

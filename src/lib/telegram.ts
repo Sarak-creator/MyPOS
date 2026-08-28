@@ -104,10 +104,10 @@ export function getServerTelegramConfig(): TelegramConfig {
         return {
           botToken: cleanCredential(parsed.botToken) || cleanCredential(process.env.TELEGRAM_BOT_TOKEN),
           chatId: cleanCredential(parsed.chatId) || cleanCredential(process.env.TELEGRAM_CHAT_ID),
-          notifyOnSale: parsed.notifyOnSale ?? true,
-          notifyOnLowStock: parsed.notifyOnLowStock ?? true,
-          notifyOnRepair: parsed.notifyOnRepair ?? true,
-          notifyDailyReport: parsed.notifyDailyReport ?? true,
+          notifyOnSale: parsed.notifyOnSale ?? false,
+          notifyOnLowStock: parsed.notifyOnLowStock ?? false,
+          notifyOnRepair: parsed.notifyOnRepair ?? false,
+          notifyDailyReport: parsed.notifyDailyReport ?? false,
         };
       }
     }
@@ -118,10 +118,10 @@ export function getServerTelegramConfig(): TelegramConfig {
   return {
     botToken: cleanCredential(process.env.TELEGRAM_BOT_TOKEN),
     chatId: cleanCredential(process.env.TELEGRAM_CHAT_ID),
-    notifyOnSale: true,
-    notifyOnLowStock: true,
-    notifyOnRepair: true,
-    notifyDailyReport: true,
+    notifyOnSale: false,
+    notifyOnLowStock: false,
+    notifyOnRepair: false,
+    notifyDailyReport: false,
   };
 }
 

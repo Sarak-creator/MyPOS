@@ -114,24 +114,22 @@ export default function SettingsPage() {
     dualDisplayPrice: true,
   });
 
-  // 3. Payment / KHQR State
+  // 3. Payment / KHQR State (Empty by default)
   const [paymentConfig, setPaymentConfig] = useState({
-    bakongMerchantId: bakongMerchantId || "khqr@aclb",
-    bakongMerchantName: bakongMerchantName || "IEM SARAK",
-    bakongMerchantCity: bakongMerchantCity || "Phnom Penh",
-    merchantID: "85514965629",
-    acquiringBank: "ACLEDA",
-    mobileNumber: "0963760229",
-    enableBakongKhqr: enableBakongKhqr ?? true,
-    enableAbaKhqr: enableAbaKhqr ?? true,
+    bakongMerchantId: bakongMerchantId || "",
+    bakongMerchantName: bakongMerchantName || "",
+    bakongMerchantCity: bakongMerchantCity || "",
+    merchantID: "",
+    acquiringBank: "",
+    mobileNumber: "",
+    enableBakongKhqr: enableBakongKhqr ?? false,
+    enableAbaKhqr: enableAbaKhqr ?? false,
     enableCashUsd: enableCashUsd ?? true,
     enableCashKhr: enableCashKhr ?? true,
     enableCustomerCredit: enableCustomerCredit ?? true,
   });
 
-  const [rawKhqrInput, setRawKhqrInput] = useState<string>(
-    "00020101021129380009khqr@aclb0111855149656290206ACLEDA391300042CCY01014520459995802KH53031165909IEM SARAK6010Phnom Penh6214021009637602296304009A"
-  );
+  const [rawKhqrInput, setRawKhqrInput] = useState<string>("");
   const [khqrImportStatus, setKhqrImportStatus] = useState<string | null>(null);
 
   // Live KHQR Preview State
@@ -169,14 +167,14 @@ export default function SettingsPage() {
     footerMessage: "ទំនិញទិញរួចមិនអាចប្តូរប្រាក់វិញបានទេ\nធានាជួសជុលរយៈពេល ៣០ ថ្ងៃ • សូមអរគុណ!",
   });
 
-  // 7. Telegram Bot State
+  // 7. Telegram Bot State (Empty by default)
   const [telegramForm, setTelegramForm] = useState({
     botToken: telegramBotToken || "",
     chatId: telegramChatId || "",
-    notifyOnSale: telegramNotifyOnSale ?? true,
-    notifyOnLowStock: telegramNotifyOnLowStock ?? true,
-    notifyOnRepair: telegramNotifyOnRepair ?? true,
-    notifyDailyReport: true,
+    notifyOnSale: telegramNotifyOnSale ?? false,
+    notifyOnLowStock: telegramNotifyOnLowStock ?? false,
+    notifyOnRepair: telegramNotifyOnRepair ?? false,
+    notifyDailyReport: false,
   });
 
   // Load saved Telegram config from Server on component mount
@@ -549,12 +547,12 @@ export default function SettingsPage() {
       const d = decoded.data;
       const updated = {
         ...paymentConfig,
-        bakongMerchantId: d.bakongAccountID || "khqr@aclb",
-        bakongMerchantName: d.merchantName || "IEM SARAK",
+        bakongMerchantId: d.bakongAccountID || "",
+        bakongMerchantName: d.merchantName || "",
         bakongMerchantCity: d.merchantCity || "Phnom Penh",
-        merchantID: d.accountInformation || d.merchantID || "85514965629",
-        acquiringBank: d.acquiringBank || "ACLEDA",
-        mobileNumber: d.mobileNumber || "0963760229",
+        merchantID: d.accountInformation || d.merchantID || "",
+        acquiringBank: d.acquiringBank || "",
+        mobileNumber: d.mobileNumber || "",
       };
       setPaymentConfig(updated);
       setStorePaymentConfig({
@@ -567,7 +565,7 @@ export default function SettingsPage() {
         customKhqrRawString: rawKhqrInput.trim(),
         enableBakongKhqr: true,
       });
-      setKhqrImportStatus(`✓ បានភ្ជាប់គណនី KHQR របស់ ${d.merchantName} (${d.acquiringBank || "ACLEDA"} - ${d.bakongAccountID}) ដោយជោគជ័យ!`);
+      setKhqrImportStatus(`✓ បានភ្ជាប់គណនី KHQR របស់ ${d.merchantName || "Merchant"} (${d.acquiringBank || ""} - ${d.bakongAccountID}) ដោយជោគជ័យ!`);
       setTimeout(() => setKhqrImportStatus(null), 5000);
     } else {
       alert("ទម្រង់ KHQR មិនត្រឹមត្រូវ: " + (decoded.error || ""));
@@ -885,7 +883,7 @@ export default function SettingsPage() {
                   disabled={!canEditSettings}
                   value={rawKhqrInput}
                   onChange={(e) => setRawKhqrInput(e.target.value)}
-                  placeholder="00020101021129380009khqr@aclb..."
+                  placeholder="ឧ. 000201010211... (Paste raw KHQR string here)"
                   className="flex-1 rounded-xl border border-teal-300 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
                 <button

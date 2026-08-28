@@ -62,14 +62,19 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   useEffect(() => {
     if (isOpen && grandTotalUsd > 0) {
       const state = usePOSStore.getState();
+      if (!state.bakongMerchantId) {
+        setKhqrString("");
+        setKhqrQrUrl("");
+        return;
+      }
       const payload = generateBakongKHQR({
-        bakongAccount: state.bakongMerchantId || "khqr@aclb",
-        merchantName: state.bakongMerchantName || "IEM SARAK",
+        bakongAccount: state.bakongMerchantId,
+        merchantName: state.bakongMerchantName || "",
         merchantCity: state.bakongMerchantCity || "Phnom Penh",
-        merchantID: state.merchantID || "85514965629",
-        accountInformation: state.merchantID || "85514965629",
-        acquiringBank: state.acquiringBank || "ACLEDA",
-        mobileNumber: state.mobileNumber || "0963760229",
+        merchantID: state.merchantID || "",
+        accountInformation: state.merchantID || "",
+        acquiringBank: state.acquiringBank || "",
+        mobileNumber: state.mobileNumber || "",
         merchantCategoryCode: state.merchantCategoryCode || "5999",
         amount: grandTotalUsd,
         currency: "USD",
@@ -78,9 +83,13 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
       });
       setKhqrString(payload);
 
-      QRCode.toDataURL(payload, { width: 240, margin: 1 }, (err, url) => {
-        if (!err && url) setKhqrQrUrl(url);
-      });
+      if (payload) {
+        QRCode.toDataURL(payload, { width: 240, margin: 1 }, (err, url) => {
+          if (!err && url) setKhqrQrUrl(url);
+        });
+      } else {
+        setKhqrQrUrl("");
+      }
     }
   }, [isOpen, grandTotalUsd, currentBranchName]);
 
@@ -369,9 +378,11 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                   <span className="rounded-lg bg-teal-600 px-2.5 py-0.5 font-black text-white text-[11px] tracking-wider uppercase shadow-xs">
                     Bakong KHQR
                   </span>
-                  <span className="text-[11px] text-teal-300 font-bold bg-teal-950/80 px-2 py-0.5 rounded border border-teal-800/60">
-                    {usePOSStore.getState().acquiringBank || "ACLEDA Bank"}
-                  </span>
+                  {usePOSStore.getState().acquiringBank && (
+                    <span className="text-[11px] text-teal-300 font-bold bg-teal-950/80 px-2 py-0.5 rounded border border-teal-800/60">
+                      {usePOSStore.getState().acquiringBank}
+                    </span>
+                  )}
                 </div>
 
                 <p className="text-xs text-slate-300 font-sans mb-3 text-center">
@@ -383,18 +394,24 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                     <img src={khqrQrUrl} alt="Bakong KHQR" className="h-48 w-48" />
                   </div>
                 ) : (
-                  <div className="h-48 w-48 bg-slate-800 animate-pulse rounded-2xl flex items-center justify-center">
-                    <QrCode className="h-10 w-10 text-slate-600" />
+                  <div className="p-4 bg-slate-800/90 border border-amber-500/30 rounded-2xl flex flex-col items-center justify-center text-center space-y-2 max-w-xs">
+                    <QrCode className="h-10 w-10 text-amber-400/80" />
+                    <p className="text-xs font-bold text-amber-300">មិនទាន់បានកំណត់គណនី KHQR ទេ</p>
+                    <p className="text-[11px] text-slate-400">សូមចូលទៅកាន់ Settings &gt; ការទូទាត់ ដើម្បីកំណត់គណនី Bakong / KHQR របស់ហាង។</p>
                   </div>
                 )}
 
                 <div className="mt-3 text-center space-y-0.5">
-                  <p className="text-xs font-bold text-white tracking-wide">
-                    {usePOSStore.getState().bakongMerchantName || "IEM SARAK"}
-                  </p>
-                  <p className="text-[10px] font-mono text-slate-400">
-                    {usePOSStore.getState().bakongMerchantId || "khqr@aclb"} ({usePOSStore.getState().merchantID || "85514965629"})
-                  </p>
+                  {usePOSStore.getState().bakongMerchantName && (
+                    <p className="text-xs font-bold text-white tracking-wide">
+                      {usePOSStore.getState().bakongMerchantName}
+                    </p>
+                  )}
+                  {usePOSStore.getState().bakongMerchantId && (
+                    <p className="text-[10px] font-mono text-slate-400">
+                      {usePOSStore.getState().bakongMerchantId} {usePOSStore.getState().merchantID ? `(${usePOSStore.getState().merchantID})` : ""}
+                    </p>
+                  )}
                   <p className="text-2xl font-black font-mono text-emerald-400 pt-1.5">{formatUSD(grandTotalUsd)}</p>
                   <p className="text-xs text-slate-400 font-sans">{formatKHR(grandTotalUsd, exchangeRateKhr)}</p>
                 </div>
