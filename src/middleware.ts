@@ -10,6 +10,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/api") ||
     pathname.startsWith("/static") ||
     pathname === "/login" ||
+    pathname === "/setup" ||
+    pathname === "/onboarding" ||
     pathname === "/manifest.json" ||
     pathname === "/favicon.ico" ||
     pathname.includes(".")

@@ -44,9 +44,9 @@ export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>("LOGIN");
 
   // Login Form State
-  const [storeAddress, setStoreAddress] = useState("anajak@anajak.com");
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [storeAddress, setStoreAddress] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   // Database Setup & Switch Modal State
@@ -123,8 +123,40 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
+    // 1. Check system setup status
+    async function checkSetupStatus() {
+      try {
+        const res = await fetch("/api/system/status");
+        const data = await res.json();
+        if (data.success) {
+          if (data.needsSetup) {
+            router.replace("/setup");
+            return;
+          }
+          if (data.defaultStoreAddress && !storeAddress) {
+            setStoreAddress(data.defaultStoreAddress);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to verify system setup status:", e);
+      }
+    }
+
+    // 2. Check URL parameters
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("created") === "true") {
+        setSuccessMessage("🎉 ហាង និងគណនីម្ចាស់ហាងត្រូវបានបង្កើតដោយជោគជ័យ! សូមចូលប្រើប្រាស់ខាងក្រោម។");
+      }
+      const addr = params.get("address");
+      if (addr) {
+        setStoreAddress(decodeURIComponent(addr));
+      }
+    }
+
+    checkSetupStatus();
     fetchDbConfig();
-  }, []);
+  }, [router]);
 
   // 1. Test Connection
   const handleTestConnection = async () => {
@@ -202,6 +234,12 @@ export default function LoginPage() {
 
       setDbSetupStep(4);
       setDbSetupSuccess(data);
+
+      if (action === "NEW_DATABASE" || data.needsSetup || data.redirectTo === "/setup") {
+        setIsDbModalOpen(false);
+        router.push("/setup");
+        return;
+      }
 
       if (data.credentials) {
         setStoreAddress(data.credentials.storeAddress || customStoreAddress);
@@ -308,20 +346,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = (role: "admin" | "cashier" | "tech") => {
-    setStoreAddress(customStoreAddress || "anajak@anajak.com");
-    if (role === "admin") {
-      setUsername("admin");
-      setPassword("admin123");
-    } else if (role === "cashier") {
-      setUsername("cashier1");
-      setPassword("123456");
-    } else if (role === "tech") {
-      setUsername("tech_dara");
-      setPassword("123456");
-    }
-    setErrorMessage("");
-  };
+
 
   return (
     <div className="min-h-screen w-full bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden font-sans">
@@ -474,9 +499,6 @@ export default function LoginPage() {
                       className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-xs font-mono text-teal-300 placeholder-slate-500 focus:border-teal-500 focus:bg-white/10 focus:outline-hidden transition"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1 pl-1">
-                    Default: <span className="font-mono text-slate-400">anajak@anajak.com</span>
-                  </p>
                 </div>
 
                 {/* Username */}
@@ -491,7 +513,7 @@ export default function LoginPage() {
                       required
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="admin, cashier1, or email..."
+                      placeholder="បញ្ចូលឈ្មោះគណនី ឬ អ៊ីមែល (Username or Email)..."
                       className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:bg-white/10 focus:outline-hidden transition"
                     />
                   </div>
@@ -537,64 +559,6 @@ export default function LoginPage() {
                   )}
                 </button>
               </form>
-
-              {/* Quick Demo Switcher */}
-              <div className="pt-3 border-t border-white/10 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-bold text-slate-400">
-                    គណនីគំរូហាងមេ ({storeAddress || "anajak@anajak.com"}):
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsDbModalOpen(true);
-                    }}
-                    className="text-[10px] text-teal-400 hover:text-teal-300 font-bold underline"
-                  >
-                    កំណត់ Database
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin("admin")}
-                    className={`rounded-xl border p-2 text-center transition flex flex-col items-center gap-1 ${
-                      username === "admin"
-                        ? "border-teal-500 bg-teal-500/20 text-teal-300"
-                        : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    <span className="text-[10px] font-bold">Admin</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin("cashier")}
-                    className={`rounded-xl border p-2 text-center transition flex flex-col items-center gap-1 ${
-                      username === "cashier1"
-                        ? "border-teal-500 bg-teal-500/20 text-teal-300"
-                        : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <ShoppingCart className="h-4 w-4" />
-                    <span className="text-[10px] font-bold">Cashier</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin("tech")}
-                    className={`rounded-xl border p-2 text-center transition flex flex-col items-center gap-1 ${
-                      username === "tech_dara"
-                        ? "border-teal-500 bg-teal-500/20 text-teal-300"
-                        : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <Wrench className="h-4 w-4" />
-                    <span className="text-[10px] font-bold">Technician</span>
-                  </button>
-                </div>
-              </div>
             </>
           )}
 

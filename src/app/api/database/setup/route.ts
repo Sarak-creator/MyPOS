@@ -194,26 +194,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Create Cashier if not exists
-    const existingCashier = await prisma.user.findFirst({
-      where: { tenantId: tenant.id, username: "cashier1" },
-    });
-    if (!existingCashier) {
-      await prisma.user.create({
-        data: {
-          tenantId: tenant.id,
-          branchId: branchHQ?.id,
-          username: "cashier1",
-          email: `cashier1@${tenant.storeAddress.split("@")[0]}.com`,
-          fullName: "Heng Bopha (ហេង បុប្ផា)",
-          fullNameKh: "ហេង បុប្ផា",
-          passwordHash: staffPassword,
-          role: RoleType.CASHIER,
-          permissions: ["POS_CASHIER", "VIEW_PRODUCTS", "CREATE_ORDER", "VIEW_CUSTOMERS"],
-        },
-      }).catch(() => {});
-    }
-
     // Step 5: Seed Chart of Accounts (COA)
     const coaData = [
       { code: "1010", nameKh: "សាច់ប្រាក់ក្នុងដៃ (Cash on Hand USD)", nameEn: "Cash on Hand USD", type: AccountType.ASSET },
@@ -248,133 +228,22 @@ export async function POST(request: Request) {
       { nameKh: "កុំព្យូទ័រ & ឡេបថប", nameEn: "Laptops & Computers", slug: "laptops", icon: "laptop" },
     ];
 
-    const categoryMap: Record<string, string> = {};
     for (const cat of defaultCategories) {
       let existingCat = await prisma.category.findFirst({
         where: { tenantId: tenant.id, slug: cat.slug },
       });
       if (!existingCat) {
-        existingCat = await prisma.category.create({
+        await prisma.category.create({
           data: { tenantId: tenant.id, ...cat },
         });
       }
-      categoryMap[cat.slug] = existingCat.id;
     }
 
-    // Step 7: Seed Sample Brand & Products with Initial Stock
-    let brandApple = await prisma.brand.findFirst({ where: { name: "Apple" } });
-    if (!brandApple) {
-      brandApple = await prisma.brand.create({ data: { name: "Apple" } });
-    }
-
-    // Product 1: iPhone 15 Pro Max (IMEI Item)
-    const existingP1 = await prisma.product.findFirst({
-      where: { tenantId: tenant.id, sku: { startsWith: "IP15PM" } },
-    });
-
-    if (!existingP1 && categoryMap["smartphones"] && branchHQ && mainWarehouse) {
-      await prisma.product.create({
-        data: {
-          tenantId: tenant.id,
-          categoryId: categoryMap["smartphones"],
-          brandId: brandApple.id,
-          sku: `IP15PM-256-NT-${Date.now().toString().slice(-4)}`,
-          nameKh: "iPhone 15 Pro Max 256GB Natural Titanium (LL/A)",
-          nameEn: "iPhone 15 Pro Max 256GB Natural Titanium",
-          type: ProductType.SERIAL_IMEI_ITEM,
-          costPriceUsd: 1040.0,
-          salePriceUsd: 1169.0,
-          salePriceKhr: 1169.0 * 4100,
-          minStockAlert: 2,
-          unit: "គ្រឿង",
-          stockItems: {
-            create: [
-              {
-                branchId: branchHQ.id,
-                warehouseId: mainWarehouse.id,
-                serialOrImei: `359876100982341`,
-                quantity: 1,
-                costPriceUsd: 1040.0,
-                status: "IN_STOCK",
-              },
-              {
-                branchId: branchHQ.id,
-                warehouseId: mainWarehouse.id,
-                serialOrImei: `359876100982342`,
-                quantity: 1,
-                costPriceUsd: 1040.0,
-                status: "IN_STOCK",
-              },
-            ],
-          },
-        },
-      });
-    }
-
-    // Product 2: Apple 20W Charger (Standard Item)
-    const existingP2 = await prisma.product.findFirst({
-      where: { tenantId: tenant.id, sku: { startsWith: "AP-20W" } },
-    });
-
-    if (!existingP2 && categoryMap["accessories"] && branchHQ && mainWarehouse) {
-      await prisma.product.create({
-        data: {
-          tenantId: tenant.id,
-          categoryId: categoryMap["accessories"],
-          brandId: brandApple.id,
-          sku: `AP-20W-USB-C-${Date.now().toString().slice(-4)}`,
-          barcode: "885909123456",
-          nameKh: "ក្បាលឆ្នាំងសាក Apple 20W USB-C Power Adapter",
-          nameEn: "Apple 20W USB-C Power Adapter",
-          type: ProductType.STANDARD_ITEM,
-          costPriceUsd: 6.5,
-          salePriceUsd: 12.0,
-          salePriceKhr: 12.0 * 4100,
-          minStockAlert: 5,
-          unit: "ដើម",
-          stockItems: {
-            create: [
-              {
-                branchId: branchHQ.id,
-                warehouseId: mainWarehouse.id,
-                quantity: 25,
-                costPriceUsd: 6.5,
-                status: "IN_STOCK",
-              },
-            ],
-          },
-        },
-      });
-    }
-
-    // Product 3: Screen Replacement Labor Service
-    const existingP3 = await prisma.product.findFirst({
-      where: { tenantId: tenant.id, sku: { startsWith: "SRV-IPHONE" } },
-    });
-
-    if (!existingP3 && categoryMap["repair-services"]) {
-      await prisma.product.create({
-        data: {
-          tenantId: tenant.id,
-          categoryId: categoryMap["repair-services"],
-          sku: `SRV-IPHONE-SCREEN`,
-          nameKh: "សេវាកម្មដូរអេក្រង់ទូរស័ព្ទ iPhone (Original Service)",
-          nameEn: "iPhone Screen Replacement Labor Service",
-          type: ProductType.SERVICE_LABOR,
-          costPriceUsd: 0,
-          salePriceUsd: 15.0,
-          salePriceKhr: 15.0 * 4100,
-          minStockAlert: 0,
-          unit: "ដង",
-        },
-      });
-    }
-
-    console.log("✅ Database Auto-Setup & Seed Completed Successfully!");
+    console.log("✅ Clean Database Initialization Completed Successfully!");
 
     return NextResponse.json({
       success: true,
-      message: "🎉 ការតភ្ជាប់ និងបង្កើតទិន្នន័យចាំបាច់ទាំងអស់បានជោគជ័យ 100%!",
+      message: "🎉 ការតភ្ជាប់ និងបង្កើតហាងព្រមទាំងម្ចាស់ហាងបានជោគជ័យ!",
       credentials: {
         storeAddress: tenant.storeAddress,
         username: adminUsername.trim() || "admin",
@@ -385,7 +254,7 @@ export async function POST(request: Request) {
         tenantName: tenant.name,
         branchName: branchHQ?.name,
         warehouseName: mainWarehouse?.name,
-        categoriesCount: Object.keys(categoryMap).length,
+        categoriesCount: defaultCategories.length,
       },
     });
   } catch (error: any) {
