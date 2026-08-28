@@ -4,7 +4,7 @@ import { getAuthSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/hrm - Fetch Employees, Payroll, Attendance scoped to tenant
+// GET /api/hrm - Fetch Employees, Payroll, Attendance scoped to tenant and branch
 export async function GET(request: Request) {
   try {
     const session = await getAuthSession(request);
@@ -16,12 +16,40 @@ export async function GET(request: Request) {
     }
 
     if (!tenantId) {
-      return NextResponse.json({ success: true, employees: [], payrolls: [], attendances: [] });
+      return NextResponse.json({ success: true, employees: [], payrolls: [], attendances: [], branches: [] });
     }
 
-    const [employees, payrolls, attendances, users] = await Promise.all([
+    const userRole = session?.role || "ADMIN";
+    const isSuperAdminOrAdmin = userRole === "SUPER_ADMIN" || userRole === "ADMIN";
+    const isBranchManager = userRole === "BRANCH_MANAGER";
+
+    const { searchParams } = new URL(request.url);
+    const queryBranchId = searchParams.get("branchId");
+
+    let effectiveBranchId: string | null = null;
+    if (isBranchManager) {
+      effectiveBranchId = session?.branchId || null;
+      if (!effectiveBranchId && session?.userId) {
+        const u = await prisma.user.findUnique({
+          where: { id: session.userId },
+          select: { branchId: true },
+        });
+        effectiveBranchId = u?.branchId || null;
+      }
+    } else if (isSuperAdminOrAdmin && queryBranchId && queryBranchId !== "ALL") {
+      effectiveBranchId = queryBranchId;
+    }
+
+    const employeeWhereClause: any = {
+      user: {
+        tenantId,
+        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
+      },
+    };
+
+    const [employees, payrolls, attendances, users, branches] = await Promise.all([
       prisma.employee.findMany({
-        where: { user: { tenantId } },
+        where: employeeWhereClause,
         include: {
           user: {
             select: {
@@ -32,6 +60,14 @@ export async function GET(request: Request) {
               fullNameKh: true,
               phone: true,
               email: true,
+              branchId: true,
+              branch: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
             },
           },
           payrolls: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -40,19 +76,40 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
       prisma.payrollRecord.findMany({
-        where: { employee: { user: { tenantId } } },
+        where: { employee: employeeWhereClause },
         include: { employee: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.attendance.findMany({
-        where: { employee: { user: { tenantId } } },
-        include: { employee: true },
+        where: {
+          employee: employeeWhereClause,
+          ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
+        },
+        include: { employee: true, branch: true },
         orderBy: { checkIn: "desc" },
-        take: 30,
+        take: 50,
       }),
       prisma.user.findMany({
-        where: { tenantId },
-        select: { id: true, username: true, fullName: true, fullNameKh: true, role: true },
+        where: {
+          tenantId,
+          ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
+        },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          fullNameKh: true,
+          role: true,
+          branchId: true,
+          branch: { select: { id: true, name: true, code: true } },
+        },
+      }),
+      prisma.branch.findMany({
+        where: {
+          tenantId,
+          ...(effectiveBranchId ? { id: effectiveBranchId } : {}),
+        },
+        select: { id: true, name: true, code: true, isHeadOffice: true },
       }),
     ]);
 
@@ -75,6 +132,9 @@ export async function GET(request: Request) {
         role: emp.user?.role || emp.position,
         phone: emp.user?.phone || emp.phone,
         email: emp.user?.email || "",
+        branchId: emp.user?.branchId || null,
+        branchName: emp.user?.branch?.name || "មិនទាន់កំណត់",
+        branchCode: emp.user?.branch?.code || "",
         baseSalaryUsd,
         commissionUsd,
         overtimeUsd,
@@ -92,12 +152,16 @@ export async function GET(request: Request) {
       payrolls,
       attendances,
       users,
+      branches,
+      isBranchScoped: isBranchManager,
+      scopedBranchId: effectiveBranchId,
     });
   } catch (error: any) {
     console.error("GET /api/hrm error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
 
 // POST /api/hrm - Create new Employee or Process Payroll scoped to tenant
 export async function POST(request: Request) {

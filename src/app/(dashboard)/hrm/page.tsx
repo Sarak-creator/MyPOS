@@ -22,6 +22,8 @@ import {
   Trash2,
   Coffee,
   AlertCircle,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -33,6 +35,9 @@ interface EmployeePayroll {
   nameEn: string;
   position: string;
   phone: string;
+  branchId?: string | null;
+  branchName?: string;
+  branchCode?: string;
   baseSalaryUsd: number;
   overtimeUsd: number;
   commissionUsd: number;
@@ -81,6 +86,12 @@ export default function HRMPage() {
   const [loading, setLoading] = useState(true);
   const [attLoading, setAttLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Role & Scoping State
+  const [isBranchScoped, setIsBranchScoped] = useState(false);
+  const [scopedBranchId, setScopedBranchId] = useState<string | null>(null);
+  const [scopedBranchName, setScopedBranchName] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>("ADMIN");
 
   // Live Clock
   const [currentLiveTime, setCurrentLiveTime] = useState<string>("");
@@ -154,6 +165,7 @@ export default function HRMPage() {
     position: "Senior Repair Technician",
     baseSalaryUsd: "450",
     phone: "",
+    branchId: "",
   });
 
   const fetchBranches = async () => {
@@ -171,13 +183,21 @@ export default function HRMPage() {
     }
   };
 
-  const fetchHRMData = async () => {
+  const fetchHRMData = async (branchParam?: string) => {
     try {
       setLoading(true);
-      const res = await fetch("/api/hrm");
+      const targetBranch = branchParam !== undefined ? branchParam : selectedBranch;
+      const url = targetBranch && targetBranch !== "ALL" ? `/api/hrm?branchId=${targetBranch}` : "/api/hrm";
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setEmployees(data.employees || []);
+        if (data.isBranchScoped && data.scopedBranchId) {
+          setIsBranchScoped(true);
+          setScopedBranchId(data.scopedBranchId);
+          setSelectedBranch(data.scopedBranchId);
+          setQuickClockBranchId(data.scopedBranchId);
+        }
         if (data.employees?.length > 0 && !quickClockEmpId) {
           setQuickClockEmpId(data.employees[0].id);
         }
@@ -206,6 +226,16 @@ export default function HRMPage() {
         if (data.stats) {
           setAttStats(data.stats);
         }
+        if (data.userRole) setUserRole(data.userRole);
+        if (data.isBranchScoped) {
+          setIsBranchScoped(true);
+          setScopedBranchId(data.scopedBranchId);
+          setScopedBranchName(data.scopedBranchName);
+          if (data.scopedBranchId) {
+            setSelectedBranch(data.scopedBranchId);
+            setQuickClockBranchId(data.scopedBranchId);
+          }
+        }
       }
     } catch (err) {
       console.error("Failed to load attendances:", err);
@@ -229,13 +259,14 @@ export default function HRMPage() {
 
     try {
       setClockActionLoading(true);
+      const effectiveTargetBranch = isBranchScoped ? scopedBranchId : (quickClockBranchId || branches[0]?.id);
       const res = await fetch("/api/hrm/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "CLOCK_IN",
           employeeId: quickClockEmpId,
-          branchId: quickClockBranchId || branches[0]?.id,
+          branchId: effectiveTargetBranch,
           notes: quickClockNotes,
         }),
       });
@@ -302,6 +333,8 @@ export default function HRMPage() {
         ? `${manualForm.date}T${manualForm.checkOut}:00.000Z`
         : undefined;
 
+      const targetBranch = isBranchScoped ? scopedBranchId : (manualForm.branchId || branches[0]?.id);
+
       if (manualForm.id) {
         // Update
         const res = await fetch("/api/hrm/attendance", {
@@ -313,7 +346,7 @@ export default function HRMPage() {
             checkOut: checkOutDateTime,
             status: manualForm.status,
             notes: manualForm.notes,
-            branchId: manualForm.branchId,
+            branchId: targetBranch,
           }),
         });
         const data = await res.json();
@@ -326,7 +359,7 @@ export default function HRMPage() {
           body: JSON.stringify({
             action: "MANUAL_ENTRY",
             employeeId: manualForm.employeeId,
-            branchId: manualForm.branchId || branches[0]?.id,
+            branchId: targetBranch,
             date: manualForm.date,
             checkIn: checkInDateTime,
             checkOut: checkOutDateTime,
@@ -390,6 +423,7 @@ export default function HRMPage() {
         position: "Senior Repair Technician",
         baseSalaryUsd: "450",
         phone: "",
+        branchId: "",
       });
       await fetchHRMData();
     } catch (err: any) {
@@ -417,6 +451,17 @@ export default function HRMPage() {
       console.error("Failed to disburse payroll:", err);
     }
   };
+
+  // Available employees for quick clock and manual record
+  const availableEmployees = employees.filter((emp) => {
+    if (isBranchScoped && scopedBranchId) {
+      return !emp.branchId || emp.branchId === scopedBranchId;
+    }
+    if (selectedBranch !== "ALL") {
+      return !emp.branchId || emp.branchId === selectedBranch;
+    }
+    return true;
+  });
 
   const filteredAttendances = attendances.filter((att) => {
     const query = attendanceSearch.toLowerCase().trim();
@@ -481,7 +526,7 @@ export default function HRMPage() {
             {t.hrm} & {t.attendance}
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            គ្រប់គ្រងវត្តមានបុគ្គលិកប្រចាំថ្ងៃ ម៉ោងចូល-ចេញ ប្រាក់បៀវត្ស និងកម្រៃជើងសារពហុសាខា
+            គ្រប់គ្រងវត្តមានបុគ្គលិកតាមសាខា ម៉ោងចូល-ចេញ ប្រាក់បៀវត្ស និងកម្រៃជើងសារពហុសាខា
           </p>
         </div>
 
@@ -505,6 +550,26 @@ export default function HRMPage() {
           </button>
         </div>
       </div>
+
+      {/* Branch Scope Banner for Branch Managers */}
+      {isBranchScoped && (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50/70 p-4 text-xs font-bold text-amber-950 shadow-2xs">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-white font-bold shrink-0 shadow-xs">
+            <Building2 className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <p className="font-extrabold text-amber-950 flex items-center gap-1.5">
+              <span>🔒 វិសាលភាពសាខា៖ កំណត់ត្រាវត្តមានសម្រាប់តែសាខា៖</span>
+              <span className="rounded-md bg-amber-200/80 px-2 py-0.5 text-amber-950 font-black">
+                {scopedBranchName || "សាខារបស់អ្នក"}
+              </span>
+            </p>
+            <p className="text-[11px] text-amber-800 font-normal mt-0.5">
+              អ្នកមានសិទ្ធិមើល គ្រប់គ្រង និងកត់ត្រាវត្តមានសម្រាប់តែបុគ្គលិកក្នុងសាខាដែលបានចាត់តាំងនេះប៉ុណ្ណោះ។
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-slate-200 gap-6 text-xs font-bold">
@@ -578,24 +643,30 @@ export default function HRMPage() {
                   className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur-md focus:outline-hidden focus:bg-teal-950/80"
                 >
                   <option value="" className="text-slate-800">ជ្រើសរើសបុគ្គលិក...</option>
-                  {employees.map((emp) => (
+                  {availableEmployees.map((emp) => (
                     <option key={emp.id} value={emp.id} className="text-slate-800">
-                      {emp.nameKh} ({emp.code}) - {emp.position}
+                      {emp.nameKh} ({emp.code}) - {emp.position} {emp.branchName ? `[${emp.branchName}]` : ""}
                     </option>
                   ))}
                 </select>
 
-                <select
-                  value={quickClockBranchId}
-                  onChange={(e) => setQuickClockBranchId(e.target.value)}
-                  className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur-md focus:outline-hidden focus:bg-teal-950/80"
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id} className="text-slate-800">
-                      🏢 {b.name} ({b.code})
-                    </option>
-                  ))}
-                </select>
+                {!isBranchScoped ? (
+                  <select
+                    value={quickClockBranchId}
+                    onChange={(e) => setQuickClockBranchId(e.target.value)}
+                    className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur-md focus:outline-hidden focus:bg-teal-950/80"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id} className="text-slate-800">
+                        🏢 {b.name} ({b.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-xl bg-white/15 border border-white/20 px-3 py-2 text-xs font-bold text-teal-100">
+                    🏢 {scopedBranchName || "សាខាផ្ទាល់"}
+                  </span>
+                )}
 
                 <input
                   type="text"
@@ -720,21 +791,29 @@ export default function HRMPage() {
                 </button>
 
                 {/* Branch Filter */}
-                <select
-                  value={selectedBranch}
-                  onChange={(e) => {
-                    setSelectedBranch(e.target.value);
-                    fetchAttendanceData(attendanceDate, e.target.value);
-                  }}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-hidden shadow-2xs"
-                >
-                  <option value="ALL">🏢 គ្រប់សាខាទាំងអស់ (All Branches)</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      🏢 {b.name} ({b.code})
-                    </option>
-                  ))}
-                </select>
+                {!isBranchScoped ? (
+                  <select
+                    value={selectedBranch}
+                    onChange={(e) => {
+                      setSelectedBranch(e.target.value);
+                      fetchAttendanceData(attendanceDate, e.target.value);
+                      fetchHRMData(e.target.value);
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-hidden shadow-2xs"
+                  >
+                    <option value="ALL">🏢 គ្រប់សាខាទាំងអស់ (All Branches)</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        🏢 {b.name} ({b.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 shadow-2xs">
+                    <Building2 className="h-3.5 w-3.5 text-amber-700" />
+                    <span>សាខា៖ {scopedBranchName || "សាខាផ្ទាល់"}</span>
+                  </div>
+                )}
 
                 {/* Status Filter */}
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
@@ -768,9 +847,10 @@ export default function HRMPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
+                    const defaultBranch = isBranchScoped ? (scopedBranchId || "") : (selectedBranch !== "ALL" ? selectedBranch : branches[0]?.id || "");
                     setManualForm({
-                      employeeId: employees[0]?.id || "",
-                      branchId: branches[0]?.id || "",
+                      employeeId: availableEmployees[0]?.id || "",
+                      branchId: defaultBranch,
                       date: attendanceDate,
                       checkIn: "08:00",
                       checkOut: "17:30",
@@ -799,12 +879,12 @@ export default function HRMPage() {
           {attLoading ? (
             <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-2 bg-white rounded-2xl border border-slate-200">
               <Loader2 className="h-6 w-6 animate-spin text-teal-700" />
-              <span className="text-xs font-semibold">កំពុងទាញទិន្នន័យវត្តមាន...</span>
+              <span className="text-xs font-semibold">កំពុងទាញទិន្នន័យវត្តមានតាមសាខា...</span>
             </div>
           ) : filteredAttendances.length === 0 ? (
             <div className="p-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
               <CalendarCheck className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-              <p className="text-xs font-bold text-slate-600">មិនទាន់មានកំណត់ត្រាវត្តមានសម្រាប់កាលបរិច្ឆេទនេះទេ</p>
+              <p className="text-xs font-bold text-slate-600">មិនទាន់មានកំណត់ត្រាវត្តមានសម្រាប់សាខា និងកាលបរិច្ឆេទនេះទេ</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 ប្រើផ្ទាំងខាងលើដើម្បីកត់ត្រាម៉ោងចូល-ចេញរហ័ស ឬចុច &quot;កត់ត្រាដោយដៃ&quot;
               </p>
@@ -960,6 +1040,7 @@ export default function HRMPage() {
               <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
                 <tr>
                   <th className="py-3 px-4">កូដ & ឈ្មោះបុគ្គលិក</th>
+                  <th className="py-3 px-4">សាខា</th>
                   <th className="py-3 px-4">មុខតំណែង</th>
                   <th className="py-3 px-4 text-right">ប្រាក់ខែគោល</th>
                   <th className="py-3 px-4 text-right">កម្រៃជើងសារជួសជុល</th>
@@ -975,6 +1056,11 @@ export default function HRMPage() {
                       <p className="text-[10px] text-slate-400 font-mono">
                         {emp.code} • {emp.phone}
                       </p>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 border border-slate-200">
+                        {emp.branchName || "មិនទាន់កំណត់"}
+                      </span>
                     </td>
                     <td className="py-3 px-4">
                       <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
@@ -1025,6 +1111,7 @@ export default function HRMPage() {
                 <tr>
                   <th className="py-3 px-4">កូដបុគ្គលិក</th>
                   <th className="py-3 px-4">ឈ្មោះពេញ (ខ្មែរ / អង់គ្លេស)</th>
+                  <th className="py-3 px-4">សាខា</th>
                   <th className="py-3 px-4">មុខតំណែង</th>
                   <th className="py-3 px-4">លេខទូរស័ព្ទ</th>
                   <th className="py-3 px-4 text-right">ប្រាក់ខែគោល</th>
@@ -1037,6 +1124,11 @@ export default function HRMPage() {
                     <td className="py-3 px-4">
                       <p className="font-bold text-slate-900">{emp.nameKh}</p>
                       <p className="text-[10px] text-slate-400 font-normal">{emp.nameEn || "-"}</p>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 border border-slate-200">
+                        {emp.branchName || "មិនទាន់កំណត់"}
+                      </span>
                     </td>
                     <td className="py-3 px-4">
                       <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
@@ -1082,7 +1174,7 @@ export default function HRMPage() {
                   className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-800 focus:outline-hidden"
                 >
                   <option value="">ជ្រើសរើសបុគ្គលិក...</option>
-                  {employees.map((emp) => (
+                  {availableEmployees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.nameKh} ({emp.code}) - {emp.position}
                     </option>
@@ -1092,18 +1184,27 @@ export default function HRMPage() {
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">សាខាបំពេញការងារ *</label>
-                <select
-                  required
-                  value={manualForm.branchId}
-                  onChange={(e) => setManualForm({ ...manualForm, branchId: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-800 focus:outline-hidden"
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      🏢 {b.name} ({b.code})
-                    </option>
-                  ))}
-                </select>
+                {!isBranchScoped ? (
+                  <select
+                    required
+                    value={manualForm.branchId}
+                    onChange={(e) => setManualForm({ ...manualForm, branchId: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-800 focus:outline-hidden"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        🏢 {b.name} ({b.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    readOnly
+                    value={`🏢 ${scopedBranchName || "សាខាផ្ទាល់"}`}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-100 p-2.5 text-xs font-bold text-slate-700 cursor-not-allowed"
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1225,7 +1326,9 @@ export default function HRMPage() {
                 </h3>
                 <p className="text-xs font-mono text-slate-700 font-bold">
                   កាលបរិច្ឆេទ: {attendanceDate} • សាខា:{" "}
-                  {selectedBranch === "ALL"
+                  {isBranchScoped
+                    ? scopedBranchName || "សាខាផ្ទាល់"
+                    : selectedBranch === "ALL"
                     ? "គ្រប់សាខាទាំងអស់"
                     : branches.find((b) => b.id === selectedBranch)?.name || "-"}
                 </p>
@@ -1257,6 +1360,7 @@ export default function HRMPage() {
                   <tr>
                     <th className="py-2 px-2.5 border-r border-slate-200">ល.រ</th>
                     <th className="py-2 px-2.5 border-r border-slate-200">កូដ & ឈ្មោះបុគ្គលិក</th>
+                    <th className="py-2 px-2.5 border-r border-slate-200">សាខា</th>
                     <th className="py-2 px-2.5 border-r border-slate-200">មុខតំណែង</th>
                     <th className="py-2 px-2.5 text-center border-r border-slate-200">ម៉ោងចូល</th>
                     <th className="py-2 px-2.5 text-center border-r border-slate-200">ម៉ោងចេញ</th>
@@ -1272,6 +1376,7 @@ export default function HRMPage() {
                         <p className="font-bold text-slate-900">{att.employeeNameKh}</p>
                         <p className="text-[9px] text-slate-500 font-mono">{att.employeeCode}</p>
                       </td>
+                      <td className="py-2 px-2.5 border-r border-slate-200 text-[10px] font-bold">{att.branchName}</td>
                       <td className="py-2 px-2.5 border-r border-slate-200 text-[11px]">{att.position}</td>
                       <td className="py-2 px-2.5 border-r border-slate-200 text-center font-mono font-bold">
                         {att.checkIn

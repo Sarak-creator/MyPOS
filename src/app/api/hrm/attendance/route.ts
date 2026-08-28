@@ -38,6 +38,8 @@ export async function GET(request: Request) {
 
     // 3. Resolve Branch Scoping
     let effectiveBranchId: string | null = null;
+    let scopedBranchName: string | null = null;
+
     if (isBranchManager) {
       effectiveBranchId = session?.branchId || null;
       if (!effectiveBranchId && session?.userId) {
@@ -49,6 +51,14 @@ export async function GET(request: Request) {
       }
     } else if (isSuperAdminOrAdmin && queryBranchId && queryBranchId !== "ALL") {
       effectiveBranchId = queryBranchId;
+    }
+
+    if (effectiveBranchId) {
+      const branchInfo = await prisma.branch.findUnique({
+        where: { id: effectiveBranchId },
+        select: { name: true },
+      });
+      scopedBranchName = branchInfo?.name || null;
     }
 
     // 4. Build Filter
@@ -95,6 +105,7 @@ export async function GET(request: Request) {
                   role: true,
                   avatarUrl: true,
                   phone: true,
+                  branchId: true,
                 },
               },
             },
@@ -171,6 +182,8 @@ export async function GET(request: Request) {
       stats,
       userRole,
       isBranchScoped: isBranchManager,
+      scopedBranchId: effectiveBranchId,
+      scopedBranchName,
     });
   } catch (error: any) {
     console.error("GET /api/hrm/attendance error:", error);
@@ -204,8 +217,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Employee not found." }, { status: 404 });
     }
 
+    const userRole = session?.role || "ADMIN";
+    const isBranchManager = userRole === "BRANCH_MANAGER";
+
     // Determine target branch
-    let targetBranchId = branchId || employee.user?.branchId || session?.branchId;
+    let targetBranchId: string | undefined = undefined;
+    if (isBranchManager) {
+      targetBranchId = session?.branchId || undefined;
+      if (!targetBranchId && session?.userId) {
+        const u = await prisma.user.findUnique({
+          where: { id: session.userId },
+          select: { branchId: true },
+        });
+        targetBranchId = u?.branchId || undefined;
+      }
+    } else {
+      targetBranchId = branchId || employee.user?.branchId || session?.branchId;
+    }
+
     if (!targetBranchId) {
       const defaultBranch = await prisma.branch.findFirst({
         where: { tenantId },
