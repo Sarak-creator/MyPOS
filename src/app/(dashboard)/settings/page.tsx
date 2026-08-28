@@ -210,6 +210,34 @@ export default function SettingsPage() {
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
   const [telegramTestStatus, setTelegramTestStatus] = useState<{ success: boolean; message: string } | null>(null);
 
+  // User Session & RBAC Permissions
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const isSuperAdminOrAdmin =
+    currentUser?.role === "SUPER_ADMIN" ||
+    currentUser?.role === "ADMIN" ||
+    currentUser?.permissions?.includes("*");
+
+  // Branch Manager has view permissions only, no manage/edit permissions
+  const canEditSettings =
+    isSuperAdminOrAdmin ||
+    (currentUser?.permissions?.includes("settings:manage") && currentUser?.role !== "BRANCH_MANAGER");
+
+  const canManageUsers =
+    isSuperAdminOrAdmin ||
+    (currentUser?.permissions?.includes("users:manage") && currentUser?.role !== "BRANCH_MANAGER");
+
   const handleTestTelegram = async () => {
     if (!telegramForm.botToken.trim() || !telegramForm.chatId.trim()) {
       alert("សូមបញ្ចូល Telegram Bot Token និង Chat ID ជាមុនសិន!");
@@ -762,16 +790,34 @@ export default function SettingsPage() {
             <RefreshCw className={`h-3.5 w-3.5 text-teal-700 ${loading ? "animate-spin" : ""}`} />
             ផ្ទុកឡើងវិញ
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2 text-xs font-bold text-white shadow-md shadow-teal-900/20 hover:bg-teal-800 transition active:scale-95 disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {t.save}ការកំណត់
-          </button>
+          {canEditSettings ? (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2 text-xs font-bold text-white shadow-md shadow-teal-900/20 hover:bg-teal-800 transition active:scale-95 disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {t.save}ការកំណត់
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-500">
+              <Lock className="h-3.5 w-3.5 text-slate-400" />
+              <span>មើលតែប៉ុណ្ណោះ (View-Only)</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* View-Only Mode Banner for Branch Manager */}
+      {currentUser && !canEditSettings && (
+        <div className="flex items-center gap-3 rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-900 shadow-xs animate-in fade-in">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+          <div>
+            <span className="font-extrabold text-sm">សិទ្ធិមើលតែប៉ុណ្ណោះ (View-Only Mode)៖</span>{" "}
+            គណនីរបស់អ្នកមានតួនាទីជា <span className="font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded text-amber-900">{currentUser?.role || "BRANCH_MANAGER"}</span> ដែលមានសិទ្ធិពិនិត្យមើលការកំណត់ប្រព័ន្ធប៉ុណ្ណោះ មិនមានសិទ្ធិកែប្រែ ឬលុបទិន្នន័យការកំណត់ឡើយ។
+          </div>
+        </div>
+      )}
 
       {/* Settings Navigation Tabs */}
       <div className="flex flex-wrap border-b border-slate-200 gap-2 text-xs font-bold">
@@ -836,15 +882,17 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={rawKhqrInput}
                   onChange={(e) => setRawKhqrInput(e.target.value)}
                   placeholder="00020101021129380009khqr@aclb..."
-                  className="flex-1 rounded-xl border border-teal-300 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="flex-1 rounded-xl border border-teal-300 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
+                  disabled={!canEditSettings}
                   onClick={handleAutoConnectRawKHQR}
-                  className="rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs px-4 py-2 shadow-xs transition active:scale-95 shrink-0"
+                  className="rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs px-4 py-2 shadow-xs transition active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ភ្ជាប់ឥឡូវនេះ
                 </button>
@@ -868,6 +916,7 @@ export default function SettingsPage() {
                       <button
                         key={bank.domain}
                         type="button"
+                        disabled={!canEditSettings}
                         onClick={() => {
                           const base = paymentConfig.bakongMerchantId.split("@")[0] || "012888999";
                           setPaymentConfig({ ...paymentConfig, bakongMerchantId: `${base}${bank.domain}` });
@@ -876,7 +925,7 @@ export default function SettingsPage() {
                           isSelected
                             ? "border-teal-600 bg-teal-50/70 text-teal-900 shadow-2xs"
                             : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                        }`}
+                        } disabled:opacity-60 disabled:cursor-not-allowed`}
                       >
                         {bank.name}
                         <span className="block text-[10px] font-mono text-slate-400 font-normal">{bank.domain}</span>
@@ -894,10 +943,11 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     required
+                    disabled={!canEditSettings}
                     value={paymentConfig.bakongMerchantId}
                     onChange={(e) => setPaymentConfig({ ...paymentConfig, bakongMerchantId: e.target.value })}
                     placeholder="012888999@aba ឬ username@aba"
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-slate-900 font-mono font-bold text-sm focus:border-teal-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-slate-900 font-mono font-bold text-sm focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
@@ -912,10 +962,11 @@ export default function SettingsPage() {
                 <input
                   type="text"
                   required
+                  disabled={!canEditSettings}
                   value={paymentConfig.bakongMerchantName}
                   onChange={(e) => setPaymentConfig({ ...paymentConfig, bakongMerchantName: e.target.value })}
                   placeholder="ANACHAK POS STORE"
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono font-bold focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono font-bold focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
                 <p className="text-[11px] text-slate-400 mt-0.5">ឈ្មោះហាងដែលអតិថិជននឹងឃើញក្នុង Mobile Banking App (អតិបរមា ២៥ តួអក្សរ)</p>
               </div>
@@ -926,10 +977,11 @@ export default function SettingsPage() {
                 </label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={paymentConfig.bakongMerchantCity}
                   onChange={(e) => setPaymentConfig({ ...paymentConfig, bakongMerchantCity: e.target.value })}
                   placeholder="Phnom Penh"
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -949,9 +1001,10 @@ export default function SettingsPage() {
                     </div>
                     <input
                       type="checkbox"
+                      disabled={!canEditSettings}
                       checked={m.val}
                       onChange={(e) => setPaymentConfig({ ...paymentConfig, [m.id]: e.target.checked })}
-                      className="h-4 w-4 accent-teal-700 rounded"
+                      className="h-4 w-4 accent-teal-700 rounded disabled:cursor-not-allowed"
                     />
                   </label>
                 ))}
@@ -959,14 +1012,21 @@ export default function SettingsPage() {
 
               {/* Save KHQR Button */}
               <div className="pt-3 border-t border-slate-100 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSaveKHQR}
-                  className="flex items-center gap-2 rounded-xl bg-teal-700 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-teal-900/20 hover:bg-teal-800 transition active:scale-95"
-                >
-                  <Save className="h-4 w-4" />
-                  រក្សាទុកការកំណត់ KHQR
-                </button>
+                {canEditSettings ? (
+                  <button
+                    type="button"
+                    onClick={handleSaveKHQR}
+                    className="flex items-center gap-2 rounded-xl bg-teal-700 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-teal-900/20 hover:bg-teal-800 transition active:scale-95"
+                  >
+                    <Save className="h-4 w-4" />
+                    រក្សាទុកការកំណត់ KHQR
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 border border-slate-200 px-4 py-2 text-xs font-bold text-slate-500">
+                    <Lock className="h-3.5 w-3.5 text-slate-400" />
+                    <span>មើលតែប៉ុណ្ណោះ (View-Only)</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1070,10 +1130,11 @@ export default function SettingsPage() {
                 <div className="relative">
                   <input
                     type={showBotToken ? "text" : "password"}
+                    disabled={!canEditSettings}
                     value={telegramForm.botToken}
                     onChange={(e) => setTelegramForm({ ...telegramForm, botToken: e.target.value })}
                     placeholder="7891234567:AAHxyzABCdefGhIJKlmNoPQRsTUVwxyZ"
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-slate-900 font-mono focus:border-sky-500 focus:outline-hidden pr-10"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-slate-900 font-mono focus:border-sky-500 focus:outline-hidden pr-10 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <button
                     type="button"
@@ -1094,10 +1155,11 @@ export default function SettingsPage() {
                 </label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={telegramForm.chatId}
                   onChange={(e) => setTelegramForm({ ...telegramForm, chatId: e.target.value })}
                   placeholder="-1001234567890 ឬ 987654321"
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-slate-900 font-mono font-bold focus:border-sky-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-slate-900 font-mono font-bold focus:border-sky-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
                   លេខសម្គាល់ Chat ID (Group ID ចាប់ផ្តើមដោយ <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">-100...</code>)
@@ -1143,9 +1205,10 @@ export default function SettingsPage() {
                     </div>
                     <input
                       type="checkbox"
+                      disabled={!canEditSettings}
                       checked={item.val}
                       onChange={(e) => setTelegramForm({ ...telegramForm, [item.id]: e.target.checked })}
-                      className="h-4 w-4 accent-sky-600 rounded"
+                      className="h-4 w-4 accent-sky-600 rounded disabled:cursor-not-allowed"
                     />
                   </label>
                 ))}
@@ -1156,8 +1219,8 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleTestTelegram}
-                  disabled={isTestingTelegram}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2.5 text-xs transition active:scale-95 disabled:opacity-50"
+                  disabled={isTestingTelegram || !canEditSettings}
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2.5 text-xs transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isTestingTelegram ? (
                     <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
@@ -1167,14 +1230,21 @@ export default function SettingsPage() {
                   តេស្តផ្ញើសារសាកល្បង (Test Ping)
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleSaveTelegram}
-                  className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-6 py-2.5 text-xs shadow-md shadow-teal-900/20 transition active:scale-95"
-                >
-                  <Save className="h-4 w-4" />
-                  រក្សាទុក Telegram
-                </button>
+                {canEditSettings ? (
+                  <button
+                    type="button"
+                    onClick={handleSaveTelegram}
+                    className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-6 py-2.5 text-xs shadow-md shadow-teal-900/20 transition active:scale-95"
+                  >
+                    <Save className="h-4 w-4" />
+                    រក្សាទុក Telegram
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 border border-slate-200 px-4 py-2 text-xs font-bold text-slate-500">
+                    <Lock className="h-3.5 w-3.5 text-slate-400" />
+                    <span>មើលតែប៉ុណ្ណោះ (View-Only)</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1272,9 +1342,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">ឈ្មោះហាង (ភាសាខ្មែរ) *</label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={businessProfile.nameKh}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, nameKh: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-bold focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-bold focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1282,9 +1353,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">ឈ្មោះហាង (English Name)</label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={businessProfile.nameEn}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, nameEn: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1292,9 +1364,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">ឈ្មោះផ្លូវការចុះបញ្ជី (Legal Entity Name)</label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={businessProfile.legalName}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, legalName: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1302,9 +1375,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">លេខសម្គាល់សារពើពន្ធ (VAT / TIN Number)</label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={businessProfile.vatNumber}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, vatNumber: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1312,9 +1386,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">លេខទូរស័ព្ទទំនាក់ទំនងហាង *</label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={businessProfile.phone}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, phone: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1322,9 +1397,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">អ៊ីមែលផ្លូវការ (Official Email)</label>
                 <input
                   type="email"
+                  disabled={!canEditSettings}
                   value={businessProfile.email}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, email: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1332,10 +1408,11 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">Telegram Support / Channel</label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={businessProfile.telegramChannel}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, telegramChannel: e.target.value })}
                   placeholder="https://t.me/your_store"
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1343,10 +1420,11 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">Facebook Page / Website</label>
                 <input
                   type="text"
+                  disabled={!canEditSettings}
                   value={businessProfile.facebookPage}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, facebookPage: e.target.value })}
                   placeholder="https://facebook.com/yourpage"
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1354,9 +1432,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">អាសយដ្ឋានទីស្នាក់ការកណ្តាល</label>
                 <textarea
                   rows={2}
+                  disabled={!canEditSettings}
                   value={businessProfile.address}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, address: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -1401,9 +1480,10 @@ export default function SettingsPage() {
                 <div className="relative">
                   <input
                     type="number"
+                    disabled={!canEditSettings}
                     value={posConfig.exchangeRate}
                     onChange={(e) => setPosConfig({ ...posConfig, exchangeRate: Number(e.target.value) })}
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold text-base focus:border-teal-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold text-base focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <span className="absolute right-3 top-2.5 font-bold text-slate-400">KHR (៛)</span>
                 </div>
@@ -1416,9 +1496,10 @@ export default function SettingsPage() {
                 <div className="relative">
                   <input
                     type="number"
+                    disabled={!canEditSettings}
                     value={posConfig.exchangeRateThb}
                     onChange={(e) => setPosConfig({ ...posConfig, exchangeRateThb: Number(e.target.value) })}
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold text-base focus:border-teal-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold text-base focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <span className="absolute right-3 top-2.5 font-bold text-slate-400">THB (฿)</span>
                 </div>
@@ -1431,9 +1512,10 @@ export default function SettingsPage() {
                   </label>
                   <input
                     type="number"
+                    disabled={!canEditSettings}
                     value={posConfig.defaultTaxRate}
                     onChange={(e) => setPosConfig({ ...posConfig, defaultTaxRate: Number(e.target.value) })}
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold focus:border-teal-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -1443,10 +1525,11 @@ export default function SettingsPage() {
                   </label>
                   <input
                     type="text"
+                    disabled={!canEditSettings}
                     value={posConfig.invoicePrefix}
                     onChange={(e) => setPosConfig({ ...posConfig, invoicePrefix: e.target.value })}
                     placeholder="INV-"
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold focus:border-teal-500 focus:outline-hidden"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -1457,9 +1540,10 @@ export default function SettingsPage() {
                 </label>
                 <input
                   type="number"
+                  disabled={!canEditSettings}
                   value={posConfig.lowStockThreshold}
                   onChange={(e) => setPosConfig({ ...posConfig, lowStockThreshold: Number(e.target.value) })}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold focus:border-teal-500 focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 font-mono font-bold focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -1479,9 +1563,10 @@ export default function SettingsPage() {
                 </div>
                 <input
                   type="checkbox"
+                  disabled={!canEditSettings}
                   checked={posConfig.allowManualDiscount}
                   onChange={(e) => setPosConfig({ ...posConfig, allowManualDiscount: e.target.checked })}
-                  className="h-4 w-4 accent-teal-700 rounded"
+                  className="h-4 w-4 accent-teal-700 rounded disabled:cursor-not-allowed"
                 />
               </label>
 
@@ -1492,9 +1577,10 @@ export default function SettingsPage() {
                 </div>
                 <input
                   type="checkbox"
+                  disabled={!canEditSettings}
                   checked={posConfig.dualDisplayPrice}
                   onChange={(e) => setPosConfig({ ...posConfig, dualDisplayPrice: e.target.checked })}
-                  className="h-4 w-4 accent-teal-700 rounded"
+                  className="h-4 w-4 accent-teal-700 rounded disabled:cursor-not-allowed"
                 />
               </label>
 
@@ -1505,9 +1591,10 @@ export default function SettingsPage() {
                 </div>
                 <input
                   type="checkbox"
+                  disabled={!canEditSettings}
                   checked={posConfig.autoPrintReceipt}
                   onChange={(e) => setPosConfig({ ...posConfig, autoPrintReceipt: e.target.checked })}
-                  className="h-4 w-4 accent-teal-700 rounded"
+                  className="h-4 w-4 accent-teal-700 rounded disabled:cursor-not-allowed"
                 />
               </label>
 
@@ -1518,9 +1605,10 @@ export default function SettingsPage() {
                 </div>
                 <input
                   type="checkbox"
+                  disabled={!canEditSettings}
                   checked={posConfig.enableSoundEffects}
                   onChange={(e) => setPosConfig({ ...posConfig, enableSoundEffects: e.target.checked })}
-                  className="h-4 w-4 accent-teal-700 rounded"
+                  className="h-4 w-4 accent-teal-700 rounded disabled:cursor-not-allowed"
                 />
               </label>
             </div>
@@ -1535,13 +1623,15 @@ export default function SettingsPage() {
             <p className="text-xs text-slate-500 font-medium">
               គ្រប់គ្រងសាខាពហុទីតាំង (Multi-Branch) ផ្ទាល់ពី Supabase
             </p>
-            <button
-              onClick={() => setIsAddBranchModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-800 transition shadow-xs"
-            >
-              <Plus className="h-4 w-4" />
-              បន្ថែមសាខាថ្មី
-            </button>
+            {canEditSettings && (
+              <button
+                onClick={() => setIsAddBranchModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-800 transition shadow-xs"
+              >
+                <Plus className="h-4 w-4" />
+                បន្ថែមសាខាថ្មី
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1572,22 +1662,24 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">
-                  <button
-                    onClick={() => setEditingBranch(b)}
-                    className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition"
-                  >
-                    <Edit2 className="h-3 w-3" /> កែប្រែ
-                  </button>
-                  {!b.isHeadOffice && (
+                {canEditSettings && (
+                  <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">
                     <button
-                      onClick={() => handleDeleteBranch(b.id)}
-                      className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 transition"
+                      onClick={() => setEditingBranch(b)}
+                      className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition"
                     >
-                      <Trash2 className="h-3 w-3" /> លុប
+                      <Edit2 className="h-3 w-3" /> កែប្រែ
                     </button>
-                  )}
-                </div>
+                    {!b.isHeadOffice && (
+                      <button
+                        onClick={() => handleDeleteBranch(b.id)}
+                        className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 transition"
+                      >
+                        <Trash2 className="h-3 w-3" /> លុប
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1601,13 +1693,15 @@ export default function SettingsPage() {
             <p className="text-xs text-slate-500 font-medium">
               តួនាទីអ្នកប្រើប្រាស់ និងសិទ្ធិចូលដំណើរការ (Users in Supabase)
             </p>
-            <button
-              onClick={() => setIsAddUserModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-800 transition shadow-xs"
-            >
-              <Plus className="h-4 w-4" />
-              បន្ថែមអ្នកប្រើប្រាស់ថ្មី
-            </button>
+            {canManageUsers && (
+              <button
+                onClick={() => setIsAddUserModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-800 transition shadow-xs"
+              >
+                <Plus className="h-4 w-4" />
+                បន្ថែមអ្នកប្រើប្រាស់ថ្មី
+              </button>
+            )}
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
@@ -1664,26 +1758,34 @@ export default function SettingsPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right space-x-1.5">
-                        <button
-                          onClick={() => setResettingUser(u)}
-                          title="Reset Password"
-                          className="inline-flex items-center gap-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1 text-[10px] font-bold hover:bg-amber-100 transition"
-                        >
-                          <KeyRound className="h-3 w-3" /> ប្តូរលេខកូដ
-                        </button>
-                        <button
-                          onClick={() => setEditingUser(u)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-50 transition"
-                        >
-                          <Edit2 className="h-3 w-3" /> កែប្រែ
-                        </button>
-                        {u.username !== "admin" && (
-                          <button
-                            onClick={() => handleDeleteUser(u.id)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 px-2 py-1 text-[10px] font-bold hover:bg-rose-100 transition"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                        {canManageUsers ? (
+                          <>
+                            <button
+                              onClick={() => setResettingUser(u)}
+                              title="Reset Password"
+                              className="inline-flex items-center gap-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1 text-[10px] font-bold hover:bg-amber-100 transition"
+                            >
+                              <KeyRound className="h-3 w-3" /> ប្តូរលេខកូដ
+                            </button>
+                            <button
+                              onClick={() => setEditingUser(u)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-50 transition"
+                            >
+                              <Edit2 className="h-3 w-3" /> កែប្រែ
+                            </button>
+                            {u.username !== "admin" && (
+                              <button
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 px-2 py-1 text-[10px] font-bold hover:bg-rose-100 transition"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                            មើលតែប៉ុណ្ណោះ
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -1728,7 +1830,8 @@ export default function SettingsPage() {
                     { name: "របាយការណ៍គណនេយ្យ P&L & ចំណាយ", sa: true, bm: false, cash: false, tech: false, acc: true, inv: false },
                     { name: "ធនធានមនុស្ស & បុគ្គលិក (HRM & Payroll)", sa: true, bm: true, cash: false, tech: false, acc: true, inv: false },
                     { name: "កំណត់ត្រាសុវត្ថិភាព (Audit Logs)", sa: true, bm: true, cash: false, tech: false, acc: true, inv: false },
-                    { name: "ការកំណត់ប្រព័ន្ធ & RBAC (Settings)", sa: true, bm: true, cash: false, tech: false, acc: false, inv: false },
+                    { name: "មើលការកំណត់ប្រព័ន្ធ (View Settings)", sa: true, bm: true, cash: false, tech: false, acc: false, inv: false },
+                    { name: "កែប្រែការកំណត់ & បុគ្គលិក (Manage Settings)", sa: true, bm: false, cash: false, tech: false, acc: false, inv: false },
                   ].map((row, i) => (
                     <tr key={i} className="hover:bg-slate-50/70">
                       <td className="py-2.5 px-3 font-semibold text-slate-800">{row.name}</td>
@@ -1760,9 +1863,10 @@ export default function SettingsPage() {
               <div>
                 <label className="block font-bold text-slate-700 mb-1">ទំហំក្រដាសវិក្កយបត្រ (Paper Size)</label>
                 <select
+                  disabled={!canEditSettings}
                   value={printerConfig.paperSize}
                   onChange={(e) => setPrinterConfig({ ...printerConfig, paperSize: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 >
                   <option value="80mm">ក្រដាសខ្នាតស្តង់ដារ 80mm (ESC/POS)</option>
                   <option value="58mm">ក្រដាសខ្នាតតូច 58mm (Mini POS)</option>
@@ -1773,9 +1877,10 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">សារក្បាលវិក្កយបត្រ (Receipt Header Note)</label>
                 <textarea
                   rows={3}
+                  disabled={!canEditSettings}
                   value={printerConfig.headerMessage}
                   onChange={(e) => setPrinterConfig({ ...printerConfig, headerMessage: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1783,16 +1888,18 @@ export default function SettingsPage() {
                 <label className="block font-bold text-slate-700 mb-1">សារកន្ទុយវិក្កយបត្រ (Receipt Footer Note)</label>
                 <textarea
                   rows={3}
+                  disabled={!canEditSettings}
                   value={printerConfig.footerMessage}
                   onChange={(e) => setPrinterConfig({ ...printerConfig, footerMessage: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
               <div className="pt-2">
                 <button
+                  disabled={!canEditSettings}
                   onClick={() => alert("🖨️ បានបញ្ជូនទំព័រតេស្តសាកល្បងទៅកាន់ម៉ាស៊ីនបោះពុម្ពរួចរាល់!")}
-                  className="rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 text-xs transition"
+                  className="rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 text-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   បោះពុម្ពតេស្តសាកល្បង (Test Print)
                 </button>

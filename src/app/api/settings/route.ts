@@ -109,6 +109,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Tenant not found" }, { status: 400 });
     }
 
+    // Verify permissions: Only SUPER_ADMIN, ADMIN, or users with settings:manage/users:manage can modify settings
+    const isSuperAdminOrAdmin = session?.role === "SUPER_ADMIN" || session?.role === "ADMIN";
+    const canManageSettings = isSuperAdminOrAdmin || session?.permissions?.includes("settings:manage") || session?.permissions?.includes("*");
+    const canManageUsers = isSuperAdminOrAdmin || session?.permissions?.includes("users:manage") || session?.permissions?.includes("*");
+
+    if (session && !isSuperAdminOrAdmin) {
+      const isUserAction = action === "ADD_USER" || action === "UPDATE_USER" || action === "DELETE_USER" || action === "RESET_PASSWORD";
+      if (isUserAction && !canManageUsers) {
+        return NextResponse.json(
+          { success: false, error: "លោកអ្នកគ្មានសិទ្ធិគ្រប់គ្រងបុគ្គលិក ឬអ្នកប្រើប្រាស់ទេ (Permission Denied)" },
+          { status: 403 }
+        );
+      }
+      if (!isUserAction && !canManageSettings) {
+        return NextResponse.json(
+          { success: false, error: "លោកអ្នកមានសិទ្ធិតែត្រឹមមើលការកំណត់ប៉ុណ្ណោះ គ្មានសិទ្ធិកែប្រែទេ (View-only: Modification not allowed for Branch Manager)" },
+          { status: 403 }
+        );
+      }
+    }
+
     // Invalidate cached settings on any modification
     invalidateSettingsCache(tenantId);
 
