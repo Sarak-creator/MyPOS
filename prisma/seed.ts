@@ -362,13 +362,11 @@ async function main() {
   await resetAndSeedDatabase();
 }
 
-if (require.main === module) {
-  main()
-    .catch((e) => {
-      console.error("❌ Reset and seed failed:", e);
-      process.exit(1);
-    })
-    .finally(async () => {
-      await prisma.$disconnect();
-    });
-}
+main()
+  .catch((e) => {
+    console.error("❌ Reset and seed failed:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
