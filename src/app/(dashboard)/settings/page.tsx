@@ -1212,6 +1212,16 @@ export default function SettingsPage() {
                 ))}
               </div>
 
+              {/* Vercel Cloud Notice */}
+              <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-xl text-[11px] text-sky-800 space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-sky-900">
+                  <span>💡</span> ព័ត៌មានបន្ថែមសម្រាប់ការប្រើប្រាស់លើ Vercel:
+                </p>
+                <p className="text-sky-700 leading-relaxed">
+                  លើ Vercel Serverless ការកំណត់ត្រូវបានរក្សាទុកក្នុង Memory/LocalStorage ភ្លាមៗ។ ដើម្បីឱ្យ Bot ដំណើរការជាប់ជានិច្ច 100% សូមដាក់ <code className="bg-sky-100/80 px-1 py-0.5 rounded font-mono font-bold">TELEGRAM_BOT_TOKEN</code> និង <code className="bg-sky-100/80 px-1 py-0.5 rounded font-mono font-bold">TELEGRAM_CHAT_ID</code> ក្នុង <strong>Vercel &gt; Settings &gt; Environment Variables</strong> ផងដែរ។
+                </p>
+              </div>
+
               {/* Action Buttons */}
               <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
                 <button

@@ -79,6 +79,7 @@ export async function POST(request: Request) {
         message: "ការកំណត់ Telegram Bot ត្រូវបានរក្សាទុកដោយជោគជ័យ!",
         botToken: token,
         chatId: chat,
+        isVercel: Boolean(process.env.VERCEL),
       });
     }
 

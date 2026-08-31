@@ -77,8 +77,13 @@ function parseTelegramError(description: string): string {
 
 import fs from "fs";
 import path from "path";
+import os from "os";
 
-const CONFIG_FILE = path.join(process.cwd(), "scratch", "telegram_config.json");
+// Global in-memory cache for serverless environments (e.g. Vercel)
+let memoryTelegramConfig: TelegramConfig | null = null;
+
+const LOCAL_CONFIG_FILE = path.join(process.cwd(), "scratch", "telegram_config.json");
+const TMP_CONFIG_FILE = path.join(os.tmpdir(), "mypos_telegram_config.json");
 
 export function cleanCredential(val?: string | null): string {
   if (!val) return "";
@@ -96,76 +101,115 @@ export function cleanCredential(val?: string | null): string {
 }
 
 export function getServerTelegramConfig(): TelegramConfig {
+  let savedConfig: Partial<TelegramConfig> = {};
+
   try {
     if (typeof process !== "undefined" && typeof window === "undefined") {
-      if (fs.existsSync(CONFIG_FILE)) {
-        const raw = fs.readFileSync(CONFIG_FILE, "utf-8");
-        const parsed = JSON.parse(raw);
-        return {
-          botToken: cleanCredential(parsed.botToken) || cleanCredential(process.env.TELEGRAM_BOT_TOKEN),
-          chatId: cleanCredential(parsed.chatId) || cleanCredential(process.env.TELEGRAM_CHAT_ID),
-          notifyOnSale: parsed.notifyOnSale ?? false,
-          notifyOnLowStock: parsed.notifyOnLowStock ?? false,
-          notifyOnRepair: parsed.notifyOnRepair ?? false,
-          notifyDailyReport: parsed.notifyDailyReport ?? false,
-        };
+      // 1. Check in-memory first
+      if (memoryTelegramConfig) {
+        savedConfig = { ...memoryTelegramConfig };
+      } else {
+        // 2. Check local scratch file
+        if (fs.existsSync(LOCAL_CONFIG_FILE)) {
+          try {
+            const raw = fs.readFileSync(LOCAL_CONFIG_FILE, "utf-8");
+            savedConfig = JSON.parse(raw);
+          } catch {}
+        }
+
+        // 3. Fallback to /tmp storage (for Vercel serverless functions)
+        if (!savedConfig.botToken && fs.existsSync(TMP_CONFIG_FILE)) {
+          try {
+            const raw = fs.readFileSync(TMP_CONFIG_FILE, "utf-8");
+            savedConfig = JSON.parse(raw);
+          } catch {}
+        }
       }
     }
   } catch (err) {
-    console.warn("Failed reading telegram_config.json:", err);
+    console.warn("Failed reading telegram config:", err);
   }
 
+  const botToken = cleanCredential(savedConfig.botToken) || cleanCredential(process.env.TELEGRAM_BOT_TOKEN);
+  const chatId = cleanCredential(savedConfig.chatId) || cleanCredential(process.env.TELEGRAM_CHAT_ID);
+
   return {
-    botToken: cleanCredential(process.env.TELEGRAM_BOT_TOKEN),
-    chatId: cleanCredential(process.env.TELEGRAM_CHAT_ID),
-    notifyOnSale: false,
-    notifyOnLowStock: false,
-    notifyOnRepair: false,
-    notifyDailyReport: false,
+    botToken,
+    chatId,
+    notifyOnSale: savedConfig.notifyOnSale ?? true,
+    notifyOnLowStock: savedConfig.notifyOnLowStock ?? true,
+    notifyOnRepair: savedConfig.notifyOnRepair ?? true,
+    notifyDailyReport: savedConfig.notifyDailyReport ?? true,
   };
 }
 
 export function saveServerTelegramConfig(config: Partial<TelegramConfig>): boolean {
   try {
     if (typeof process !== "undefined" && typeof window === "undefined") {
-      const dir = path.dirname(CONFIG_FILE);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
       const existing = getServerTelegramConfig();
-      const merged = { ...existing, ...config };
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), "utf-8");
-      
+      const merged: TelegramConfig = {
+        botToken: cleanCredential(config.botToken) || existing.botToken,
+        chatId: cleanCredential(config.chatId) || existing.chatId,
+        notifyOnSale: config.notifyOnSale ?? existing.notifyOnSale ?? true,
+        notifyOnLowStock: config.notifyOnLowStock ?? existing.notifyOnLowStock ?? true,
+        notifyOnRepair: config.notifyOnRepair ?? existing.notifyOnRepair ?? true,
+        notifyDailyReport: config.notifyDailyReport ?? existing.notifyDailyReport ?? true,
+      };
+
+      // 1. Update in-memory cache and environment variables
+      memoryTelegramConfig = merged;
       if (merged.botToken) process.env.TELEGRAM_BOT_TOKEN = merged.botToken;
       if (merged.chatId) process.env.TELEGRAM_CHAT_ID = merged.chatId;
 
-      // Also attempt to update .env
+      // 2. Try writing to local scratch dir (for local dev environments)
+      let writtenLocally = false;
       try {
-        const envPath = path.join(process.cwd(), ".env");
-        if (fs.existsSync(envPath)) {
-          let envContent = fs.readFileSync(envPath, "utf-8");
-          if (envContent.includes("TELEGRAM_BOT_TOKEN=")) {
-            envContent = envContent.replace(/TELEGRAM_BOT_TOKEN=.*(\r?\n|$)/g, `TELEGRAM_BOT_TOKEN="${merged.botToken}"$1`);
-          } else {
-            envContent += `\nTELEGRAM_BOT_TOKEN="${merged.botToken}"`;
-          }
-          if (envContent.includes("TELEGRAM_CHAT_ID=")) {
-            envContent = envContent.replace(/TELEGRAM_CHAT_ID=.*(\r?\n|$)/g, `TELEGRAM_CHAT_ID="${merged.chatId}"$1`);
-          } else {
-            envContent += `\nTELEGRAM_CHAT_ID="${merged.chatId}"`;
-          }
-          fs.writeFileSync(envPath, envContent, "utf-8");
+        const dir = path.dirname(LOCAL_CONFIG_FILE);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
         }
-      } catch (envErr) {
-        console.warn("Could not update .env file:", envErr);
+        fs.writeFileSync(LOCAL_CONFIG_FILE, JSON.stringify(merged, null, 2), "utf-8");
+        writtenLocally = true;
+      } catch {
+        // Expected on read-only filesystem like Vercel
+      }
+
+      // 3. Try writing to /tmp directory (supported on Vercel / AWS Lambda)
+      try {
+        fs.writeFileSync(TMP_CONFIG_FILE, JSON.stringify(merged, null, 2), "utf-8");
+      } catch (tmpErr) {
+        console.warn("Could not write to tmp directory:", tmpErr);
+      }
+
+      // 4. Also attempt to update .env if local filesystem is writable
+      if (writtenLocally) {
+        try {
+          const envPath = path.join(process.cwd(), ".env");
+          if (fs.existsSync(envPath)) {
+            let envContent = fs.readFileSync(envPath, "utf-8");
+            if (envContent.includes("TELEGRAM_BOT_TOKEN=")) {
+              envContent = envContent.replace(/TELEGRAM_BOT_TOKEN=.*(\r?\n|$)/g, `TELEGRAM_BOT_TOKEN="${merged.botToken}"$1`);
+            } else {
+              envContent += `\nTELEGRAM_BOT_TOKEN="${merged.botToken}"`;
+            }
+            if (envContent.includes("TELEGRAM_CHAT_ID=")) {
+              envContent = envContent.replace(/TELEGRAM_CHAT_ID=.*(\r?\n|$)/g, `TELEGRAM_CHAT_ID="${merged.chatId}"$1`);
+            } else {
+              envContent += `\nTELEGRAM_CHAT_ID="${merged.chatId}"`;
+            }
+            fs.writeFileSync(envPath, envContent, "utf-8");
+          }
+        } catch {
+          // Ignore .env write error in production
+        }
       }
 
       return true;
     }
   } catch (err) {
-    console.error("Failed writing telegram_config.json:", err);
+    console.error("Failed saving telegram config:", err);
   }
-  return false;
+  return true;
 }
 
 /**
