@@ -12,14 +12,16 @@ import {
 } from "@/lib/telegram";
 import { getAuthSession } from "@/lib/auth";
 
+import { ConfigManager } from "@/lib/config-manager";
+
 export const dynamic = "force-dynamic";
 
 // GET /api/telegram - Check current Telegram Bot configuration status and retrieve saved config
 export async function GET(request: Request) {
   try {
-    const serverConfig = getServerTelegramConfig();
-    const rawToken = cleanCredential(serverConfig.botToken) || cleanCredential(process.env.TELEGRAM_BOT_TOKEN);
-    const rawChatId = cleanCredential(serverConfig.chatId) || cleanCredential(process.env.TELEGRAM_CHAT_ID);
+    const config = await ConfigManager.getTelegramConfig();
+    const rawToken = cleanCredential(config.botToken) || cleanCredential(process.env.TELEGRAM_BOT_TOKEN);
+    const rawChatId = cleanCredential(config.chatId) || cleanCredential(process.env.TELEGRAM_CHAT_ID);
     const hasToken = Boolean(rawToken);
     const hasChatId = Boolean(rawChatId);
 
@@ -31,10 +33,10 @@ export async function GET(request: Request) {
       botTokenMasked: hasToken
         ? `${rawToken.slice(0, 6)}...${rawToken.slice(-4)}`
         : null,
-      notifyOnSale: serverConfig.notifyOnSale ?? true,
-      notifyOnLowStock: serverConfig.notifyOnLowStock ?? true,
-      notifyOnRepair: serverConfig.notifyOnRepair ?? true,
-      notifyDailyReport: serverConfig.notifyDailyReport ?? true,
+      notifyOnSale: config.notifyOnSale ?? true,
+      notifyOnLowStock: config.notifyOnLowStock ?? true,
+      notifyOnRepair: config.notifyOnRepair ?? true,
+      notifyDailyReport: config.notifyDailyReport ?? true,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const saved = saveServerTelegramConfig({
+      await ConfigManager.saveTelegramConfig({
         botToken: token,
         chatId: chat,
         notifyOnSale: config?.notifyOnSale ?? true,
@@ -70,13 +72,18 @@ export async function POST(request: Request) {
         notifyDailyReport: config?.notifyDailyReport ?? true,
       });
 
-      if (!saved) {
-        return NextResponse.json({ success: false, error: "បរាជ័យក្នុងការកត់ត្រាការកំណត់លើ Server" }, { status: 500 });
-      }
+      saveServerTelegramConfig({
+        botToken: token,
+        chatId: chat,
+        notifyOnSale: config?.notifyOnSale ?? true,
+        notifyOnLowStock: config?.notifyOnLowStock ?? true,
+        notifyOnRepair: config?.notifyOnRepair ?? true,
+        notifyDailyReport: config?.notifyDailyReport ?? true,
+      });
 
       return NextResponse.json({
         success: true,
-        message: "ការកំណត់ Telegram Bot ត្រូវបានរក្សាទុកដោយជោគជ័យ!",
+        message: "ការកំណត់ Telegram Bot ត្រូវបានរក្សាទុកក្នុង Supabase ដោយជោគជ័យ!",
         botToken: token,
         chatId: chat,
         isVercel: Boolean(process.env.VERCEL),

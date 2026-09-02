@@ -100,6 +100,8 @@ export function cleanCredential(val?: string | null): string {
   return trimmed;
 }
 
+import { ConfigManager } from "@/lib/config-manager";
+
 export function getServerTelegramConfig(): TelegramConfig {
   let savedConfig: Partial<TelegramConfig> = {};
 
@@ -160,6 +162,11 @@ export function saveServerTelegramConfig(config: Partial<TelegramConfig>): boole
       memoryTelegramConfig = merged;
       if (merged.botToken) process.env.TELEGRAM_BOT_TOKEN = merged.botToken;
       if (merged.chatId) process.env.TELEGRAM_CHAT_ID = merged.chatId;
+
+      // 2. Persist to Supabase Central Store
+      ConfigManager.saveTelegramConfig(merged).catch((err) => {
+        console.warn("Could not save telegram config to Supabase:", err);
+      });
 
       // 2. Try writing to local scratch dir (for local dev environments)
       let writtenLocally = false;

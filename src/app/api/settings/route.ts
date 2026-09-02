@@ -4,6 +4,8 @@ import { hashPassword, getAuthSession } from "@/lib/auth";
 import { RoleType } from "@prisma/client";
 import { getEffectivePermissions } from "@/lib/permissions";
 
+import { ConfigManager } from "@/lib/config-manager";
+
 export const dynamic = "force-dynamic";
 
 // In-memory cache for tenant settings (TTL: 15 seconds)
@@ -75,11 +77,29 @@ export async function GET(request: Request) {
       },
     });
 
+    const [posConfig, khqrConfig] = await Promise.all([
+      ConfigManager.getPosSettings(),
+      ConfigManager.getKhqrConfig(),
+    ]);
+
     const responseData = {
       success: true,
       tenant,
       branches: tenant?.branches || [],
       users: tenant?.users || [],
+      settings: {
+        exchangeRateKhr: tenant?.exchangeRate || posConfig.exchangeRateKhr,
+        exchangeRateThb: posConfig.exchangeRateThb,
+        vatRatePercent: tenant?.defaultTaxRate ?? posConfig.defaultTaxRate,
+        currency: tenant?.currency || posConfig.currency,
+        bakongMerchantId: khqrConfig.merchantId,
+        bakongMerchantName: khqrConfig.merchantName,
+        bakongMerchantCity: khqrConfig.merchantCity,
+        merchantID: khqrConfig.merchantId,
+        acquiringBank: khqrConfig.acquiringBank,
+        mobileNumber: khqrConfig.merchantMobile,
+        bakongOpenApiToken: khqrConfig.bakongToken,
+      },
     };
 
     // Cache for 15s
@@ -135,7 +155,7 @@ export async function POST(request: Request) {
 
     // 1. UPDATE TENANT BUSINESS PROFILE
     if (action === "UPDATE_TENANT") {
-      const { name, legalName, vatNumber, phone, email, address, storeAddress } = body;
+      const { name, legalName, vatNumber, phone, email, address, storeAddress, currency, exchangeRate, defaultTaxRate } = body;
       const updated = await prisma.tenant.update({
         where: { id: tenantId },
         data: {
@@ -146,9 +166,81 @@ export async function POST(request: Request) {
           email: email || undefined,
           address: address || undefined,
           storeAddress: storeAddress ? storeAddress.trim().toLowerCase() : undefined,
+          currency: currency || undefined,
+          exchangeRate: exchangeRate !== undefined ? Number(exchangeRate) : undefined,
+          defaultTaxRate: defaultTaxRate !== undefined ? Number(defaultTaxRate) : undefined,
         },
       });
-      return NextResponse.json({ success: true, tenant: updated, message: "Settings saved" });
+
+      // Also persist to Supabase Central Config Store
+      if (currency || exchangeRate !== undefined || defaultTaxRate !== undefined) {
+        await ConfigManager.savePosSettings({
+          currency: currency || undefined,
+          exchangeRateKhr: exchangeRate !== undefined ? Number(exchangeRate) : undefined,
+          defaultTaxRate: defaultTaxRate !== undefined ? Number(defaultTaxRate) : undefined,
+        });
+      }
+
+      return NextResponse.json({ success: true, tenant: updated, message: "Settings saved to Supabase & Database" });
+    }
+
+    // 1.1 UPDATE DYNAMIC POS & KHQR CONFIG (SUPABASE STORE)
+    if (action === "UPDATE_POS_CONFIG" || action === "UPDATE_KHQR") {
+      const {
+        currency,
+        exchangeRateKhr,
+        exchangeRateThb,
+        defaultTaxRate,
+        appName,
+        appSlogan,
+        merchantName,
+        merchantCity,
+        merchantId,
+        bakongAccount,
+        acquiringBank,
+        merchantMobile,
+        bakongToken,
+      } = body;
+
+      if (currency || exchangeRateKhr || exchangeRateThb || defaultTaxRate !== undefined || appName || appSlogan) {
+        await ConfigManager.savePosSettings({
+          currency,
+          exchangeRateKhr: exchangeRateKhr ? Number(exchangeRateKhr) : undefined,
+          exchangeRateThb: exchangeRateThb ? Number(exchangeRateThb) : undefined,
+          defaultTaxRate: defaultTaxRate !== undefined ? Number(defaultTaxRate) : undefined,
+          appName,
+          appSlogan,
+        });
+
+        // Also update Tenant model in database
+        if (tenantId) {
+          await prisma.tenant.update({
+            where: { id: tenantId },
+            data: {
+              currency: currency || undefined,
+              exchangeRate: exchangeRateKhr ? Number(exchangeRateKhr) : undefined,
+              defaultTaxRate: defaultTaxRate !== undefined ? Number(defaultTaxRate) : undefined,
+            },
+          }).catch(() => {});
+        }
+      }
+
+      if (merchantName || merchantId || bakongAccount || acquiringBank || bakongToken) {
+        await ConfigManager.saveKhqrConfig({
+          merchantName,
+          merchantCity,
+          merchantId,
+          bakongAccount,
+          acquiringBank,
+          merchantMobile,
+          bakongToken,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "ការកំណត់ត្រូវបានរក្សាទុកក្នុង Supabase ដោយជោគជ័យ 100%!",
+      });
     }
 
     // 2. ADD BRANCH

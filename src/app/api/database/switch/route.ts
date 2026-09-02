@@ -88,10 +88,13 @@ async function updateEnvFile(newEntries: Record<string, string>) {
   await fs.promises.writeFile(envPath, newLines.join("\n"), "utf-8");
 }
 
+import { ConfigManager } from "@/lib/config-manager";
+
 // GET /api/database/switch - Get current 5 database connection variables
 export async function GET() {
   try {
     const env = await getEnvEntries();
+    const config = await ConfigManager.getDatabaseConfig();
 
     let connected = false;
     try {
@@ -105,11 +108,11 @@ export async function GET() {
       success: true,
       connected,
       config: {
-        DATABASE_URL: env["DATABASE_URL"] || process.env.DATABASE_URL || "",
-        DIRECT_URL: env["DIRECT_URL"] || process.env.DIRECT_URL || "",
-        NEXT_PUBLIC_SUPABASE_URL: env["NEXT_PUBLIC_SUPABASE_URL"] || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-        SUPABASE_SERVICE_ROLE_KEY: env["SUPABASE_SERVICE_ROLE_KEY"] || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+        DATABASE_URL: config.DATABASE_URL || env["DATABASE_URL"] || process.env.DATABASE_URL || "",
+        DIRECT_URL: config.DIRECT_URL || env["DIRECT_URL"] || process.env.DIRECT_URL || "",
+        NEXT_PUBLIC_SUPABASE_URL: config.NEXT_PUBLIC_SUPABASE_URL || env["NEXT_PUBLIC_SUPABASE_URL"] || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: config.NEXT_PUBLIC_SUPABASE_ANON_KEY || env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+        SUPABASE_SERVICE_ROLE_KEY: config.SUPABASE_SERVICE_ROLE_KEY || env["SUPABASE_SERVICE_ROLE_KEY"] || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
       },
     });
   } catch (error: any) {
@@ -193,24 +196,29 @@ export async function POST(request: Request) {
       });
     }
 
-    // 2. Persist the 5 variables into .env file
-    const envUpdates: Record<string, string> = {
+    // 2. Persist the 5 variables into Supabase Central Store
+    await ConfigManager.saveDatabaseConfig({
       DATABASE_URL: cleanDbUrl,
       DIRECT_URL: cleanDirectUrl,
-    };
+      NEXT_PUBLIC_SUPABASE_URL: supabaseUrl || undefined,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey || undefined,
+      SUPABASE_SERVICE_ROLE_KEY: supabaseServiceKey || undefined,
+    });
+    console.log("⚡ Supabase Central Config updated with new database credentials.");
 
-    if (supabaseUrl && supabaseUrl.trim()) {
-      envUpdates["NEXT_PUBLIC_SUPABASE_URL"] = supabaseUrl.trim();
+    // Also update local .env file if filesystem is writable (optional for local dev)
+    try {
+      const envUpdates: Record<string, string> = {
+        DATABASE_URL: cleanDbUrl,
+        DIRECT_URL: cleanDirectUrl,
+      };
+      if (supabaseUrl && supabaseUrl.trim()) envUpdates["NEXT_PUBLIC_SUPABASE_URL"] = supabaseUrl.trim();
+      if (supabaseAnonKey && supabaseAnonKey.trim()) envUpdates["NEXT_PUBLIC_SUPABASE_ANON_KEY"] = supabaseAnonKey.trim();
+      if (supabaseServiceKey && supabaseServiceKey.trim()) envUpdates["SUPABASE_SERVICE_ROLE_KEY"] = supabaseServiceKey.trim();
+      await updateEnvFile(envUpdates);
+    } catch {
+      // Ignored on read-only environments (Vercel Serverless)
     }
-    if (supabaseAnonKey && supabaseAnonKey.trim()) {
-      envUpdates["NEXT_PUBLIC_SUPABASE_ANON_KEY"] = supabaseAnonKey.trim();
-    }
-    if (supabaseServiceKey && supabaseServiceKey.trim()) {
-      envUpdates["SUPABASE_SERVICE_ROLE_KEY"] = supabaseServiceKey.trim();
-    }
-
-    await updateEnvFile(envUpdates);
-    console.log("📝 .env file updated with new credentials.");
 
     setEnvVar("DATABASE_URL", cleanDbUrl);
     setEnvVar("DIRECT_URL", cleanDirectUrl);

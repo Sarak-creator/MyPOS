@@ -513,7 +513,7 @@ export default function SettingsPage() {
         enableCustomerCredit: paymentConfig.enableCustomerCredit,
       });
 
-      // 2. Persist to Supabase Database
+      // 2. Persist to Supabase Central Store & Database
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -525,8 +525,26 @@ export default function SettingsPage() {
           phone: businessProfile.phone,
           email: businessProfile.email,
           address: businessProfile.address,
+          currency: "USD",
+          exchangeRate: Number(posConfig.exchangeRate) || 4100,
+          defaultTaxRate: Number(posConfig.defaultTaxRate) || 0,
         }),
       });
+
+      // Also sync KHQR settings to Supabase
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_KHQR",
+          merchantName: paymentConfig.bakongMerchantName.trim(),
+          merchantCity: paymentConfig.bakongMerchantCity.trim(),
+          merchantId: paymentConfig.merchantID || paymentConfig.bakongMerchantId.trim(),
+          bakongAccount: paymentConfig.bakongMerchantId.trim(),
+          acquiringBank: paymentConfig.acquiringBank.trim(),
+          merchantMobile: paymentConfig.mobileNumber.trim(),
+        }),
+      }).catch(() => {});
 
       const data = await res.json();
       if (data.success) {
@@ -1212,13 +1230,13 @@ export default function SettingsPage() {
                 ))}
               </div>
 
-              {/* Vercel Cloud Notice */}
-              <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-xl text-[11px] text-sky-800 space-y-1">
-                <p className="font-bold flex items-center gap-1.5 text-sky-900">
-                  <span>💡</span> ព័ត៌មានបន្ថែមសម្រាប់ការប្រើប្រាស់លើ Vercel:
+              {/* Supabase Dynamic Cloud Notice */}
+              <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl text-[11px] text-emerald-800 space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-emerald-900">
+                  <span>⚡</span> ការកំណត់ត្រូវបានរក្សាទុកក្នុង Supabase ដោយស្វ័យប្រវត្តិ:
                 </p>
-                <p className="text-sky-700 leading-relaxed">
-                  លើ Vercel Serverless ការកំណត់ត្រូវបានរក្សាទុកក្នុង Memory/LocalStorage ភ្លាមៗ។ ដើម្បីឱ្យ Bot ដំណើរការជាប់ជានិច្ច 100% សូមដាក់ <code className="bg-sky-100/80 px-1 py-0.5 rounded font-mono font-bold">TELEGRAM_BOT_TOKEN</code> និង <code className="bg-sky-100/80 px-1 py-0.5 rounded font-mono font-bold">TELEGRAM_CHAT_ID</code> ក្នុង <strong>Vercel &gt; Settings &gt; Environment Variables</strong> ផងដែរ។
+                <p className="text-emerald-700 leading-relaxed">
+                  រាល់ពេលរក្សាទុក Bot Token និង Chat ID ប្រព័ន្ធនឹង Update ចូលក្នុង Supabase Table ភ្លាមៗ។ Bot នឹងដំណើរការ 100% គ្រប់ពេលវេលា ដោយមិនចាំបាច់ចូលទៅកែប្រែ Environment Variables ក្នុង Vercel និងមិនចាំបាច់ Redeploy ឡើយ!
                 </p>
               </div>
 

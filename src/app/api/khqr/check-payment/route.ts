@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { paidRegistry } from "@/lib/khqr-registry";
+import { ConfigManager } from "@/lib/config-manager";
 
 // POST /api/khqr/check-payment - Check KHQR Payment Status via Bakong Open API or Webhook
 export async function POST(request: Request) {
@@ -40,8 +41,16 @@ export async function POST(request: Request) {
     }
 
     // 3. If real Bakong Open API token is available, check with NBC Open API directly
-    const bakongToken = (providedToken && providedToken.trim()) || process.env.BAKONG_OPEN_API_TOKEN || process.env.BAKONG_API_TOKEN;
-    const bakongApiUrl = process.env.BAKONG_API_URL || "https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5";
+    const khqrConfig = await ConfigManager.getKhqrConfig();
+    const bakongToken =
+      (providedToken && providedToken.trim()) ||
+      khqrConfig.bakongToken ||
+      process.env.BAKONG_OPEN_API_TOKEN ||
+      process.env.BAKONG_API_TOKEN;
+    const bakongApiUrl =
+      khqrConfig.bakongApiUrl ||
+      process.env.BAKONG_API_URL ||
+      "https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5";
 
     if (bakongToken && md5) {
       try {

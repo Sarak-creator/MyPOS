@@ -742,3 +742,19 @@ model DebtPaymentLog {
 
   debtSchedule    DebtPaymentSchedule @relation(fields: [debtScheduleId], references: [id], onDelete: Cascade)
 }
+
+// ----------------------------------------------------
+// 10. Dynamic System Configurations (Supabase Central Store)
+// ----------------------------------------------------
+
+model SystemConfig {
+  key         String   @id
+  value       String   @db.Text
+  category    String   @default("GENERAL")
+  description String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("system_configs")
+}
+
