@@ -311,6 +311,9 @@ export async function POST(request: Request) {
       }
 
       return { order, payment };
+    }, {
+      maxWait: 15000,
+      timeout: 60000,
     });
 
     // Invalidate caches so UI sees updated stock & stats immediately

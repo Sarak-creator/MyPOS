@@ -221,80 +221,96 @@ export async function POST(request: Request) {
 
     const isReceived = targetStatus === POStatus.RECEIVED;
 
-    const newPO = await prisma.$transaction(async (tx) => {
-      // 1. Create Purchase Order
-      const po = await tx.purchaseOrder.create({
-        data: {
-          poNumber: finalPoNumber,
-          supplierId,
-          status: targetStatus,
-          totalCostUsd,
-          notes,
-          orderedAt: new Date(orderedAt),
-          receivedAt: isReceived ? new Date() : null,
-          items: {
-            create: items.map((i: any) => ({
-              productId: i.productId,
-              quantity: Number(i.quantity),
-              unitCostUsd: Number(i.unitCostUsd),
-              totalCostUsd: Number(i.quantity) * Number(i.unitCostUsd),
-            })),
-          },
-        },
-        include: {
-          supplier: true,
-          items: {
-            include: {
-              product: true,
+    const newPO = await prisma.$transaction(
+      async (tx) => {
+        // 1. Create Purchase Order
+        const po = await tx.purchaseOrder.create({
+          data: {
+            poNumber: finalPoNumber,
+            supplierId,
+            status: targetStatus,
+            totalCostUsd,
+            notes,
+            orderedAt: new Date(orderedAt),
+            receivedAt: isReceived ? new Date() : null,
+            items: {
+              create: items.map((i: any) => ({
+                productId: i.productId,
+                quantity: Number(i.quantity),
+                unitCostUsd: Number(i.unitCostUsd),
+                totalCostUsd: Number(i.quantity) * Number(i.unitCostUsd),
+              })),
             },
           },
-        },
-      });
+          include: {
+            supplier: true,
+            items: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        });
 
-      // 2. If directly received, increase stock
-      if (isReceived && targetBranch && targetWarehouse) {
-        for (const item of items) {
-          const existingStock = await tx.stockItem.findFirst({
+        // 2. If directly received, increase stock (batch query to minimize roundtrips)
+        if (isReceived && targetBranch && targetWarehouse && items.length > 0) {
+          const productIds = items.map((i: any) => i.productId).filter(Boolean);
+          const existingStocks = await tx.stockItem.findMany({
             where: {
-              productId: item.productId,
+              productId: { in: productIds },
               branchId: targetBranch.id,
               status: "IN_STOCK",
             },
           });
+          const stockMap = new Map(existingStocks.map((s: any) => [s.productId, s]));
 
-          if (existingStock) {
-            await tx.stockItem.update({
-              where: { id: existingStock.id },
-              data: {
-                quantity: { increment: Number(item.quantity) },
-                costPriceUsd: Number(item.unitCostUsd),
-              },
-            });
-          } else {
-            await tx.stockItem.create({
-              data: {
-                productId: item.productId,
-                branchId: targetBranch.id,
-                warehouseId: targetWarehouse.id,
-                quantity: Number(item.quantity),
-                costPriceUsd: Number(item.unitCostUsd),
-                status: "IN_STOCK",
-              },
-            });
+          for (const item of items) {
+            const existingStock = stockMap.get(item.productId);
+            if (existingStock) {
+              await tx.stockItem.update({
+                where: { id: existingStock.id },
+                data: {
+                  quantity: { increment: Number(item.quantity) },
+                  costPriceUsd: Number(item.unitCostUsd),
+                },
+              });
+            } else {
+              const created = await tx.stockItem.create({
+                data: {
+                  productId: item.productId,
+                  branchId: targetBranch.id,
+                  warehouseId: targetWarehouse.id,
+                  quantity: Number(item.quantity),
+                  costPriceUsd: Number(item.unitCostUsd),
+                  status: "IN_STOCK",
+                },
+              });
+              stockMap.set(item.productId, created);
+            }
           }
         }
+
+        // 3. Update Supplier balance
+        if (supplierId && totalCostUsd > 0) {
+          try {
+            await tx.supplier.update({
+              where: { id: supplierId },
+              data: {
+                currentBalanceUsd: { increment: totalCostUsd },
+              },
+            });
+          } catch (supErr) {
+            console.warn("Could not update supplier balance inside tx:", supErr);
+          }
+        }
+
+        return po;
+      },
+      {
+        maxWait: 15000, // 15s wait to acquire connection
+        timeout: 60000, // 60s timeout for transaction
       }
-
-      // 3. Update Supplier balance
-      await tx.supplier.update({
-        where: { id: supplierId },
-        data: {
-          currentBalanceUsd: { increment: totalCostUsd },
-        },
-      });
-
-      return po;
-    });
+    );
 
     return NextResponse.json({
       success: true,
@@ -338,70 +354,80 @@ export async function PATCH(request: Request) {
     const previousStatus = po.status;
     const isNowReceived = status === "RECEIVED" && previousStatus !== "RECEIVED";
 
-    const updatedPO = await prisma.$transaction(async (tx) => {
-      const updated = await tx.purchaseOrder.update({
-        where: { id: poId },
-        data: {
-          status: status as POStatus,
-          notes: notes ? `${po.notes || ""} [Update: ${notes}]`.trim() : po.notes,
-          receivedAt: isNowReceived ? new Date() : po.receivedAt,
-        },
-        include: {
-          supplier: true,
-          items: { include: { product: true } },
-        },
-      });
-
-      // If transition to RECEIVED, increment stock items
-      if (isNowReceived) {
-        const tenant = await tx.tenant.findUnique({
-          where: { id: po.supplier.tenantId },
+    const updatedPO = await prisma.$transaction(
+      async (tx) => {
+        const updated = await tx.purchaseOrder.update({
+          where: { id: poId },
+          data: {
+            status: status as POStatus,
+            notes: notes ? `${po.notes || ""} [Update: ${notes}]`.trim() : po.notes,
+            receivedAt: isNowReceived ? new Date() : po.receivedAt,
+          },
           include: {
-            branches: {
-              include: { warehouses: true },
-            },
+            supplier: true,
+            items: { include: { product: true } },
           },
         });
 
-        const targetBranch = tenant?.branches[0];
-        const targetWarehouse = targetBranch?.warehouses[0];
+        // If transition to RECEIVED, increment stock items (batch-optimized)
+        if (isNowReceived && po.items.length > 0) {
+          const tenant = await tx.tenant.findUnique({
+            where: { id: po.supplier.tenantId },
+            include: {
+              branches: {
+                include: { warehouses: true },
+              },
+            },
+          });
 
-        if (targetBranch && targetWarehouse) {
-          for (const item of po.items) {
-            const existingStock = await tx.stockItem.findFirst({
+          const targetBranch = tenant?.branches[0];
+          const targetWarehouse = targetBranch?.warehouses[0];
+
+          if (targetBranch && targetWarehouse) {
+            const productIds = po.items.map((i: any) => i.productId).filter(Boolean);
+            const existingStocks = await tx.stockItem.findMany({
               where: {
-                productId: item.productId,
+                productId: { in: productIds },
                 branchId: targetBranch.id,
                 status: "IN_STOCK",
               },
             });
+            const stockMap = new Map(existingStocks.map((s: any) => [s.productId, s]));
 
-            if (existingStock) {
-              await tx.stockItem.update({
-                where: { id: existingStock.id },
-                data: {
-                  quantity: { increment: item.quantity },
-                  costPriceUsd: Number(item.unitCostUsd),
-                },
-              });
-            } else {
-              await tx.stockItem.create({
-                data: {
-                  productId: item.productId,
-                  branchId: targetBranch.id,
-                  warehouseId: targetWarehouse.id,
-                  quantity: item.quantity,
-                  costPriceUsd: Number(item.unitCostUsd),
-                  status: "IN_STOCK",
-                },
-              });
+            for (const item of po.items) {
+              const existingStock = stockMap.get(item.productId);
+              if (existingStock) {
+                await tx.stockItem.update({
+                  where: { id: existingStock.id },
+                  data: {
+                    quantity: { increment: item.quantity },
+                    costPriceUsd: Number(item.unitCostUsd),
+                  },
+                });
+              } else {
+                const created = await tx.stockItem.create({
+                  data: {
+                    productId: item.productId,
+                    branchId: targetBranch.id,
+                    warehouseId: targetWarehouse.id,
+                    quantity: item.quantity,
+                    costPriceUsd: Number(item.unitCostUsd),
+                    status: "IN_STOCK",
+                  },
+                });
+                stockMap.set(item.productId, created);
+              }
             }
           }
         }
-      }
 
-      return updated;
-    });
+        return updated;
+      },
+      {
+        maxWait: 15000,
+        timeout: 60000,
+      }
+    );
 
     return NextResponse.json({
       success: true,

@@ -428,6 +428,9 @@ export async function PATCH(
       }
 
       return updated;
+    }, {
+      maxWait: 15000,
+      timeout: 60000,
     });
 
     // Notify Telegram asynchronously

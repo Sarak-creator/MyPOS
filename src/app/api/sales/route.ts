@@ -315,6 +315,9 @@ export async function PATCH(request: Request) {
         });
 
         return updated;
+      }, {
+        maxWait: 15000,
+        timeout: 60000,
       });
 
       if (order.branch?.tenantId) {

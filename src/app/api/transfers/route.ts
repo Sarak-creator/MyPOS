@@ -395,6 +395,9 @@ export async function POST(request: Request) {
       }
 
       return transfer;
+    }, {
+      maxWait: 15000,
+      timeout: 60000,
     });
 
     // Send Telegram Notification asynchronously
