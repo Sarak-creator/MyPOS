@@ -5,8 +5,8 @@
   "description": "អាណាចក្រPOS (Anachak POS) - Enterprise Multi-Branch ERP & POS System",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
+    "dev": "node -r ./fix-fat32.js ./node_modules/next/dist/bin/next dev",
+    "build": "prisma generate && node -r ./fix-fat32.js ./node_modules/next/dist/bin/next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "next lint",

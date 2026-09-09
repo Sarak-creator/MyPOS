@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Language } from "@/lib/i18n";
+import { ThemeMode, ColorPaletteId, applyTheme, getStoredThemeMode, getStoredColorPalette } from "@/lib/theme";
 
 export interface CartItem {
   id: string; // Product ID or Variant ID
@@ -54,6 +55,12 @@ interface POSState {
   exchangeRateKhr: number;
   currentBranchId: string;
   currentBranchName: string;
+
+  // Theme & Appearance
+  themeMode: ThemeMode;
+  colorPalette: ColorPaletteId;
+  setThemeMode: (mode: ThemeMode) => void;
+  setColorPalette: (palette: ColorPaletteId) => void;
 
   // KHQR & Payments Config
   bakongMerchantId: string;
@@ -137,6 +144,18 @@ export const usePOSStore = create<POSState>()(
       exchangeRateKhr: 4100,
       currentBranchId: "BR-PP01",
       currentBranchName: "សាខាកណ្តាល ភ្នំពេញ (Phnom Penh Main)",
+
+      // Theme & Appearance
+      themeMode: typeof window !== "undefined" ? getStoredThemeMode() : "light",
+      colorPalette: typeof window !== "undefined" ? getStoredColorPalette() : "emerald-teal",
+      setThemeMode: (themeMode: ThemeMode) => {
+        set({ themeMode });
+        applyTheme(themeMode, get().colorPalette);
+      },
+      setColorPalette: (colorPalette: ColorPaletteId) => {
+        set({ colorPalette });
+        applyTheme(get().themeMode, colorPalette);
+      },
 
       // Default KHQR settings (Empty by default)
       bakongMerchantId: "",
@@ -394,6 +413,8 @@ export const usePOSStore = create<POSState>()(
         exchangeRateKhr: state.exchangeRateKhr,
         currentBranchId: state.currentBranchId,
         currentBranchName: state.currentBranchName,
+        themeMode: state.themeMode,
+        colorPalette: state.colorPalette,
         taxRatePercent: state.taxRatePercent,
         bakongMerchantId: state.bakongMerchantId,
         bakongMerchantName: state.bakongMerchantName,

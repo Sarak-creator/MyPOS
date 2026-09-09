@@ -168,6 +168,17 @@ export const translations = {
     overtime: "ថែមម៉ោង (OT)",
     netPay: "ប្រាក់ខែសុទ្ធ",
     generatePayslip: "បង្កើតប័ណ្ណបើកប្រាក់ខែ (PDF)",
+
+    // Appearance & Theme
+    appearance: "ការតុបតែង និងរូបរាង",
+    themeMode: "ទម្រង់ពន្លឺ (Theme Mode)",
+    lightMode: "ពន្លឺ (Light)",
+    darkMode: "ងងឹត (Dark)",
+    systemMode: "ស្វ័យប្រវត្តិ (System)",
+    colorPalette: "កញ្ចប់ពណ៌ប្រព័ន្ធ (Color Palette)",
+    appearanceSubtitle: "កំណត់ពណ៌រូបរាង និងទម្រង់ពន្លឺតាមចំណូលចិត្តរបស់អ្នក",
+    previewComponents: "ទិដ្ឋភាពគំរូផ្សាយផ្ទាល់",
+    resetAppearance: "កំណត់លំនាំដើមឡើងវិញ",
   },
 
   en: {
@@ -337,6 +348,17 @@ export const translations = {
     overtime: "Overtime (OT)",
     netPay: "Net Pay",
     generatePayslip: "Generate Payslip (PDF)",
+
+    // Appearance & Theme
+    appearance: "Appearance & Theme",
+    themeMode: "Theme Mode",
+    lightMode: "Light",
+    darkMode: "Dark",
+    systemMode: "System",
+    colorPalette: "Color Palette",
+    appearanceSubtitle: "Customize UI theme mode and brand color accents",
+    previewComponents: "Live Preview",
+    resetAppearance: "Reset to Default",
   },
 
   zh: {
@@ -506,5 +528,16 @@ export const translations = {
     overtime: "加班费 (OT)",
     netPay: "实发薪资",
     generatePayslip: "生成工资条 (PDF)",
+
+    // Appearance & Theme
+    appearance: "外观与主题",
+    themeMode: "主题模式",
+    lightMode: "浅色",
+    darkMode: "深色",
+    systemMode: "跟随系统",
+    colorPalette: "品牌配色方案",
+    appearanceSubtitle: "自定义界面主题模式与品牌主色调",
+    previewComponents: "实时预览",
+    resetAppearance: "重置为默认",
   },
 };

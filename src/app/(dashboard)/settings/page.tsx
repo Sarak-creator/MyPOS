@@ -41,12 +41,18 @@ import {
   Send,
   Volume2,
   Receipt,
+  Palette,
+  Sun,
+  Moon,
+  Laptop,
+  ShoppingCart,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import { generateBakongKHQR, CAMBODIA_BANKS, validateKHQR, decodeKHQR } from "@/lib/khqr";
+import { COLOR_PALETTES, ColorPaletteId, ThemeMode } from "@/lib/theme";
 
-type SettingsTab = "GENERAL" | "POS_CURRENCY" | "PAYMENTS" | "BRANCHES" | "RBAC" | "PRINTER" | "BACKUP" | "TELEGRAM";
+type SettingsTab = "GENERAL" | "POS_CURRENCY" | "PAYMENTS" | "BRANCHES" | "RBAC" | "PRINTER" | "BACKUP" | "TELEGRAM" | "APPEARANCE";
 
 export default function SettingsPage() {
   const {
@@ -75,13 +81,27 @@ export default function SettingsPage() {
     telegramNotifyOnLowStock,
     telegramNotifyOnRepair,
     setTelegramConfig,
+    themeMode,
+    setThemeMode,
+    colorPalette,
+    setColorPalette,
   } = usePOSStore();
   const t = translations[language];
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>("TELEGRAM");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("APPEARANCE");
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab") as SettingsTab | null;
+      if (tabParam && ["GENERAL", "POS_CURRENCY", "PAYMENTS", "BRANCHES", "RBAC", "PRINTER", "BACKUP", "TELEGRAM", "APPEARANCE"].includes(tabParam)) {
+        setActiveTab(tabParam);
+      }
+    }
+  }, []);
 
   // 1. General Profile State
   const [businessProfile, setBusinessProfile] = useState({
@@ -838,6 +858,7 @@ export default function SettingsPage() {
       {/* Settings Navigation Tabs */}
       <div className="flex flex-wrap border-b border-slate-200 gap-2 text-xs font-bold">
         {[
+          { id: "APPEARANCE", label: "ការតុបតែង & រូបរាង (Appearance)", icon: Palette },
           { id: "PAYMENTS", label: "Bakong KHQR & ការទូទាត់", icon: QrCode },
           { id: "TELEGRAM", label: "Telegram Bot (ដំណឹង)", icon: Send },
           { id: "GENERAL", label: "ព័ត៌មានអាជីវកម្ម (Profile)", icon: Store },
@@ -865,6 +886,295 @@ export default function SettingsPage() {
           );
         })}
       </div>
+
+      {/* Tab: Appearance & Theme Customization */}
+      {activeTab === "APPEARANCE" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Banner / Description */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Palette className="h-5 w-5 text-teal-700" />
+                ការតុបតែង និងរូបរាងប្រព័ន្ធ (Appearance & Theme Customization)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                កំណត់ទម្រង់ពន្លឺ (Light/Dark/System) និងកញ្ចប់ពណ៌ប្រព័ន្ធអាជីវកម្មរបស់អ្នក។ ការផ្លាស់ប្តូរទាំងអស់នឹងត្រូវអនុវត្តភ្លាមៗទូទាំងផ្ទាំង POS, របាយការណ៍, និងទំព័រទាំងអស់នៃកម្មវិធី។
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setThemeMode("light");
+                setColorPalette("emerald-teal");
+              }}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 transition shrink-0"
+            >
+              <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+              <span>កំណត់លំនាំដើមឡើងវិញ</span>
+            </button>
+          </div>
+
+          {/* Section 1: Theme Mode Selection */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 pb-3">
+              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                {themeMode === "dark" ? (
+                  <Moon className="h-4 w-4 text-indigo-400" />
+                ) : themeMode === "system" ? (
+                  <Laptop className="h-4 w-4 text-slate-500" />
+                ) : (
+                  <Sun className="h-4 w-4 text-amber-500" />
+                )}
+                ទម្រង់ពន្លឺនៃការបង្ហាញ (Theme Display Mode)
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                ជ្រើសរើសរវាងទម្រង់ភ្លឺច្បាស់ ទម្រង់ងងឹតស្រទន់ភ្នែក ឬកំណត់ឱ្យស្វ័យប្រវត្តិតាមឧបករណ៍របស់អ្នក
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Light Mode Card */}
+              <button
+                type="button"
+                onClick={() => setThemeMode("light")}
+                className={`relative flex flex-col items-start p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  themeMode === "light"
+                    ? "border-teal-600 bg-teal-50/40 shadow-sm"
+                    : "border-slate-200 hover:border-slate-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                    <Sun className="h-5 w-5" />
+                  </div>
+                  {themeMode === "light" && (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100/80 px-2 py-0.5 rounded-full">
+                      <Check className="h-3 w-3" /> កំពុងប្រើ
+                    </span>
+                  )}
+                </div>
+                <h5 className="font-extrabold text-sm text-slate-900">ទម្រង់ពន្លឺ (Light Mode)</h5>
+                <p className="text-xs text-slate-500 mt-1">
+                  ផ្ទៃខាងក្រោយពណ៌សភ្លឺច្បាស់ ស័ក្តិសមសម្រាប់កន្លែងលក់ដែលមានពន្លឺថ្ងៃគ្រប់គ្រាន់។
+                </p>
+              </button>
+
+              {/* Dark Mode Card */}
+              <button
+                type="button"
+                onClick={() => setThemeMode("dark")}
+                className={`relative flex flex-col items-start p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  themeMode === "dark"
+                    ? "border-teal-600 bg-teal-50/40 shadow-sm"
+                    : "border-slate-200 hover:border-slate-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center text-indigo-400">
+                    <Moon className="h-5 w-5" />
+                  </div>
+                  {themeMode === "dark" && (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100/80 px-2 py-0.5 rounded-full">
+                      <Check className="h-3 w-3" /> កំពុងប្រើ
+                    </span>
+                  )}
+                </div>
+                <h5 className="font-extrabold text-sm text-slate-900">ទម្រង់ងងឹត (Dark Mode)</h5>
+                <p className="text-xs text-slate-500 mt-1">
+                  ផ្ទៃងងឹតស្ងប់ស្ងាត់ កាត់បន្ថយការចាំងភ្នែក និងជួយសន្សំសំចៃថ្មលើអេក្រង់ OLED។
+                </p>
+              </button>
+
+              {/* System Mode Card */}
+              <button
+                type="button"
+                onClick={() => setThemeMode("system")}
+                className={`relative flex flex-col items-start p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  themeMode === "system"
+                    ? "border-teal-600 bg-teal-50/40 shadow-sm"
+                    : "border-slate-200 hover:border-slate-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+                    <Laptop className="h-5 w-5" />
+                  </div>
+                  {themeMode === "system" && (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100/80 px-2 py-0.5 rounded-full">
+                      <Check className="h-3 w-3" /> កំពុងប្រើ
+                    </span>
+                  )}
+                </div>
+                <h5 className="font-extrabold text-sm text-slate-900">ស្វ័យប្រវត្តិ (System Auto)</h5>
+                <p className="text-xs text-slate-500 mt-1">
+                  ផ្លាស់ប្តូរស្វ័យប្រវត្តិតាមការកំណត់ពន្លឺរបស់ Windows, macOS, Android ឬ Tablet។
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Section 2: Curated Brand Color Palettes */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 pb-3">
+              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-teal-700" />
+                កញ្ចប់ពណ៌ប្រព័ន្ធអាជីវកម្ម (Brand Color Palettes)
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                ជ្រើសរើសកញ្ចប់ពណ៌ដែលត្រូវនឹងអត្តសញ្ញាណម៉ាកយីហោរបស់ហាងអ្នក (៧ កញ្ចប់ពណ៌ស្តង់ដារ)
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {COLOR_PALETTES.map((palette) => {
+                const isSelected = colorPalette === palette.id;
+                return (
+                  <button
+                    key={palette.id}
+                    type="button"
+                    onClick={() => setColorPalette(palette.id)}
+                    className={`relative flex flex-col p-4 rounded-2xl border-2 text-left transition-all cursor-pointer overflow-hidden ${
+                      isSelected
+                        ? "border-teal-600 bg-teal-50/30 shadow-sm"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    {/* Top Color Banner */}
+                    <div
+                      className={`h-2.5 w-full rounded-full bg-gradient-to-r ${palette.gradientClass} mb-3.5`}
+                    />
+
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className="h-6 w-6 rounded-full shadow-xs ring-2 ring-white shrink-0"
+                          style={{ backgroundColor: palette.primaryColor }}
+                        />
+                        <h5 className="font-extrabold text-sm text-slate-900 leading-tight">
+                          {language === "en" ? palette.nameEn : language === "zh" ? palette.nameZh : palette.nameKh}
+                        </h5>
+                      </div>
+                      {isSelected && (
+                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-teal-600 text-white shrink-0">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-500 line-clamp-2 mt-1">
+                      {language === "en" ? palette.descriptionEn : palette.descriptionKh}
+                    </p>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                      <span>Primary: {palette.primaryColor}</span>
+                      <span className="font-bold text-slate-600">{palette.id}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 3: Live Component Preview Card */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-teal-700" />
+                  ទិដ្ឋភាពគំរូផ្សាយផ្ទាល់ (Live Interactive UI Preview)
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  ពិនិត្យមើលរូបរាងប៊ូតុង ស្លាកសញ្ញា និងផ្ទាំងគិតប្រាក់ POS ជាមួយពណ៌ដែលបានជ្រើសរើស
+                </p>
+              </div>
+              <span className="rounded-full bg-teal-50 text-teal-700 border border-teal-200 px-2.5 py-0.5 text-[10px] font-bold">
+                ផ្សាយផ្ទាល់ (Live)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              {/* Left Preview: Action Buttons & Badges */}
+              <div className="lg:col-span-6 space-y-4">
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    ប៊ូតុងសកម្មភាព (Action Buttons)
+                  </p>
+                  <div className="flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs px-4 py-2 shadow-xs transition"
+                    >
+                      <ShoppingCart className="h-3.5 w-3.5" />
+                      <span>ប៊ូតុងចម្បង (Primary Button)</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 rounded-xl border border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs px-3.5 py-2 transition"
+                    >
+                      <Edit2 className="h-3.5 w-3.5 text-teal-700" />
+                      <span>ប៊ូតុងបន្ទាប់បន្សំ</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    ស្លាកសញ្ញាស្ថានភាព (Status Badges)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 text-teal-800 font-bold text-xs px-3 py-1">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-teal-700" />
+                      បានទូទាត់រួច (Paid)
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-teal-300 bg-teal-50 text-teal-900 font-bold text-xs px-3 py-1">
+                      <Sparkles className="h-3.5 w-3.5 text-teal-700" />
+                      ប្រូម៉ូសិន VIP
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md font-mono font-bold text-[11px] bg-teal-950 text-teal-300 px-2 py-0.5">
+                      INV-2026-089
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Preview: Mini POS Cart Summary */}
+              <div className="lg:col-span-6 rounded-xl bg-white border border-slate-200 p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="font-extrabold text-xs text-slate-800">សង្ខេបការទូទាត់ POS</span>
+                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                    2 មុខទំនិញ
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-500">
+                    <span>សរុបបឋម (Subtotal)</span>
+                    <span className="font-mono font-bold text-slate-700">$1,199.00</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
+                    <span>បញ្ចុះតម្លៃ (Discount)</span>
+                    <span className="font-mono font-bold text-rose-600">-$20.00</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-slate-100 items-baseline">
+                    <span className="font-black text-slate-900">ទឹកប្រាក់សរុប (Grand Total)</span>
+                    <div className="text-right">
+                      <p className="text-lg font-black text-teal-700 font-mono">$1,179.00</p>
+                      <p className="text-[10px] text-slate-400 font-mono">≈ 4,833,900 ៛</p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-black text-xs py-2.5 shadow-md shadow-teal-900/20 transition active:scale-95"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span>ទូទាត់ប្រាក់ឥឡូវនេះ (F9 Pay Now)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab: Bakong KHQR & Payments */}
       {activeTab === "PAYMENTS" && (
