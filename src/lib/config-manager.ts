@@ -27,6 +27,9 @@ export interface KhqrConfig {
   merchantMobile: string;
   bakongToken: string;
   bakongApiUrl: string;
+  abaMerchantId?: string;
+  abaApiKey?: string;
+  abaApiUrl?: string;
 }
 
 export interface PosSystemSettings {
@@ -285,6 +288,9 @@ export class ConfigManager {
       merchantMobile: saved?.merchantMobile || process.env.NEXT_PUBLIC_MERCHANT_MOBILE || "0963760229",
       bakongToken: saved?.bakongToken || process.env.BAKONG_OPEN_API_TOKEN || process.env.BAKONG_API_TOKEN || "",
       bakongApiUrl: saved?.bakongApiUrl || process.env.BAKONG_API_URL || "https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5",
+      abaMerchantId: saved?.abaMerchantId || process.env.ABA_PAYWAY_MERCHANT_ID || "",
+      abaApiKey: saved?.abaApiKey || process.env.ABA_PAYWAY_API_KEY || "",
+      abaApiUrl: saved?.abaApiUrl || process.env.ABA_PAYWAY_CHECK_URL || "https://checkout.payway.com.kh/api/payment-gateway/v1/payments/check-transaction-2",
     };
   }
 

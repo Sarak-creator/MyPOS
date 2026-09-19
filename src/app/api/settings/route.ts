@@ -97,8 +97,10 @@ export async function GET(request: Request) {
         bakongMerchantCity: khqrConfig.merchantCity,
         merchantID: khqrConfig.merchantId,
         acquiringBank: khqrConfig.acquiringBank,
-        mobileNumber: khqrConfig.merchantMobile,
         bakongOpenApiToken: khqrConfig.bakongToken,
+        bakongToken: khqrConfig.bakongToken,
+        abaMerchantId: khqrConfig.abaMerchantId || "",
+        abaApiKey: khqrConfig.abaApiKey || "",
       },
     };
 
@@ -185,7 +187,7 @@ export async function POST(request: Request) {
     }
 
     // 1.1 UPDATE DYNAMIC POS & KHQR CONFIG (SUPABASE STORE)
-    if (action === "UPDATE_POS_CONFIG" || action === "UPDATE_KHQR") {
+    if (action === "UPDATE_POS_CONFIG" || action === "UPDATE_POS_SETTINGS" || action === "UPDATE_KHQR") {
       const {
         currency,
         exchangeRateKhr,
@@ -200,6 +202,8 @@ export async function POST(request: Request) {
         acquiringBank,
         merchantMobile,
         bakongToken,
+        abaMerchantId,
+        abaApiKey,
       } = body;
 
       if (currency || exchangeRateKhr || exchangeRateThb || defaultTaxRate !== undefined || appName || appSlogan) {
@@ -225,7 +229,15 @@ export async function POST(request: Request) {
         }
       }
 
-      if (merchantName || merchantId || bakongAccount || acquiringBank || bakongToken) {
+      if (
+        merchantName ||
+        merchantId ||
+        bakongAccount ||
+        acquiringBank ||
+        bakongToken !== undefined ||
+        abaMerchantId !== undefined ||
+        abaApiKey !== undefined
+      ) {
         await ConfigManager.saveKhqrConfig({
           merchantName,
           merchantCity,
@@ -233,7 +245,9 @@ export async function POST(request: Request) {
           bakongAccount,
           acquiringBank,
           merchantMobile,
-          bakongToken,
+          bakongToken: bakongToken !== undefined ? String(bakongToken).trim() : undefined,
+          abaMerchantId: abaMerchantId !== undefined ? String(abaMerchantId).trim() : undefined,
+          abaApiKey: abaApiKey !== undefined ? String(abaApiKey).trim() : undefined,
         });
       }
 

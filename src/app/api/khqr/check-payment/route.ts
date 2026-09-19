@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. If real Bakong Open API token is available, check with NBC Open API directly
+    // 3. Check with NBC Bakong Open API if Bakong token is available
     const khqrConfig = await ConfigManager.getKhqrConfig();
     const bakongToken =
       (providedToken && providedToken.trim()) ||
@@ -96,6 +96,7 @@ export async function POST(request: Request) {
           return NextResponse.json({
             success: true,
             paid: true,
+            hasBankConfig: true,
             transactionId: txRecord.txId,
             fromAccountId: data.data.fromAccountId,
             amount: data.data.amount,
@@ -110,13 +111,89 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Return pending status
+    // 4. Check with ABA PayWay if ABA credentials are configured
+    const abaMerchantId = khqrConfig.abaMerchantId || process.env.ABA_PAYWAY_MERCHANT_ID;
+    const abaApiKey = khqrConfig.abaApiKey || process.env.ABA_PAYWAY_API_KEY;
+    const abaApiUrl =
+      khqrConfig.abaApiUrl ||
+      process.env.ABA_PAYWAY_CHECK_URL ||
+      "https://checkout.payway.com.kh/api/payment-gateway/v1/payments/check-transaction-2";
+
+    if (abaMerchantId && abaApiKey && cleanBill) {
+      try {
+        const now = new Date();
+        const reqTime =
+          now.getUTCFullYear().toString() +
+          String(now.getUTCMonth() + 1).padStart(2, "0") +
+          String(now.getUTCDate()).padStart(2, "0") +
+          String(now.getUTCHours()).padStart(2, "0") +
+          String(now.getUTCMinutes()).padStart(2, "0") +
+          String(now.getUTCSeconds()).padStart(2, "0");
+
+        const rawStr = `${reqTime}${abaMerchantId}${cleanBill}`;
+        const hash = crypto.createHmac("sha512", abaApiKey).update(rawStr).digest("base64");
+
+        const formData = new URLSearchParams();
+        formData.append("req_time", reqTime);
+        formData.append("merchant_id", abaMerchantId);
+        formData.append("tran_id", cleanBill);
+        formData.append("hash", hash);
+
+        const abaRes = await fetch(abaApiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData.toString(),
+        });
+
+        const abaData = await abaRes.json().catch(() => null);
+        if (
+          abaData &&
+          (abaData.status === 0 ||
+            abaData.status === "0" ||
+            abaData.status === "00" ||
+            abaData.code === 0 ||
+            abaData.code === "00" ||
+            abaData.data?.status === 0)
+        ) {
+          const txRecord = {
+            amount: Number(abaData.amount || abaData.data?.amount || amount),
+            currency: abaData.currency || currency,
+            timestamp: Date.now(),
+            txId: abaData.apv || abaData.tran_id || `ABA-${Date.now()}`,
+          };
+
+          paidRegistry.set(cleanBill, txRecord);
+          if (md5) {
+            paidRegistry.set(md5, txRecord);
+          }
+
+          return NextResponse.json({
+            success: true,
+            paid: true,
+            hasBankConfig: true,
+            transactionId: txRecord.txId,
+            amount: txRecord.amount,
+            currency: txRecord.currency,
+            description: "Payment confirmed via ABA PayWay",
+            md5,
+            billNumber: cleanBill,
+          });
+        }
+      } catch (abaErr: any) {
+        console.warn("ABA PayWay check failed:", abaErr.message);
+      }
+    }
+
+    const hasBankConfig = Boolean(bakongToken || (abaMerchantId && abaApiKey));
+
+    // 5. Return pending status
     return NextResponse.json({
       success: true,
       paid: false,
+      hasBankConfig,
       md5,
       billNumber: cleanBill,
-      message: "Waiting for payment scan",
+      message: hasBankConfig ? "Waiting for payment scan" : "No Bank Token or ABA API Key configured in Settings",
     });
   } catch (error: any) {
     console.error("KHQR check-payment error:", error);

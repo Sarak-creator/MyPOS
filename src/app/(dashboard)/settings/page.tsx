@@ -134,7 +134,6 @@ export default function SettingsPage() {
     dualDisplayPrice: true,
   });
 
-  // 3. Payment / KHQR State (Empty by default)
   const [paymentConfig, setPaymentConfig] = useState({
     bakongMerchantId: bakongMerchantId || "",
     bakongMerchantName: bakongMerchantName || "",
@@ -142,6 +141,9 @@ export default function SettingsPage() {
     merchantID: "",
     acquiringBank: "",
     mobileNumber: "",
+    bakongToken: "",
+    abaMerchantId: "",
+    abaApiKey: "",
     enableBakongKhqr: enableBakongKhqr ?? false,
     enableAbaKhqr: enableAbaKhqr ?? false,
     enableCashUsd: enableCashUsd ?? true,
@@ -504,6 +506,21 @@ export default function SettingsPage() {
         }));
         setBranches(data.branches || []);
         setUsers(data.users || []);
+
+        if (data.settings) {
+          setPaymentConfig((prev) => ({
+            ...prev,
+            bakongMerchantId: data.settings.bakongMerchantId || prev.bakongMerchantId,
+            bakongMerchantName: data.settings.bakongMerchantName || prev.bakongMerchantName,
+            bakongMerchantCity: data.settings.bakongMerchantCity || prev.bakongMerchantCity,
+            merchantID: data.settings.merchantID || prev.merchantID,
+            acquiringBank: data.settings.acquiringBank || prev.acquiringBank,
+            mobileNumber: data.settings.mobileNumber || prev.mobileNumber,
+            bakongToken: data.settings.bakongToken || data.settings.bakongOpenApiToken || prev.bakongToken,
+            abaMerchantId: data.settings.abaMerchantId || prev.abaMerchantId,
+            abaApiKey: data.settings.abaApiKey || prev.abaApiKey,
+          }));
+        }
       }
     } catch (err) {
       console.error("Failed to load settings:", err);
@@ -610,23 +627,53 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveKHQR = () => {
-    setStorePaymentConfig({
-      bakongMerchantId: paymentConfig.bakongMerchantId.trim(),
-      bakongMerchantName: paymentConfig.bakongMerchantName.trim(),
-      bakongMerchantCity: paymentConfig.bakongMerchantCity.trim(),
-      merchantID: paymentConfig.merchantID,
-      acquiringBank: paymentConfig.acquiringBank,
-      mobileNumber: paymentConfig.mobileNumber,
-      customKhqrRawString: rawKhqrInput.trim(),
-      enableBakongKhqr: paymentConfig.enableBakongKhqr,
-      enableAbaKhqr: paymentConfig.enableAbaKhqr,
-      enableCashUsd: paymentConfig.enableCashUsd,
-      enableCashKhr: paymentConfig.enableCashKhr,
-      enableCustomerCredit: paymentConfig.enableCustomerCredit,
-    });
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3500);
+  const handleSaveKHQR = async () => {
+    try {
+      setSaving(true);
+      setStorePaymentConfig({
+        bakongMerchantId: paymentConfig.bakongMerchantId.trim(),
+        bakongMerchantName: paymentConfig.bakongMerchantName.trim(),
+        bakongMerchantCity: paymentConfig.bakongMerchantCity.trim(),
+        merchantID: paymentConfig.merchantID,
+        acquiringBank: paymentConfig.acquiringBank,
+        mobileNumber: paymentConfig.mobileNumber,
+        bakongOpenApiToken: paymentConfig.bakongToken?.trim() || "",
+        customKhqrRawString: rawKhqrInput.trim(),
+        enableBakongKhqr: paymentConfig.enableBakongKhqr,
+        enableAbaKhqr: paymentConfig.enableAbaKhqr,
+        enableCashUsd: paymentConfig.enableCashUsd,
+        enableCashKhr: paymentConfig.enableCashKhr,
+        enableCustomerCredit: paymentConfig.enableCustomerCredit,
+      });
+
+      // Save to database & central server store
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_KHQR",
+          merchantName: paymentConfig.bakongMerchantName.trim(),
+          merchantCity: paymentConfig.bakongMerchantCity.trim(),
+          merchantId: paymentConfig.merchantID || paymentConfig.bakongMerchantId.trim(),
+          bakongAccount: paymentConfig.bakongMerchantId.trim(),
+          acquiringBank: paymentConfig.acquiringBank.trim(),
+          merchantMobile: paymentConfig.mobileNumber.trim(),
+          bakongToken: paymentConfig.bakongToken?.trim() || "",
+          abaMerchantId: paymentConfig.abaMerchantId?.trim() || "",
+          abaApiKey: paymentConfig.abaApiKey?.trim() || "",
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3500);
+      }
+    } catch (err: any) {
+      alert("Failed to save KHQR config: " + err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAddBranch = async (e: React.FormEvent) => {
@@ -1309,6 +1356,71 @@ export default function SettingsPage() {
                   placeholder="Phnom Penh"
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
+              </div>
+
+              {/* Real-Time Bank Verification API Credentials */}
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50 text-teal-700 font-bold text-xs">
+                    API
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-xs">
+                      ការតភ្ជាប់ជាមួយធនាគារផ្ទាល់ (Real-time Bank Polling API)
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      កំណត់ដើម្បីអោយ POS អាចឆែកដឹងស្វ័យប្រវត្តផ្ទាល់ពីធនាគារ (Auto-Complete) ពេលអតិថិជនស្កេនទូទាត់ជោគជ័យ
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bakong Open API Token */}
+                <div>
+                  <label className="block font-bold text-slate-700 text-xs mb-1">
+                    Bakong Open API Token (NBC)
+                  </label>
+                  <input
+                    type="password"
+                    disabled={!canEditSettings}
+                    value={paymentConfig.bakongToken || ""}
+                    onChange={(e) => setPaymentConfig({ ...paymentConfig, bakongToken: e.target.value })}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono text-xs focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Token ផ្លូវការពី National Bank of Cambodia (NBC Bakong Open API) សម្រាប់ឱ្យ POS Check MD5 ស្វ័យប្រវត្តិ
+                  </p>
+                </div>
+
+                {/* ABA PayWay Integration */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block font-bold text-slate-700 text-xs mb-1">
+                      ABA PayWay Merchant ID
+                    </label>
+                    <input
+                      type="text"
+                      disabled={!canEditSettings}
+                      value={paymentConfig.abaMerchantId || ""}
+                      onChange={(e) => setPaymentConfig({ ...paymentConfig, abaMerchantId: e.target.value })}
+                      placeholder="ec478611"
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono text-xs focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 text-xs mb-1">
+                      ABA PayWay Public/API Key
+                    </label>
+                    <input
+                      type="password"
+                      disabled={!canEditSettings}
+                      value={paymentConfig.abaApiKey || ""}
+                      onChange={(e) => setPaymentConfig({ ...paymentConfig, abaApiKey: e.target.value })}
+                      placeholder="743F9E262F9673DE1809..."
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-900 font-mono text-xs focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Payment Methods Allowed */}

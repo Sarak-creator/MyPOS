@@ -104,7 +104,7 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const [bankTxInfo, setBankTxInfo] = useState<{ txId?: string; fromAccountId?: string; amount?: number; currency?: string } | null>(null);
   const [isCheckingPayment, setIsCheckingPayment] = useState<boolean>(false);
   const [autoCompleteKhqr, setAutoCompleteKhqr] = useState<boolean>(true);
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
+  const [hasBankConfig, setHasBankConfig] = useState<boolean | null>(null);
 
   // Initialize consistent invoice number when modal opens
   useEffect(() => {
@@ -176,6 +176,10 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
 
           if (isCancelled) return;
           const data = await res.json().catch(() => ({}));
+
+          if (data.hasBankConfig !== undefined) {
+            setHasBankConfig(Boolean(data.hasBankConfig));
+          }
 
           if (data.paid) {
             setPaymentDetected(true);
@@ -359,28 +363,6 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
       setErrorMessage(err.message || "មានបញ្ហាបច្ចេកទេសក្នុងការទូទាត់");
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleSimulateBankScan = async () => {
-    if (!currentInvoiceNumber || isSimulating || isProcessing || isSuccess) return;
-    try {
-      setIsSimulating(true);
-      const fakeTxId = `ABA-SIM-${Date.now().toString().slice(-6)}`;
-      await fetch("/api/khqr/webhook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          billNumber: currentInvoiceNumber,
-          amount: grandTotalUsd,
-          currency: "USD",
-          transactionId: fakeTxId,
-        }),
-      });
-    } catch (e) {
-      console.warn("Simulate bank scan failed:", e);
-    } finally {
-      setIsSimulating(false);
     }
   };
 
@@ -578,8 +560,8 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                       </div>
                     )}
 
-                    {/* Auto-Complete Toggle & Test Simulator Button */}
-                    <div className="flex items-center justify-between w-full pt-1 text-[11px] text-slate-400">
+                    {/* Auto-Complete Toggle & Bank Connection Status */}
+                    <div className="flex items-center justify-between w-full pt-1.5 text-[11px] text-slate-400">
                       <label className="flex items-center gap-1.5 cursor-pointer hover:text-slate-200 transition">
                         <input
                           type="checkbox"
@@ -587,19 +569,19 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                           onChange={(e) => setAutoCompleteKhqr(e.target.checked)}
                           className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-800 accent-teal-600"
                         />
-                        <span>ចេញវិក្កយបត្រស្វ័យប្រវត្តិ (Auto-complete)</span>
+                        <span>ចេញវិក្កយបត្រស្វ័យប្រវត្តិ (Auto-complete on Scan)</span>
                       </label>
 
-                      <button
-                        type="button"
-                        onClick={handleSimulateBankScan}
-                        disabled={isSimulating || isProcessing || paymentDetected}
-                        className="text-[10px] font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2 flex items-center gap-1 disabled:opacity-40 transition"
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        {isSimulating ? "កំពុងតេស្ត..." : "តេស្តស្កេនជោគជ័យ"}
-                      </button>
+                      <span className="text-[10px] font-mono font-semibold text-teal-400">
+                        {hasBankConfig === false ? "⚠️ មិនទាន់ភ្ជាប់ API ធនាគារ" : "Live Bank Active"}
+                      </span>
                     </div>
+
+                    {hasBankConfig === false && (
+                      <div className="mt-1.5 w-full rounded-xl bg-amber-500/10 border border-amber-500/30 p-2 text-center text-[10px] text-amber-300">
+                        ⚠️ មិនទាន់មាន Bakong API Token ឬ ABA Key ទេ។ សូមចូល Settings &gt; ការទូទាត់ ដើម្បីកំណត់ សម្រាប់អោយប្រព័ន្ធទាញពីធនាគារស្វ័យប្រវត្តិ។
+                      </div>
+                    )}
                   </div>
                 )}
 
