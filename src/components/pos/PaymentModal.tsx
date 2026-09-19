@@ -21,6 +21,46 @@ import { formatUSD, formatKHR, generateInvoiceNumber } from "@/lib/utils";
 import ThermalReceipt, { ReceiptData } from "@/components/print/ThermalReceipt";
 import { OfflineSyncManager } from "@/lib/offline-sync";
 
+/**
+ * Modern POS chime sound using Web Audio API (cross-platform, no external asset dependencies)
+ */
+function playPaymentSuccessSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    // First Tone: D5 -> A5
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(587.33, now);
+    osc1.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+    gain1.gain.setValueAtTime(0.3, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+
+    // Second Harmonic Tone: A5 -> D6 for rich POS confirmation chime
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(880, now + 0.1);
+    osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.25);
+    gain2.gain.setValueAtTime(0.25, now + 0.1);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.1);
+    osc2.stop(now + 0.45);
+  } catch (e) {
+    console.warn("Web Audio chime error:", e);
+  }
+}
+
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -51,6 +91,7 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const [activeTab, setActiveTab] = useState<MethodTab>("KHQR_ABA");
   const [tenderedUsd, setTenderedUsd] = useState<string>(grandTotalUsd.toString());
   const [tenderedKhr, setTenderedKhr] = useState<string>(grandTotalKhr.toString());
+  const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState<string>("");
   const [khqrString, setKhqrString] = useState<string>("");
   const [khqrQrUrl, setKhqrQrUrl] = useState<string>("");
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
@@ -58,9 +99,27 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [completedReceipt, setCompletedReceipt] = useState<ReceiptData | null>(null);
 
+  // Real-time Bank Payment Status & Auto-Complete States
+  const [paymentDetected, setPaymentDetected] = useState<boolean>(false);
+  const [bankTxInfo, setBankTxInfo] = useState<{ txId?: string; fromAccountId?: string; amount?: number; currency?: string } | null>(null);
+  const [isCheckingPayment, setIsCheckingPayment] = useState<boolean>(false);
+  const [autoCompleteKhqr, setAutoCompleteKhqr] = useState<boolean>(true);
+  const [isSimulating, setIsSimulating] = useState<boolean>(false);
+
+  // Initialize consistent invoice number when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const invNum = generateInvoiceNumber();
+      setCurrentInvoiceNumber(invNum);
+      setPaymentDetected(false);
+      setBankTxInfo(null);
+      setErrorMessage("");
+    }
+  }, [isOpen]);
+
   // Generate KHQR on load or amount change
   useEffect(() => {
-    if (isOpen && grandTotalUsd > 0) {
+    if (isOpen && grandTotalUsd > 0 && currentInvoiceNumber) {
       const state = usePOSStore.getState();
       if (!state.bakongMerchantId) {
         setKhqrString("");
@@ -78,7 +137,7 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
         merchantCategoryCode: state.merchantCategoryCode || "5999",
         amount: grandTotalUsd,
         currency: "USD",
-        billNumber: generateInvoiceNumber(),
+        billNumber: currentInvoiceNumber,
         storeLabel: currentBranchName,
       });
       setKhqrString(payload);
@@ -91,7 +150,69 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
         setKhqrQrUrl("");
       }
     }
-  }, [isOpen, grandTotalUsd, currentBranchName]);
+  }, [isOpen, grandTotalUsd, currentBranchName, currentInvoiceNumber]);
+
+  // Automated background check for Bank Payment Scan
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    let isCancelled = false;
+
+    if (isOpen && activeTab === "KHQR_ABA" && khqrString && !isSuccess && !isProcessing && !paymentDetected) {
+      const checkPayment = async () => {
+        try {
+          setIsCheckingPayment(true);
+          const state = usePOSStore.getState();
+          const res = await fetch("/api/khqr/check-payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              qrString: khqrString,
+              billNumber: currentInvoiceNumber,
+              amount: grandTotalUsd,
+              currency: "USD",
+              bakongToken: state.bakongOpenApiToken,
+            }),
+          });
+
+          if (isCancelled) return;
+          const data = await res.json().catch(() => ({}));
+
+          if (data.paid) {
+            setPaymentDetected(true);
+            const txDetails = {
+              txId: data.transactionId,
+              fromAccountId: data.fromAccountId,
+              amount: data.amount,
+              currency: data.currency,
+            };
+            setBankTxInfo(txDetails);
+            playPaymentSuccessSound();
+
+            if (autoCompleteKhqr) {
+              handleProcessPayment(data.transactionId);
+            }
+            return;
+          }
+        } catch (err) {
+          // silently ignore transient network fetch errors
+        } finally {
+          if (!isCancelled) {
+            setIsCheckingPayment(false);
+          }
+        }
+      };
+
+      // Run initial check after 800ms, then recurring every 2000ms
+      const initialTimeout = setTimeout(checkPayment, 800);
+      timer = setInterval(checkPayment, 2000);
+
+      return () => {
+        isCancelled = true;
+        clearTimeout(initialTimeout);
+        if (timer) clearInterval(timer);
+      };
+    }
+  }, [isOpen, activeTab, khqrString, isSuccess, isProcessing, paymentDetected, currentInvoiceNumber, grandTotalUsd, autoCompleteKhqr]);
 
   if (!isOpen) return null;
 
@@ -101,19 +222,21 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const tenderedKhrNum = parseFloat(tenderedKhr) || 0;
   const changeKhr = Math.max(0, tenderedKhrNum - grandTotalKhr);
 
-  const handleProcessPayment = async () => {
+  const handleProcessPayment = async (customBankTxId?: string) => {
     if (isProcessing) return;
     setIsProcessing(true);
     setErrorMessage("");
 
-    const invoiceNumber = generateInvoiceNumber();
+    const invoiceNumber = currentInvoiceNumber || generateInvoiceNumber();
+    const posState = usePOSStore.getState();
+    const bankTx = customBankTxId || bankTxInfo?.txId;
 
     const receipt: ReceiptData = {
       invoiceNumber,
       branchName: currentBranchName,
       branchAddress: "Norodom Blvd, Phnom Penh",
       branchPhone: "012 888 999",
-      cashierName: "ជា សុខា (Admin)",
+      cashierName: posState.currentUser?.fullName || posState.currentUser?.fullNameKh || "ជា សុខា (Admin)",
       customer: selectedCustomer,
       items: [...items],
       subtotalUsd: getSubtotal(),
@@ -126,9 +249,9 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
       tenderedUsd: activeTab === "CASH_USD" ? tenderedUsdNum : grandTotalUsd,
       changeUsd: activeTab === "CASH_USD" ? changeUsd : 0,
       khqrPayload: activeTab === "KHQR_ABA" ? khqrString : undefined,
+      bankTransactionId: bankTx,
     };
 
-    const posState = usePOSStore.getState();
     const orderData = {
       invoiceNumber,
       branchId: currentBranchId,
@@ -151,7 +274,8 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
       paymentMethod: activeTab,
       tenderedUsd: activeTab === "CASH_USD" ? tenderedUsdNum : grandTotalUsd,
       changeUsd: activeTab === "CASH_USD" ? changeUsd : 0,
-      notes: posState.orderNotes || "",
+      referenceNumber: bankTx || undefined,
+      notes: [posState.orderNotes || "", bankTx ? `Bank Ref: ${bankTx}` : ""].filter(Boolean).join(" | "),
       khqrQrString: activeTab === "KHQR_ABA" ? khqrString : undefined,
       createdAt: new Date().toISOString(),
     };
@@ -238,6 +362,28 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
     }
   };
 
+  const handleSimulateBankScan = async () => {
+    if (!currentInvoiceNumber || isSimulating || isProcessing || isSuccess) return;
+    try {
+      setIsSimulating(true);
+      const fakeTxId = `ABA-SIM-${Date.now().toString().slice(-6)}`;
+      await fetch("/api/khqr/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billNumber: currentInvoiceNumber,
+          amount: grandTotalUsd,
+          currency: "USD",
+          transactionId: fakeTxId,
+        }),
+      });
+    } catch (e) {
+      console.warn("Simulate bank scan failed:", e);
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -245,6 +391,9 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const handleCloseAll = () => {
     setIsSuccess(false);
     setCompletedReceipt(null);
+    setPaymentDetected(false);
+    setBankTxInfo(null);
+    setCurrentInvoiceNumber("");
     onClose();
   };
 
@@ -383,6 +532,11 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                       {usePOSStore.getState().acquiringBank}
                     </span>
                   )}
+                  {currentInvoiceNumber && (
+                    <span className="text-[10px] text-slate-400 font-mono bg-slate-800 px-2 py-0.5 rounded">
+                      #{currentInvoiceNumber}
+                    </span>
+                  )}
                 </div>
 
                 <p className="text-xs text-slate-300 font-sans mb-3 text-center">
@@ -390,7 +544,7 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                 </p>
 
                 {khqrQrUrl ? (
-                  <div className="bg-white p-3.5 rounded-2xl shadow-2xl border-4 border-teal-500/20">
+                  <div className="bg-white p-3.5 rounded-2xl shadow-2xl border-4 border-teal-500/20 relative group">
                     <img src={khqrQrUrl} alt="Bakong KHQR" className="h-48 w-48" />
                   </div>
                 ) : (
@@ -401,7 +555,55 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                   </div>
                 )}
 
-                <div className="mt-3 text-center space-y-0.5">
+                {/* Real-time Bank Payment Status Indicator */}
+                {khqrQrUrl && (
+                  <div className="mt-3.5 flex flex-col items-center gap-1.5 w-full max-w-sm">
+                    {paymentDetected ? (
+                      <div className="flex items-center justify-center gap-2 w-full rounded-xl bg-emerald-500/20 border border-emerald-500/60 px-3.5 py-2 text-emerald-300 text-xs font-bold animate-in fade-in zoom-in-95">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400 animate-bounce" />
+                        <span>ទទួលបានប្រាក់ជោគជ័យ! {bankTxInfo?.txId ? `(Ref: ${bankTxInfo.txId})` : ""}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between w-full px-3 py-1.5 rounded-xl bg-slate-800/70 border border-slate-700/60 text-[11px]">
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-teal-500"></span>
+                          </span>
+                          <span>រង់ចាំអតិថិជនស្កេនទូទាត់...</span>
+                        </div>
+                        <span className="text-[10px] text-teal-400 font-mono font-bold flex items-center gap-1">
+                          {isCheckingPayment ? "កំពុងផ្ទៀងផ្ទាត់..." : "Auto-listening"}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Auto-Complete Toggle & Test Simulator Button */}
+                    <div className="flex items-center justify-between w-full pt-1 text-[11px] text-slate-400">
+                      <label className="flex items-center gap-1.5 cursor-pointer hover:text-slate-200 transition">
+                        <input
+                          type="checkbox"
+                          checked={autoCompleteKhqr}
+                          onChange={(e) => setAutoCompleteKhqr(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-800 accent-teal-600"
+                        />
+                        <span>ចេញវិក្កយបត្រស្វ័យប្រវត្តិ (Auto-complete)</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleSimulateBankScan}
+                        disabled={isSimulating || isProcessing || paymentDetected}
+                        className="text-[10px] font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2 flex items-center gap-1 disabled:opacity-40 transition"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        {isSimulating ? "កំពុងតេស្ត..." : "តេស្តស្កេនជោគជ័យ"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-2.5 text-center space-y-0.5">
                   {usePOSStore.getState().bakongMerchantName && (
                     <p className="text-xs font-bold text-white tracking-wide">
                       {usePOSStore.getState().bakongMerchantName}
@@ -412,7 +614,7 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                       {usePOSStore.getState().bakongMerchantId} {usePOSStore.getState().merchantID ? `(${usePOSStore.getState().merchantID})` : ""}
                     </p>
                   )}
-                  <p className="text-2xl font-black font-mono text-emerald-400 pt-1.5">{formatUSD(grandTotalUsd)}</p>
+                  <p className="text-2xl font-black font-mono text-emerald-400 pt-1">{formatUSD(grandTotalUsd)}</p>
                   <p className="text-xs text-slate-400 font-sans">{formatKHR(grandTotalUsd, exchangeRateKhr)}</p>
                 </div>
               </div>
@@ -547,14 +749,23 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
             {/* Process Button */}
             <div className="pt-2">
               <button
-                onClick={handleProcessPayment}
+                onClick={() => handleProcessPayment()}
                 disabled={isProcessing}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-700 py-3.5 text-base font-extrabold text-white shadow-lg shadow-teal-900/30 hover:bg-teal-800 disabled:opacity-50 transition active:scale-[0.99]"
+                className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-base font-extrabold text-white shadow-lg transition active:scale-[0.99] disabled:opacity-50 ${
+                  paymentDetected
+                    ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/30 animate-pulse"
+                    : "bg-teal-700 hover:bg-teal-800 shadow-teal-900/30"
+                }`}
               >
                 {isProcessing ? (
                   <>
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    <span>កំពុងដំណើរការទូទាត់...</span>
+                    <span>កំពុងដំណើរការចេញវិក្កយបត្រ...</span>
+                  </>
+                ) : paymentDetected ? (
+                  <>
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span>ទទួលបានប្រាក់ជោគជ័យ! បញ្ចប់ការទូទាត់</span>
                   </>
                 ) : (
                   <>

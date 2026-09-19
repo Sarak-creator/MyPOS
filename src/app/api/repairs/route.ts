@@ -55,8 +55,23 @@ export async function GET(request: Request) {
       prisma.product.findMany({
         where: {
           tenantId,
-          type: "SPARE_PART",
           isActive: true,
+          OR: [
+            { type: "SPARE_PART" },
+            {
+              category: {
+                OR: [
+                  { slug: { contains: "spare", mode: "insensitive" } },
+                  { nameKh: { contains: "គ្រឿងបន្លាស់" } },
+                  { nameEn: { contains: "spare", mode: "insensitive" } },
+                ],
+              },
+            },
+            { nameKh: { contains: "អេក្រង់" } },
+            { nameKh: { contains: "LCD", mode: "insensitive" } },
+            { nameEn: { contains: "LCD", mode: "insensitive" } },
+            { nameEn: { contains: "Screen", mode: "insensitive" } },
+          ],
         },
         select: {
           id: true,
@@ -65,11 +80,19 @@ export async function GET(request: Request) {
           costPriceUsd: true,
           salePriceUsd: true,
           sku: true,
+          category: {
+            select: {
+              nameKh: true,
+              nameEn: true,
+              slug: true,
+            },
+          },
           stockItems: {
             where: { status: "IN_STOCK" },
             select: { quantity: true, branchId: true },
           },
         },
+        orderBy: { nameKh: "asc" },
       }),
     ]);
 
@@ -83,6 +106,7 @@ export async function GET(request: Request) {
         id: sp.id,
         nameKh: sp.nameKh,
         nameEn: sp.nameEn,
+        categoryName: sp.category?.nameKh || sp.category?.nameEn || "",
         costPriceUsd: Number(sp.costPriceUsd || 0),
         salePriceUsd: Number(sp.salePriceUsd || 0),
         sku: sp.sku,

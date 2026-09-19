@@ -1521,7 +1521,20 @@ export default function InventoryPage() {
 
                   <select
                     value={formData.categoryId}
-                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                    onChange={(e) => {
+                      const catId = e.target.value;
+                      const cat = categories.find((c) => c.id === catId);
+                      const isSpare =
+                        cat &&
+                        (cat.slug.toLowerCase().includes("spare") ||
+                          cat.nameKh.includes("គ្រឿងបន្លាស់") ||
+                          cat.nameEn?.toLowerCase().includes("spare"));
+                      setFormData({
+                        ...formData,
+                        categoryId: catId,
+                        ...(isSpare ? { type: "SPARE_PART" } : {}),
+                      });
+                    }}
                     className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
                   >
                     <option value="">ជ្រើសរើសប្រភេទ...</option>

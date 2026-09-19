@@ -207,6 +207,29 @@ export async function POST(request: Request) {
       }
     }
 
+    // Auto-detect spare part type if category or name matches spare parts and type was left as STANDARD_ITEM
+    let finalType = type;
+    if (finalType === "STANDARD_ITEM") {
+      if (categoryId) {
+        const cat = await prisma.category.findUnique({ where: { id: categoryId } });
+        if (
+          cat &&
+          (cat.slug.toLowerCase().includes("spare") ||
+            cat.nameKh.includes("គ្រឿងបន្លាស់") ||
+            cat.nameEn?.toLowerCase().includes("spare"))
+        ) {
+          finalType = "SPARE_PART";
+        }
+      }
+      if (
+        nameKh.includes("អេក្រង់") ||
+        nameKh.toLowerCase().includes("lcd") ||
+        (nameEn && (nameEn.toLowerCase().includes("lcd") || nameEn.toLowerCase().includes("screen")))
+      ) {
+        finalType = "SPARE_PART";
+      }
+    }
+
     // Calculate KHR price if not given
     const calculatedKhr = salePriceKhr || Number(salePriceUsd) * 4100;
 
@@ -220,7 +243,7 @@ export async function POST(request: Request) {
         nameKh,
         nameEn: nameEn || nameKh,
         description: description || undefined,
-        type,
+        type: finalType,
         costPriceUsd: Number(costPriceUsd),
         salePriceUsd: Number(salePriceUsd),
         salePriceKhr: calculatedKhr,

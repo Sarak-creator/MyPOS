@@ -23,6 +23,7 @@ export interface ReceiptData {
   tenderedUsd?: number;
   changeUsd?: number;
   khqrPayload?: string;
+  bankTransactionId?: string;
   date?: string;
 }
 
@@ -155,6 +156,12 @@ export default function ThermalReceipt({ data }: ThermalReceiptProps) {
               <span className="font-bold">${(data.changeUsd || 0).toFixed(2)}</span>
             </div>
           </>
+        )}
+        {data.bankTransactionId && (
+          <div className="flex justify-between text-[9px] text-teal-700 font-mono pt-0.5">
+            <span>លេខប្រតិបត្តិការ:</span>
+            <span className="font-bold">{data.bankTransactionId}</span>
+          </div>
         )}
       </div>
 

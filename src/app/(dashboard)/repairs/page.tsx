@@ -83,6 +83,7 @@ export default function RepairsPage() {
   // Add Part State inside details drawer
   const [selectedPartId, setSelectedPartId] = useState("");
   const [partQty, setPartQty] = useState(1);
+  const [partSearch, setPartSearch] = useState("");
 
   // Selected ticket pricing & discount state
   const [laborCost, setLaborCost] = useState<number>(0);
@@ -351,6 +352,7 @@ export default function RepairsPage() {
         }
         setSelectedPartId("");
         setPartQty(1);
+        setPartSearch("");
       }
     } catch (err) {
       console.error("Failed to add part:", err);
@@ -755,38 +757,72 @@ export default function RepairsPage() {
                 )}
 
                 {/* Add Part Section */}
-                <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-2 items-center">
-                  <select
-                    value={selectedPartId}
-                    onChange={(e) => setSelectedPartId(e.target.value)}
-                    className="flex-1 min-w-[200px] rounded-xl border border-slate-200 p-2 text-xs focus:border-teal-700 focus:outline-hidden"
-                  >
-                    <option value="">+ ជ្រើសរើសគ្រឿងបន្លាស់ពីស្តុក...</option>
-                    {spareParts.map((sp) => (
-                      <option key={sp.id} value={sp.id}>
-                        {sp.nameKh} (${sp.salePriceUsd}) — [ស្តុក: {sp.stockQty ?? 0}]
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex items-center gap-1">
-                    <label className="text-[11px] text-slate-500 font-bold">ចំនួន:</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={partQty}
-                      onChange={(e) => setPartQty(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-14 rounded-xl border border-slate-200 p-2 text-xs font-mono text-center focus:border-teal-700 focus:outline-hidden"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddPartToTicket}
-                    disabled={!selectedPartId}
-                    className="rounded-xl bg-teal-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40 shadow-xs"
-                  >
-                    + បញ្ចូល & កាត់ស្តុក
-                  </button>
-                </div>
+                {(() => {
+                  const filteredSpareParts = spareParts.filter((sp) => {
+                    if (!partSearch.trim()) return true;
+                    const q = partSearch.toLowerCase().trim();
+                    return (
+                      (sp.nameKh && sp.nameKh.toLowerCase().includes(q)) ||
+                      (sp.nameEn && sp.nameEn.toLowerCase().includes(q)) ||
+                      (sp.sku && sp.sku.toLowerCase().includes(q))
+                    );
+                  });
+
+                  return (
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <div className="relative w-40">
+                          <input
+                            type="text"
+                            placeholder="ស្វែងរកគ្រឿង..."
+                            value={partSearch}
+                            onChange={(e) => setPartSearch(e.target.value)}
+                            className="w-full rounded-xl border border-slate-200 px-2.5 py-1.5 text-xs focus:border-teal-700 focus:outline-hidden"
+                          />
+                          {partSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setPartSearch("")}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        <select
+                          value={selectedPartId}
+                          onChange={(e) => setSelectedPartId(e.target.value)}
+                          className="flex-1 min-w-[200px] rounded-xl border border-slate-200 p-2 text-xs focus:border-teal-700 focus:outline-hidden"
+                        >
+                          <option value="">+ ជ្រើសរើសគ្រឿងបន្លាស់ពីស្តុក ({filteredSpareParts.length})...</option>
+                          {filteredSpareParts.map((sp) => (
+                            <option key={sp.id} value={sp.id}>
+                              {sp.nameKh || sp.nameEn} (${Number(sp.salePriceUsd || 0).toFixed(2)}) — [ស្តុក: {sp.stockQty ?? 0}]
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <label className="text-[11px] text-slate-500 font-bold">ចំនួន:</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={partQty}
+                            onChange={(e) => setPartQty(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-14 rounded-xl border border-slate-200 p-2 text-xs font-mono text-center focus:border-teal-700 focus:outline-hidden"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAddPartToTicket}
+                          disabled={!selectedPartId}
+                          className="rounded-xl bg-teal-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40 shadow-xs"
+                        >
+                          + បញ្ចូល & កាត់ស្តុក
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Pricing, Discount, and Payment Breakdown */}
