@@ -277,7 +277,10 @@ export class ConfigManager {
    * Get KHQR / Bakong Payment Config
    */
   static async getKhqrConfig(forceRefresh = false): Promise<KhqrConfig> {
-    const saved = await this.get<Partial<KhqrConfig>>("KHQR_CONFIG", {}, forceRefresh);
+    const [saved, standaloneBakongToken] = await Promise.all([
+      this.get<Partial<KhqrConfig>>("KHQR_CONFIG", {}, forceRefresh),
+      this.get<string>("BAKONG_OPEN_API_TOKEN", "", forceRefresh),
+    ]);
 
     return {
       merchantName: saved?.merchantName || process.env.NEXT_PUBLIC_KHQR_MERCHANT_NAME || "YOUR MERCHANT NAME",
@@ -286,7 +289,7 @@ export class ConfigManager {
       bakongAccount: saved?.bakongAccount || process.env.NEXT_PUBLIC_BAKONG_ACCOUNT || "khqr@aclb",
       acquiringBank: saved?.acquiringBank || process.env.NEXT_PUBLIC_ACQUIRING_BANK || "ACLEDA",
       merchantMobile: saved?.merchantMobile || process.env.NEXT_PUBLIC_MERCHANT_MOBILE || "0963760229",
-      bakongToken: saved?.bakongToken || process.env.BAKONG_OPEN_API_TOKEN || process.env.BAKONG_API_TOKEN || "",
+      bakongToken: saved?.bakongToken || standaloneBakongToken || process.env.BAKONG_OPEN_API_TOKEN || process.env.BAKONG_API_TOKEN || "",
       bakongApiUrl: saved?.bakongApiUrl || process.env.BAKONG_API_URL || "https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5",
       abaMerchantId: saved?.abaMerchantId || process.env.ABA_PAYWAY_MERCHANT_ID || "",
       abaApiKey: saved?.abaApiKey || process.env.ABA_PAYWAY_API_KEY || "",
@@ -303,6 +306,9 @@ export class ConfigManager {
       ...existing,
       ...config,
     };
+    if (config.bakongToken !== undefined) {
+      await this.set("BAKONG_OPEN_API_TOKEN", config.bakongToken.trim(), "PAYMENT", "Bakong Open API Bearer Token");
+    }
     return this.set("KHQR_CONFIG", merged, "PAYMENT", "Bakong KHQR payment configurations");
   }
 
