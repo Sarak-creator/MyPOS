@@ -106,6 +106,40 @@ export async function POST(request: Request) {
             billNumber: cleanBill,
           });
         }
+
+        // Handle specific Bakong Open API error codes
+        if (data && (data.responseCode === 1 || data.responseCode === "1" || data.errorCode)) {
+          const isLimit = data.errorCode === 17 || (data.responseMessage && data.responseMessage.toLowerCase().includes("limit"));
+          const isAuth = data.errorCode === 18 || response.status === 401;
+
+          if (isLimit) {
+            return NextResponse.json({
+              success: true,
+              paid: false,
+              hasBankConfig: true,
+              rateLimitExceeded: true,
+              bankError: "Bakong API: អស់ចំនួនកំណត់ Request ប្រចាំថ្ងៃ (100 requests/day limit exceeded)",
+              rawError: data.responseMessage,
+              errorCode: data.errorCode,
+              md5,
+              billNumber: cleanBill,
+            });
+          }
+
+          if (isAuth) {
+            return NextResponse.json({
+              success: true,
+              paid: false,
+              hasBankConfig: true,
+              invalidToken: true,
+              bankError: "Bakong API Token មិនត្រឹមត្រូវ ឬផុតកំណត់ (Invalid/Expired Token)",
+              rawError: data.responseMessage,
+              errorCode: data.errorCode,
+              md5,
+              billNumber: cleanBill,
+            });
+          }
+        }
       } catch (err: any) {
         console.warn("Bakong Open API check failed:", err.message);
       }

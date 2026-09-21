@@ -105,6 +105,8 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   const [isCheckingPayment, setIsCheckingPayment] = useState<boolean>(false);
   const [autoCompleteKhqr, setAutoCompleteKhqr] = useState<boolean>(true);
   const [hasBankConfig, setHasBankConfig] = useState<boolean | null>(null);
+  const [bankErrorMessage, setBankErrorMessage] = useState<string>("");
+  const [retryTrigger, setRetryTrigger] = useState<number>(0);
 
   // Initialize consistent invoice number when modal opens
   useEffect(() => {
@@ -114,6 +116,7 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
       setPaymentDetected(false);
       setBankTxInfo(null);
       setErrorMessage("");
+      setBankErrorMessage("");
     }
   }, [isOpen]);
 
@@ -156,6 +159,8 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     let isCancelled = false;
+    let pollCount = 0;
+    const MAX_POLLS = 25; // ~90 seconds maximum per session to protect Bakong daily quota
 
     if (isOpen && activeTab === "KHQR_ABA" && khqrString && !isSuccess && !isProcessing && !paymentDetected) {
       const checkPayment = async () => {
@@ -181,6 +186,16 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
             setHasBankConfig(Boolean(data.hasBankConfig));
           }
 
+          if (data.bankError) {
+            setBankErrorMessage(data.bankError);
+          }
+
+          // If daily rate limit (100) or token auth failed, stop continuous polling to avoid spamming
+          if (data.rateLimitExceeded || data.invalidToken) {
+            if (timer) clearInterval(timer);
+            return;
+          }
+
           if (data.paid) {
             setPaymentDetected(true);
             const txDetails = {
@@ -197,6 +212,11 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
             }
             return;
           }
+
+          pollCount++;
+          if (pollCount >= MAX_POLLS) {
+            if (timer) clearInterval(timer);
+          }
         } catch (err) {
           // silently ignore transient network fetch errors
         } finally {
@@ -206,9 +226,9 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
         }
       };
 
-      // Run initial check after 800ms, then recurring every 2000ms
-      const initialTimeout = setTimeout(checkPayment, 800);
-      timer = setInterval(checkPayment, 2000);
+      // Run initial check after 2000ms, then recurring every 3500ms
+      const initialTimeout = setTimeout(checkPayment, 2000);
+      timer = setInterval(checkPayment, 3500);
 
       return () => {
         isCancelled = true;
@@ -216,7 +236,7 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
         if (timer) clearInterval(timer);
       };
     }
-  }, [isOpen, activeTab, khqrString, isSuccess, isProcessing, paymentDetected, currentInvoiceNumber, grandTotalUsd, autoCompleteKhqr]);
+  }, [isOpen, activeTab, khqrString, isSuccess, isProcessing, paymentDetected, currentInvoiceNumber, grandTotalUsd, autoCompleteKhqr, retryTrigger]);
 
   if (!isOpen) return null;
 
@@ -540,7 +560,27 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                 {/* Real-time Bank Payment Status Indicator */}
                 {khqrQrUrl && (
                   <div className="mt-3.5 flex flex-col items-center gap-1.5 w-full max-w-sm">
-                    {paymentDetected ? (
+                    {/* Real-time Status or Bank Error Message */}
+                    {bankErrorMessage ? (
+                      <div className="w-full rounded-xl bg-amber-500/20 border border-amber-500/40 p-2.5 text-center text-xs text-amber-200 space-y-1 animate-in fade-in">
+                        <div className="font-bold flex items-center justify-center gap-1.5">
+                          <span>⚠️ {bankErrorMessage}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300">
+                          លោកអ្នកអាចចុចប៊ូតុង <strong className="text-white">"បញ្ជាក់ការទូទាត់ QR" (Enter)</strong> ខាងក្រោមដើម្បីចេញវិក្កយបត្រភ្លាមៗ។
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBankErrorMessage("");
+                            setRetryTrigger((prev) => prev + 1);
+                          }}
+                          className="mt-1 text-[11px] underline text-teal-300 hover:text-teal-200 font-semibold"
+                        >
+                          🔄 ព្យាយាមឆែកម្តងទៀត (Check Again)
+                        </button>
+                      </div>
+                    ) : paymentDetected ? (
                       <div className="flex items-center justify-center gap-2 w-full rounded-xl bg-emerald-500/20 border border-emerald-500/60 px-3.5 py-2 text-emerald-300 text-xs font-bold animate-in fade-in zoom-in-95">
                         <CheckCircle2 className="h-4 w-4 text-emerald-400 animate-bounce" />
                         <span>ទទួលបានប្រាក់ជោគជ័យ! {bankTxInfo?.txId ? `(Ref: ${bankTxInfo.txId})` : ""}</span>
@@ -554,9 +594,19 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
                           </span>
                           <span>រង់ចាំអតិថិជនស្កេនទូទាត់...</span>
                         </div>
-                        <span className="text-[10px] text-teal-400 font-mono font-bold flex items-center gap-1">
-                          {isCheckingPayment ? "កំពុងផ្ទៀងផ្ទាត់..." : "Auto-listening"}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-teal-400 font-mono font-bold flex items-center gap-1">
+                            {isCheckingPayment ? "កំពុងផ្ទៀងផ្ទាត់..." : "Auto-listening"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setRetryTrigger((prev) => prev + 1)}
+                            title="ពិនិត្យម្តងទៀត"
+                            className="text-[11px] text-slate-400 hover:text-teal-300 transition"
+                          >
+                            🔄
+                          </button>
+                        </div>
                       </div>
                     )}
 
