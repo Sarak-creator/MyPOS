@@ -144,6 +144,7 @@ export async function POST(request: Request) {
       salePriceKhr,
       minStockAlert = 5,
       unit = "Pcs",
+      imageUrl,
       initialStock = 0,
       imeiList = [],
       branchId: customBranchId,
@@ -249,6 +250,7 @@ export async function POST(request: Request) {
         salePriceKhr: calculatedKhr,
         minStockAlert: Number(minStockAlert),
         unit,
+        imageUrl: imageUrl ? String(imageUrl).trim() : null,
       },
     });
 

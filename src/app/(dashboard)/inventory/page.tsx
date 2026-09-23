@@ -30,6 +30,8 @@ import {
   MapPin,
   Calendar,
   Send,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -53,6 +55,7 @@ interface InventoryItem {
   minStock: number;
   unit: string;
   type: string;
+  imageUrl?: string | null;
   imeiList?: string[];
 }
 
@@ -194,7 +197,42 @@ export default function InventoryPage() {
     unit: "Pcs",
     initialStock: 0,
     imeiText: "",
+    imageUrl: "",
   });
+  const [imageUploading, setImageUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("ទំហំរូបភាពមិនត្រូវលើសពី 5MB ឡើយ!");
+      return;
+    }
+
+    try {
+      setImageUploading(true);
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: uploadData,
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      setFormData((prev) => ({ ...prev, imageUrl: data.url }));
+    } catch (err: any) {
+      alert("បរាជ័យក្នុងការផ្ទុករូបភាពឡើង: " + err.message);
+    } finally {
+      setImageUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const fetchBranches = async () => {
     try {
@@ -515,6 +553,7 @@ export default function InventoryPage() {
       unit: "Pcs",
       initialStock: 1,
       imeiText: "",
+      imageUrl: "",
     });
     setIsModalOpen(true);
   };
@@ -536,6 +575,7 @@ export default function InventoryPage() {
       unit: item.unit || "Pcs",
       initialStock: item.stockQty,
       imeiText: (item.imeiList || []).join("\n"),
+      imageUrl: item.imageUrl || "",
     });
     setIsModalOpen(true);
   };
@@ -571,6 +611,7 @@ export default function InventoryPage() {
             salePriceUsd: formData.salePriceUsd,
             minStockAlert: formData.minStockAlert,
             unit: formData.unit,
+            imageUrl: formData.imageUrl,
           }),
         });
         const resData = await res.json();
@@ -817,6 +858,7 @@ export default function InventoryPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
                   <tr>
+                    <th className="py-3 px-3 text-center w-14">រូបភាព</th>
                     <th className="py-3 px-4">កូដ SKU & បាកូដ</th>
                     <th className="py-3 px-4">ឈ្មោះទំនិញ / គ្រឿងបន្លាស់</th>
                     <th className="py-3 px-4">ប្រភេទ</th>
@@ -829,6 +871,30 @@ export default function InventoryPage() {
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/70 transition">
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex items-center justify-center">
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.nameKh}
+                              className="h-10 w-10 rounded-xl object-cover border border-slate-200 shadow-2xs"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = "none";
+                                const fallback = target.nextElementSibling as HTMLElement | null;
+                                if (fallback) fallback.style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={`h-10 w-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 ${
+                              item.imageUrl ? "hidden" : "flex"
+                            }`}
+                          >
+                            <Package className="h-5 w-5 text-slate-400" />
+                          </div>
+                        </div>
+                      </td>
                       <td className="py-3 px-4 font-mono">
                         <p className="font-bold text-slate-900">{item.sku}</p>
                         {item.barcode && <p className="text-[10px] text-slate-400">{item.barcode}</p>}
@@ -1415,6 +1481,88 @@ export default function InventoryPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Product Image Section */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <ImageIcon className="h-4 w-4 text-teal-700" />
+                    រូបភាពទំនិញ (Product Image)
+                  </label>
+                  {formData.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, imageUrl: "" })}
+                      className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      លុបរូបភាព
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-3.5">
+                  {/* Image Preview Box */}
+                  <div className="relative h-24 w-24 rounded-2xl border-2 border-dashed border-slate-300 bg-white overflow-hidden flex items-center justify-center shrink-0 shadow-2xs group">
+                    {formData.imageUrl ? (
+                      <img
+                        src={formData.imageUrl}
+                        alt="Product preview"
+                        className="h-full w-full object-cover object-center"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = "none";
+                          const fallback = target.nextElementSibling as HTMLElement | null;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`h-full w-full flex flex-col items-center justify-center text-slate-400 p-2 text-center ${
+                        formData.imageUrl ? "hidden" : "flex"
+                      }`}
+                    >
+                      <ImageIcon className="h-7 w-7 text-slate-300 mb-1" />
+                      <span className="text-[9px] font-medium leading-tight">គ្មានរូបភាព</span>
+                    </div>
+
+                    {imageUploading && (
+                      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-1 z-10">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span className="text-[9px] font-bold">កំពុងផ្ទុក...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Actions & Direct URL */}
+                  <div className="flex-1 w-full space-y-2 text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-3.5 py-2 text-xs font-bold text-white shadow-2xs hover:bg-teal-800 transition active:scale-95 disabled:opacity-50">
+                        <Upload className="h-3.5 w-3.5" />
+                        <span>{imageUploading ? "កំពុងផ្ទុកឡើង..." : "ជ្រើសរើសរូបភាព (Upload)"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={imageUploading}
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-[11px] text-slate-400">JPG, PNG, WebP (អតិបរមា 5MB)</span>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="url"
+                        value={formData.imageUrl}
+                        onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                        placeholder="ឬបញ្ចូលតំណភ្ជាប់រូបភាព (Or paste Image URL)..."
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-teal-700 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">

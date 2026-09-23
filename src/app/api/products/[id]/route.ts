@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CacheManager } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export async function PATCH(
       minStockAlert,
       unit,
       type,
+      imageUrl,
     } = body;
 
     const updateData: any = {};
@@ -42,11 +44,17 @@ export async function PATCH(
     if (minStockAlert !== undefined) updateData.minStockAlert = Number(minStockAlert);
     if (unit !== undefined) updateData.unit = unit;
     if (type !== undefined) updateData.type = type;
+    if (imageUrl !== undefined) {
+      updateData.imageUrl = imageUrl ? String(imageUrl).trim() : null;
+    }
 
     const updated = await prisma.product.update({
       where: { id },
       data: updateData,
     });
+
+    CacheManager.invalidatePrefix("products:");
+    CacheManager.invalidatePrefix("dashboard:");
 
     return NextResponse.json({
       success: true,
@@ -76,6 +84,9 @@ export async function DELETE(
       where: { id },
     });
 
+    CacheManager.invalidatePrefix("products:");
+    CacheManager.invalidatePrefix("dashboard:");
+
     return NextResponse.json({
       success: true,
       message: "Product deleted successfully",
@@ -85,3 +96,4 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+

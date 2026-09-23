@@ -11,6 +11,8 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
+  Package,
+  Image as ImageIcon,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -61,6 +63,7 @@ export default function ProductGrid() {
           categorySlug: p.categorySlug || "smartphones",
           stockQty: Number(p.stockQty || 0),
           type: p.type || "STANDARD_ITEM",
+          imageUrl: p.imageUrl || "",
           imeiList: p.imeiList || [],
         }));
         setProducts(mapped);
@@ -251,6 +254,40 @@ export default function ProductGrid() {
                   }`}
                 >
                   <div>
+                    {/* Product Image Thumbnail */}
+                    <div className="relative mb-2 w-full h-24 sm:h-28 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center border border-slate-100">
+                      {p.imageUrl ? (
+                        <img
+                          src={p.imageUrl}
+                          alt={p.nameKh}
+                          className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.style.display = "none";
+                            const fallback = target.nextElementSibling as HTMLElement | null;
+                            if (fallback) fallback.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className={`h-full w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 text-slate-300 ${
+                          p.imageUrl ? "hidden" : "flex"
+                        }`}
+                      >
+                        {p.categorySlug === "smartphones" ? (
+                          <Smartphone className="h-8 w-8 text-teal-600/40 group-hover:text-teal-600/70 transition-colors" />
+                        ) : p.categorySlug === "spare-parts" ? (
+                          <Cpu className="h-8 w-8 text-amber-600/40 group-hover:text-amber-600/70 transition-colors" />
+                        ) : p.categorySlug === "repair-services" ? (
+                          <Wrench className="h-8 w-8 text-purple-600/40 group-hover:text-purple-600/70 transition-colors" />
+                        ) : p.categorySlug === "accessories" ? (
+                          <Sparkles className="h-8 w-8 text-rose-600/40 group-hover:text-rose-600/70 transition-colors" />
+                        ) : (
+                          <Package className="h-8 w-8 text-slate-400/40 group-hover:text-teal-600/60 transition-colors" />
+                        )}
+                      </div>
+                    </div>
+
                     <div className="flex items-center justify-between gap-1 mb-1.5">
                       <span className="text-[10px] font-bold font-mono text-slate-400 truncate">
                         {p.sku}
