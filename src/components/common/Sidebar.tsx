@@ -20,6 +20,7 @@ import {
   Sparkles,
   Shield,
   X,
+  ChevronLeft,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -31,6 +32,9 @@ interface SidebarProps {
   userFullName?: string;
   isOpen?: boolean;
   onClose?: () => void;
+  isPos?: boolean;
+  isDesktopCollapsed?: boolean;
+  onToggleDesktopCollapse?: () => void;
 }
 
 export default function Sidebar({
@@ -39,6 +43,9 @@ export default function Sidebar({
   userFullName: initialFullName,
   isOpen = false,
   onClose,
+  isPos = false,
+  isDesktopCollapsed = false,
+  onToggleDesktopCollapse,
 }: SidebarProps) {
   const pathname = usePathname();
   const { language } = usePOSStore();
@@ -69,10 +76,23 @@ export default function Sidebar({
       .catch(() => {});
   }, [initialPermissions, initialRole, initialFullName]);
 
-  // Close sidebar on mobile route change
+  // Close sidebar drawer on route change
   useEffect(() => {
     if (onClose) onClose();
   }, [pathname]);
+
+  // Close drawer on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen && onClose) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [isOpen, onClose]);
 
   const navItems = [
     {
@@ -190,15 +210,26 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* Close Button on Mobile / Tablet */}
-        {onClose && (
+        {/* Close Button (in drawer mode) or Collapse Button (in desktop fixed mode) */}
+        {isOpen && onClose ? (
           <button
+            type="button"
             onClick={onClose}
-            className="lg:hidden rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+            title="បិទម៉ឺនុយ (Close Menu)"
           >
             <X className="h-5 w-5" />
           </button>
-        )}
+        ) : onToggleDesktopCollapse ? (
+          <button
+            type="button"
+            onClick={onToggleDesktopCollapse}
+            className="hidden lg:flex rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+            title="បង្រួមម៉ឺនុយ (Collapse Sidebar)"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        ) : null}
       </div>
 
       {/* Role Badge if available */}
@@ -283,19 +314,23 @@ export default function Sidebar({
     </div>
   );
 
+  const showDesktopFixed = !isPos && !isDesktopCollapsed;
+
   return (
     <>
-      {/* 1. Desktop Fixed Sidebar */}
-      <aside className="hidden lg:block fixed left-0 top-0 bottom-0 z-40">
-        {sidebarContent}
-      </aside>
+      {/* 1. Desktop Fixed Sidebar (Automatically hidden on POS or when collapsed) */}
+      {showDesktopFixed && (
+        <aside className="hidden lg:block fixed left-0 top-0 bottom-0 z-40 animate-in fade-in slide-in-from-left duration-200">
+          {sidebarContent}
+        </aside>
+      )}
 
-      {/* 2. Mobile / Tablet Off-Canvas Drawer */}
+      {/* 2. Off-Canvas Drawer (Shown on Mobile everywhere, and on Desktop when open in POS / collapsed mode) */}
       {isOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-50 flex animate-in fade-in duration-200">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs animate-in fade-in transition-opacity"
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity cursor-pointer"
             onClick={onClose}
           />
           {/* Drawer */}

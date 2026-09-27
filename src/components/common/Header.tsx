@@ -30,9 +30,18 @@ import { COLOR_PALETTES, initThemeListener } from "@/lib/theme";
 interface HeaderProps {
   currentUser?: any;
   onToggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
+  isPos?: boolean;
+  isDesktopCollapsed?: boolean;
 }
 
-export default function Header({ currentUser: initialUser, onToggleSidebar }: HeaderProps) {
+export default function Header({
+  currentUser: initialUser,
+  onToggleSidebar,
+  isSidebarOpen = false,
+  isPos = false,
+  isDesktopCollapsed = false,
+}: HeaderProps) {
   const router = useRouter();
   const {
     language,
@@ -170,12 +179,14 @@ export default function Header({ currentUser: initialUser, onToggleSidebar }: He
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-3 sm:px-6 backdrop-blur shadow-2xs">
       {/* Left: Mobile Hamburger & Branch Selector */}
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-        {/* Hamburger Menu on Mobile / Tablet */}
+        {/* Toggle Sidebar Button (Visible on Mobile, or on Desktop when in POS / collapsed mode) */}
         <button
           type="button"
           onClick={onToggleSidebar}
-          className="lg:hidden flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition shadow-2xs shrink-0"
-          title="Toggle Navigation Menu"
+          className={`${
+            isPos || isDesktopCollapsed ? "flex" : "lg:hidden flex"
+          } h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition shadow-2xs shrink-0 cursor-pointer`}
+          title={isPos ? "ម៉ឺនុយ (Menu)" : isDesktopCollapsed ? "បើកម៉ឺនុយ (Show Sidebar)" : "បិទម៉ឺនុយ (Hide Sidebar)"}
         >
           <Menu className="h-5 w-5" />
         </button>

@@ -32,7 +32,44 @@ export default function DashboardLayout({
   const storedUser = typeof window !== "undefined" ? usePOSStore.getState().currentUser : null;
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(storedUser ? true : null);
   const [currentUser, setCurrentUser] = useState<any>(storedUser || null);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
+
+  const isPos = pathname === "/pos" || pathname.startsWith("/pos/");
+  const showDesktopFixedSidebar = !isPos && !isDesktopCollapsed;
+
+  // Auto-hide drawer whenever pathname changes (especially on entering /pos)
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [pathname]);
+
+  // Global F8 hotkey to switch directly to POS from any other page
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F8" && pathname !== "/pos") {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+          return;
+        }
+        e.preventDefault();
+        router.push("/pos");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pathname, router]);
+
+  const handleToggleSidebar = () => {
+    if (isPos) {
+      setIsSidebarOpen((prev) => !prev);
+    } else {
+      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        setIsSidebarOpen((prev) => !prev);
+      } else {
+        setIsDesktopCollapsed((prev) => !prev);
+      }
+    }
+  };
 
   useEffect(() => {
     // Validate / Refresh session in background
@@ -92,23 +129,33 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
-      {/* 1. Responsive Sidebar (Fixed on Desktop, Drawer on Mobile/Tablet) */}
+      {/* 1. Responsive Sidebar (Auto-hidden on POS, Fixed on Desktop for other pages, Drawer when open) */}
       <Sidebar
         permissions={currentUser?.permissions}
         role={currentUser?.role}
         userFullName={currentUser?.fullName}
-        isOpen={isMobileSidebarOpen}
-        onClose={() => setIsMobileSidebarOpen(false)}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        isPos={isPos}
+        isDesktopCollapsed={isDesktopCollapsed}
+        onToggleDesktopCollapse={() => setIsDesktopCollapsed((prev) => !prev)}
       />
 
-      {/* 2. Main Content Wrapper */}
-      <div className="flex-1 flex flex-col lg:pl-64 pl-0 min-w-0 transition-all duration-300 pb-16 lg:pb-0">
+      {/* 2. Main Content Wrapper (Expands to full width when sidebar is hidden) */}
+      <div
+        className={`flex-1 flex flex-col ${
+          showDesktopFixedSidebar ? "lg:pl-64" : "lg:pl-0"
+        } pl-0 min-w-0 transition-all duration-300 pb-16 lg:pb-0`}
+      >
         <Header
           currentUser={currentUser}
-          onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarOpen={isSidebarOpen}
+          isPos={isPos}
+          isDesktopCollapsed={isDesktopCollapsed}
         />
 
-        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto min-w-0">
+        <main className={`flex-1 ${isPos ? "p-2 sm:p-3 md:p-4" : "p-3 sm:p-4 md:p-6"} overflow-y-auto min-w-0`}>
           {isAllowed ? (
             children
           ) : (
@@ -171,7 +218,7 @@ export default function DashboardLayout({
         {/* More / Menu Drawer Trigger */}
         <button
           type="button"
-          onClick={() => setIsMobileSidebarOpen(true)}
+          onClick={() => setIsSidebarOpen(true)}
           className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-[10px] font-medium text-slate-400 hover:text-white transition"
         >
           <Menu className="h-4 w-4" />
