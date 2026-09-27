@@ -17,6 +17,10 @@ export async function PATCH(
       status,
       technicianId,
       diagnosticNotes,
+      customerProblem,
+      problemDescription,
+      cosmeticCondition,
+      physicalCondition,
       estimatedCostUsd,
       finalCostUsd,
       depositPaidUsd,
@@ -37,6 +41,10 @@ export async function PATCH(
     const updateData: any = {};
     if (technicianId !== undefined) updateData.technicianId = technicianId || null;
     if (diagnosticNotes !== undefined) updateData.diagnosticNotes = diagnosticNotes;
+    if (customerProblem !== undefined) updateData.customerProblem = customerProblem;
+    if (problemDescription !== undefined) updateData.customerProblem = problemDescription;
+    if (cosmeticCondition !== undefined) updateData.cosmeticCondition = cosmeticCondition;
+    if (physicalCondition !== undefined) updateData.cosmeticCondition = physicalCondition;
     if (estimatedCostUsd !== undefined) updateData.estimatedCostUsd = Number(estimatedCostUsd);
     if (finalCostUsd !== undefined) updateData.finalCostUsd = Number(finalCostUsd);
     if (depositPaidUsd !== undefined) updateData.depositPaidUsd = Number(depositPaidUsd);

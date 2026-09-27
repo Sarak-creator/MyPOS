@@ -43,7 +43,9 @@ export interface RepairTicketItem {
   passcode?: string;
   patternLock?: string;
   cosmeticCondition?: string;
+  physicalCondition?: string;
   customerProblem: string;
+  problemDescription?: string;
   diagnosticNotes?: string;
   technicianId?: string;
   technicianName: string;
@@ -475,12 +477,14 @@ export default function RepairsPage() {
   const filteredTickets = tickets.filter((t) => {
     const matchesStatus = statusFilter === "ALL" || t.status === statusFilter;
     const query = searchQuery.toLowerCase();
+    const problemText = (t.customerProblem || t.problemDescription || "").toLowerCase();
     const matchesSearch =
       t.ticketNumber.toLowerCase().includes(query) ||
       t.customerName.toLowerCase().includes(query) ||
       t.customerPhone.includes(query) ||
       t.deviceModel.toLowerCase().includes(query) ||
-      (t.imeiOrSerial && t.imeiOrSerial.toLowerCase().includes(query));
+      (t.imeiOrSerial && t.imeiOrSerial.toLowerCase().includes(query)) ||
+      problemText.includes(query);
     return matchesStatus && matchesSearch;
   });
 
@@ -597,7 +601,10 @@ export default function RepairsPage() {
 
                 <div className="rounded-xl bg-slate-50 p-2.5 text-xs text-slate-700 space-y-1">
                   <p className="line-clamp-2">
-                    <span className="font-semibold text-slate-900">រោគសញ្ញា:</span> {ticket.customerProblem}
+                    <span className="font-semibold text-slate-900">រោគសញ្ញា:</span>{" "}
+                    <span className={ticket.customerProblem || ticket.problemDescription ? "text-slate-800" : "text-slate-400 italic"}>
+                      {ticket.customerProblem || ticket.problemDescription || "មិនមានបញ្ជាក់"}
+                    </span>
                   </p>
                   <div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
                     <span>អតិថិជន: {ticket.customerName}</span>
@@ -701,10 +708,20 @@ export default function RepairsPage() {
               {/* Problem Description */}
               <div>
                 <p className="font-bold text-slate-800">បញ្ហា និងរោគសញ្ញា:</p>
-                <p className="rounded-lg border border-slate-200 p-2.5 bg-white mt-1">
-                  {selectedTicket.customerProblem}
+                <p className="rounded-lg border border-slate-200 p-2.5 bg-white mt-1 text-slate-800 whitespace-pre-wrap">
+                  {selectedTicket.customerProblem || selectedTicket.problemDescription || "មិនមានបញ្ជាក់"}
                 </p>
               </div>
+
+              {/* Cosmetic Condition */}
+              {(selectedTicket.cosmeticCondition || selectedTicket.physicalCondition) && (
+                <div>
+                  <p className="font-bold text-slate-800">ស្ថានភាពរូបរាងខាងក្រៅ (Physical Condition):</p>
+                  <p className="rounded-lg border border-slate-200 p-2.5 bg-white mt-1 text-slate-700">
+                    {selectedTicket.cosmeticCondition || selectedTicket.physicalCondition}
+                  </p>
+                </div>
+              )}
 
               {/* Spare parts used with stock deduction */}
               <div className="rounded-xl border border-slate-200 p-3.5 bg-white space-y-2.5">
