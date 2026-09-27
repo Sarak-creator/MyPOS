@@ -32,9 +32,12 @@ import {
   Send,
   Upload,
   Image as ImageIcon,
+  Camera,
+  ScanBarcode,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
+import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
 
 interface InventoryItem {
   id: string;
@@ -175,6 +178,7 @@ export default function InventoryPage() {
   const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [showQuickAddCat, setShowQuickAddCat] = useState(false);
+  const [isInventoryScanOpen, setIsInventoryScanOpen] = useState(false);
   const [quickCatName, setQuickCatName] = useState("");
 
   // Product Modal State
@@ -1603,7 +1607,18 @@ export default function InventoryPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">លេខបាកូដ (Barcode)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">លេខបាកូដ (Barcode)</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsInventoryScanOpen(true)}
+                      className="flex items-center gap-1 text-[11px] font-bold text-teal-700 hover:text-teal-800 bg-teal-50 px-2 py-0.5 rounded-lg border border-teal-200 transition cursor-pointer"
+                      title="ស្កេនបាកូដតាមកាមេរ៉ា (Camera Scan Barcode)"
+                    >
+                      <Camera className="h-3 w-3" />
+                      <span>ស្កេនកាមេរ៉ា</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={formData.barcode}
@@ -2341,6 +2356,17 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      {/* Barcode Camera Scanner Modal for Inventory */}
+      <BarcodeScannerModal
+        isOpen={isInventoryScanOpen}
+        onClose={() => setIsInventoryScanOpen(false)}
+        onScan={(code) => {
+          setFormData((prev) => ({ ...prev, barcode: code }));
+          setIsInventoryScanOpen(false);
+        }}
+        title="ស្កេនបាកូដទំនិញ (Scan Product Barcode)"
+      />
     </div>
   );
 }

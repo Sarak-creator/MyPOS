@@ -13,10 +13,15 @@ import {
   AlertCircle,
   Package,
   Image as ImageIcon,
+  Camera,
+  CheckCircle2,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import { formatUSD, formatKHR } from "@/lib/utils";
+import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
+import { useBarcodeScanner } from "@/hooks/useBarcodeScanner";
+import { playScanErrorBeep } from "@/lib/scannerAudio";
 
 export interface ProductItem {
   id: string;
@@ -35,7 +40,15 @@ export interface ProductItem {
 }
 
 export default function ProductGrid() {
-  const { language, addItem, items, exchangeRateKhr } = usePOSStore();
+  const {
+    language,
+    addItem,
+    items,
+    exchangeRateKhr,
+    scannerMode,
+    scannerAutoAddToCart,
+    scannerSoundFeedback,
+  } = usePOSStore();
   const t = translations[language];
 
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -43,6 +56,8 @@ export default function ProductGrid() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [stockWarning, setStockWarning] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchLiveProducts = async () => {
@@ -122,8 +137,62 @@ export default function ProductGrid() {
     if (filteredProducts.length === 1) {
       handleSelectProduct(filteredProducts[0]);
       setSearchQuery("");
+    } else if (searchQuery.trim()) {
+      handleBarcodeScanned(searchQuery.trim());
     }
   };
+
+  const handleBarcodeScanned = (scannedCode: string) => {
+    const code = scannedCode.trim();
+    if (!code) return;
+
+    // Search matching product by exact barcode, SKU, or serial/IMEI
+    const match = products.find(
+      (p) =>
+        (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) ||
+        (p.sku && p.sku.toLowerCase() === code.toLowerCase()) ||
+        (p.imeiList && p.imeiList.some((imei) => imei.toLowerCase() === code.toLowerCase()))
+    );
+
+    if (match) {
+      if (scannerAutoAddToCart) {
+        handleSelectProduct(match);
+        setSearchQuery("");
+        setSuccessToast(`✓ បានស្កេន "${language === "km" ? match.nameKh : match.nameEn}" (${formatUSD(match.priceUsd)}) ចូលកន្ត្រក!`);
+        setTimeout(() => setSuccessToast(null), 3000);
+      } else {
+        setSearchQuery(match.barcode || match.sku || code);
+      }
+    } else {
+      if (scannerSoundFeedback) {
+        playScanErrorBeep();
+      }
+      setSearchQuery(code);
+      showWarning(`⚠️ រកមិនឃើញទំនិញដែលមានបាកូដ / QR: "${code}" ទេ!`);
+    }
+  };
+
+  // Hardware Barcode Scanner Gun Listener (USB / Bluetooth HID)
+  useBarcodeScanner({
+    onScan: handleBarcodeScanned,
+    enabled: true,
+  });
+
+  // Hotkeys: F2 (Focus Search), F3 (Toggle Camera Scanner)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F2") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (e.key === "F3" && (scannerMode === "CAMERA_DEVICE" || scannerMode === "BOTH")) {
+        e.preventDefault();
+        setIsCameraOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [scannerMode]);
 
   const handleSelectProduct = (p: ProductItem) => {
     // Check if product is out of stock (for non-service items)
@@ -169,32 +238,67 @@ export default function ProductGrid() {
         </div>
       )}
 
-      {/* Search & Barcode Bar */}
-      <form onSubmit={handleBarcodeSubmit} className="relative">
-        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t.barcodeOrSearch}
-          className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-24 text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 shadow-2xs"
-        />
-        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="text-xs text-slate-400 hover:text-slate-600 px-1"
-            >
-              ✕
-            </button>
-          )}
-          <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-500">
-            <ScanBarcode className="h-3 w-3" /> F2
-          </span>
+      {/* Success Scan Toast Alert */}
+      {successToast && (
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-600 text-white px-3.5 py-2 text-xs font-bold shadow-lg animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>{successToast}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessToast(null)}
+            className="text-xs text-white/80 hover:text-white px-1 cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
-      </form>
+      )}
+
+      {/* Search & Barcode / Camera Bar */}
+      <div className="flex items-center gap-2">
+        <form onSubmit={handleBarcodeSubmit} className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t.barcodeOrSearch}
+            className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-24 text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 shadow-2xs"
+          />
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="text-xs text-slate-400 hover:text-slate-600 px-1"
+              >
+                ✕
+              </button>
+            )}
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-500">
+              <ScanBarcode className="h-3 w-3" /> F2
+            </span>
+          </div>
+        </form>
+
+        {/* Camera Scanner Trigger (If CAMERA_DEVICE or BOTH) */}
+        {(scannerMode === "CAMERA_DEVICE" || scannerMode === "BOTH") && (
+          <button
+            type="button"
+            onClick={() => setIsCameraOpen(true)}
+            className="flex items-center gap-1.5 rounded-2xl bg-teal-700 hover:bg-teal-800 text-white px-3 sm:px-3.5 py-2.5 text-xs font-bold shadow-xs transition active:scale-95 shrink-0 cursor-pointer"
+            title="បើកកាមេរ៉ាស្កេនបាកូដ / QR Code (F3)"
+          >
+            <Camera className="h-4 w-4 text-teal-200" />
+            <span className="hidden sm:inline">ស្កេនកាមេរ៉ា</span>
+            <span className="hidden md:inline text-[9px] bg-teal-800 text-teal-200 px-1 py-0.5 rounded font-mono">
+              F3
+            </span>
+          </button>
+        )}
+      </div>
 
       {/* Category Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -353,6 +457,14 @@ export default function ProductGrid() {
           </div>
         )}
       </div>
+
+      {/* Barcode & QR Code Camera Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onScan={handleBarcodeScanned}
+        title="ស្កេនបាកូដ & QR Code (POS Camera Scanner)"
+      />
     </div>
   );
 }

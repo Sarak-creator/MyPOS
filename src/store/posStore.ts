@@ -48,6 +48,8 @@ export interface PaymentConfig {
   enableCustomerCredit: boolean;
 }
 
+export type BarcodeScannerMode = "CAMERA_DEVICE" | "SCANNER_DEVICE" | "BOTH";
+
 interface POSState {
   // Localization & Currency
   language: Language;
@@ -61,6 +63,20 @@ interface POSState {
   colorPalette: ColorPaletteId;
   setThemeMode: (mode: ThemeMode) => void;
   setColorPalette: (palette: ColorPaletteId) => void;
+
+  // Barcode & QR Scanner Configuration
+  scannerMode: BarcodeScannerMode;
+  preferredCameraId: string;
+  scannerSoundFeedback: boolean;
+  scannerAutoAddToCart: boolean;
+  scannerContinuousMode: boolean;
+  setScannerConfig: (config: Partial<{
+    scannerMode: BarcodeScannerMode;
+    preferredCameraId: string;
+    scannerSoundFeedback: boolean;
+    scannerAutoAddToCart: boolean;
+    scannerContinuousMode: boolean;
+  }>) => void;
 
   // KHQR & Payments Config
   bakongMerchantId: string;
@@ -219,6 +235,21 @@ export const usePOSStore = create<POSState>()(
           console.error("Error syncing POS settings:", err);
         }
       },
+
+      // Barcode & QR Scanner Defaults
+      scannerMode: "BOTH",
+      preferredCameraId: "",
+      scannerSoundFeedback: true,
+      scannerAutoAddToCart: true,
+      scannerContinuousMode: true,
+      setScannerConfig: (cfg) =>
+        set((state) => ({
+          scannerMode: cfg.scannerMode !== undefined ? cfg.scannerMode : state.scannerMode,
+          preferredCameraId: cfg.preferredCameraId !== undefined ? cfg.preferredCameraId : state.preferredCameraId,
+          scannerSoundFeedback: cfg.scannerSoundFeedback !== undefined ? cfg.scannerSoundFeedback : state.scannerSoundFeedback,
+          scannerAutoAddToCart: cfg.scannerAutoAddToCart !== undefined ? cfg.scannerAutoAddToCart : state.scannerAutoAddToCart,
+          scannerContinuousMode: cfg.scannerContinuousMode !== undefined ? cfg.scannerContinuousMode : state.scannerContinuousMode,
+        })),
 
       // Telegram Bot Defaults (Empty by default)
       telegramBotToken: "",
@@ -424,6 +455,12 @@ export const usePOSStore = create<POSState>()(
         enableCashUsd: state.enableCashUsd,
         enableCashKhr: state.enableCashKhr,
         enableCustomerCredit: state.enableCustomerCredit,
+        // Barcode & QR Scanner Configuration
+        scannerMode: state.scannerMode,
+        preferredCameraId: state.preferredCameraId,
+        scannerSoundFeedback: state.scannerSoundFeedback,
+        scannerAutoAddToCart: state.scannerAutoAddToCart,
+        scannerContinuousMode: state.scannerContinuousMode,
         // Telegram Bot Configuration
         telegramBotToken: state.telegramBotToken,
         telegramChatId: state.telegramChatId,

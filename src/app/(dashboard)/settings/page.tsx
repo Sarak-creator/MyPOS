@@ -46,13 +46,17 @@ import {
   Moon,
   Laptop,
   ShoppingCart,
+  Camera,
+  ScanBarcode,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import { generateBakongKHQR, CAMBODIA_BANKS, validateKHQR, decodeKHQR } from "@/lib/khqr";
 import { COLOR_PALETTES, ColorPaletteId, ThemeMode } from "@/lib/theme";
+import { playScanSuccessBeep } from "@/lib/scannerAudio";
+import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
 
-type SettingsTab = "GENERAL" | "POS_CURRENCY" | "PAYMENTS" | "BRANCHES" | "RBAC" | "PRINTER" | "BACKUP" | "TELEGRAM" | "APPEARANCE";
+type SettingsTab = "GENERAL" | "POS_CURRENCY" | "PAYMENTS" | "BRANCHES" | "RBAC" | "PRINTER" | "SCANNER" | "BACKUP" | "TELEGRAM" | "APPEARANCE";
 
 export default function SettingsPage() {
   const {
@@ -85,6 +89,12 @@ export default function SettingsPage() {
     setThemeMode,
     colorPalette,
     setColorPalette,
+    scannerMode,
+    preferredCameraId,
+    scannerSoundFeedback,
+    scannerAutoAddToCart,
+    scannerContinuousMode,
+    setScannerConfig,
   } = usePOSStore();
   const t = translations[language];
 
@@ -93,11 +103,37 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Scanner Test States
+  const [testCameraModalOpen, setTestCameraModalOpen] = useState(false);
+  const [detectedCameras, setDetectedCameras] = useState<Array<{ id: string; label: string }>>([]);
+  const [hwTestInput, setHwTestInput] = useState("");
+  const [hwTestResult, setHwTestResult] = useState<string | null>(null);
+
+  // Detect connected cameras when in SCANNER tab
+  useEffect(() => {
+    if (activeTab === "SCANNER" && typeof window !== "undefined") {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        navigator.mediaDevices
+          .enumerateDevices()
+          .then((devices) => {
+            const videoDevices = devices
+              .filter((d) => d.kind === "videoinput")
+              .map((d, i) => ({
+                id: d.deviceId,
+                label: d.label || `Camera ${i + 1}`,
+              }));
+            setDetectedCameras(videoDevices);
+          })
+          .catch(() => {});
+      }
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab") as SettingsTab | null;
-      if (tabParam && ["GENERAL", "POS_CURRENCY", "PAYMENTS", "BRANCHES", "RBAC", "PRINTER", "BACKUP", "TELEGRAM", "APPEARANCE"].includes(tabParam)) {
+      if (tabParam && ["GENERAL", "POS_CURRENCY", "PAYMENTS", "BRANCHES", "RBAC", "PRINTER", "SCANNER", "BACKUP", "TELEGRAM", "APPEARANCE"].includes(tabParam)) {
         setActiveTab(tabParam);
       }
     }
@@ -906,6 +942,7 @@ export default function SettingsPage() {
       <div className="flex flex-wrap border-b border-slate-200 gap-2 text-xs font-bold">
         {[
           { id: "APPEARANCE", label: "ការតុបតែង & រូបរាង (Appearance)", icon: Palette },
+          { id: "SCANNER", label: "ឧបករណ៍ស្កេន (QR/Barcode Scanner)", icon: ScanBarcode },
           { id: "PAYMENTS", label: "Bakong KHQR & ការទូទាត់", icon: QrCode },
           { id: "TELEGRAM", label: "Telegram Bot (ដំណឹង)", icon: Send },
           { id: "GENERAL", label: "ព័ត៌មានអាជីវកម្ម (Profile)", icon: Store },
@@ -1220,6 +1257,360 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Barcode & QR Code Scanner Configuration */}
+      {activeTab === "SCANNER" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Banner / Description */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <ScanBarcode className="h-5 w-5 text-teal-700" />
+                ការកំណត់ឧបករណ៍ស្កេនបាកូដ & QR Code (Barcode & QR Scanner Settings)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                កំណត់ជម្រើសស្កេនទំនិញតាមរយៈ <strong>ឧបករណ៍កាំភ្លើងស្កេន (USB/Bluetooth Scanner Gun)</strong> ឬ <strong>កាមេរ៉ាទូរស័ព្ទ/វេបខេម (Camera Device)</strong>។ គាំទ្របាកូដទំនិញ 1D (EAN-13, UPC, Code 128) និង 2D QR Code គ្រប់ប្រភេទ។
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold">
+                <CheckCircle2 className="h-4 w-4 text-teal-600" />
+                {scannerMode === "SCANNER_DEVICE"
+                  ? "ឧបករណ៍ស្កេនកាំភ្លើង (Scanner Device)"
+                  : scannerMode === "CAMERA_DEVICE"
+                  ? "កាមេរ៉ា (Camera Device)"
+                  : "ប្រើទាំងពីរ (Both Active)"}
+              </span>
+            </div>
+          </div>
+
+          {/* Section 1: Choose Scanner Device Mode */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 pb-3">
+              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-teal-700" />
+                ជ្រើសរើសរបៀបស្កេនបាកូដ (Scanner Mode Option)
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                ជ្រើសរើសវិធីសាស្ត្រស្កេនដែលសមស្របនឹងបរិក្ខារហាងរបស់អ្នក
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Option 1: Hardware Scanner Device */}
+              <button
+                type="button"
+                onClick={() => setScannerConfig({ scannerMode: "SCANNER_DEVICE" })}
+                className={`relative flex flex-col p-5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  scannerMode === "SCANNER_DEVICE"
+                    ? "border-teal-600 bg-teal-50/40 shadow-sm ring-2 ring-teal-500/20"
+                    : "border-slate-200 hover:border-slate-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-teal-100/80 flex items-center justify-center text-teal-700">
+                    <ScanBarcode className="h-5 w-5" />
+                  </div>
+                  {scannerMode === "SCANNER_DEVICE" && (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
+                      <Check className="h-3 w-3" /> កំពុងប្រើ
+                    </span>
+                  )}
+                </div>
+                <h5 className="font-extrabold text-sm text-slate-900">
+                  ឧបករណ៍ស្កេនបាកូដ (Scanner Device)
+                </h5>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  ប្រើកាំភ្លើងស្កេនបាកូដដោតតាមខ្សែ USB ឬ Bluetooth (HID Keyboard Emulation)។ ស្កេនលឿនបំផុតក្រោម 50ms និងចាប់យកបាកូដដោយស្វ័យប្រវត្តិ។
+                </p>
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-semibold">
+                    USB / Bluetooth
+                  </span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-semibold">
+                    Plug & Play
+                  </span>
+                </div>
+              </button>
+
+              {/* Option 2: Camera Device */}
+              <button
+                type="button"
+                onClick={() => setScannerConfig({ scannerMode: "CAMERA_DEVICE" })}
+                className={`relative flex flex-col p-5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  scannerMode === "CAMERA_DEVICE"
+                    ? "border-teal-600 bg-teal-50/40 shadow-sm ring-2 ring-teal-500/20"
+                    : "border-slate-200 hover:border-slate-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-blue-100/80 flex items-center justify-center text-blue-700">
+                    <Camera className="h-5 w-5" />
+                  </div>
+                  {scannerMode === "CAMERA_DEVICE" && (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
+                      <Check className="h-3 w-3" /> កំពុងប្រើ
+                    </span>
+                  )}
+                </div>
+                <h5 className="font-extrabold text-sm text-slate-900">
+                  កាមេរ៉ាទូរស័ព្ទ / វេបខេម (Camera Device)
+                </h5>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  ប្រើប្រាស់កាមេរ៉ាដែលភ្ជាប់ជាមួយទូរស័ព្ទដៃ ថេប្លេត ឬ Web Camera ដើម្បីស្កេនបាកូដ និង QR Code ដោយមិនចាំបាច់ទិញឧបករណ៍បន្ថែម។
+                </p>
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-semibold">
+                    Webcam / Mobile
+                  </span>
+                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-semibold">
+                    Flashlight Support
+                  </span>
+                </div>
+              </button>
+
+              {/* Option 3: Both (Hybrid) */}
+              <button
+                type="button"
+                onClick={() => setScannerConfig({ scannerMode: "BOTH" })}
+                className={`relative flex flex-col p-5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  scannerMode === "BOTH"
+                    ? "border-teal-600 bg-teal-50/40 shadow-sm ring-2 ring-teal-500/20"
+                    : "border-slate-200 hover:border-slate-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-purple-100/80 flex items-center justify-center text-purple-700">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  {scannerMode === "BOTH" && (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
+                      <Check className="h-3 w-3" /> ណែនាំឱ្យប្រើ
+                    </span>
+                  )}
+                </div>
+                <h5 className="font-extrabold text-sm text-slate-900">
+                  ប្រើទាំងពីរ (Both Camera & Scanner)
+                </h5>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  បើកដំណើរការទាំងកាំភ្លើងស្កេនបាកូដ USB/Bluetooth និងប៊ូតុងស្កេនកាមេរ៉ានៅលើផ្ទាំង POS ដើម្បីភាពបត់បែនខ្ពស់បំផុតសម្រាប់បុគ្គលិកគិតលុយ។
+                </p>
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-mono font-semibold">
+                    Hybrid Mode
+                  </span>
+                  <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-mono font-semibold">
+                    All-in-One
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Section 2: Camera Device Selection & Test (Shown if camera is active) */}
+          {(scannerMode === "CAMERA_DEVICE" || scannerMode === "BOTH") && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    <Camera className="h-4 w-4 text-teal-700" />
+                    ជ្រើសរើសឧបករណ៍កាមេរ៉ា (Preferred Camera Device)
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    ជ្រើសរើសកាមេរ៉ាដែលចង់ប្រើជាលំនាំដើម (Front, Back, ឬ USB Webcam)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTestCameraModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-2 text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                  <span>សាកល្បងស្កេនកាមេរ៉ា</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    កាមេរ៉ាដែលបានភ្ជាប់ ({detectedCameras.length} ឧបករណ៍)
+                  </label>
+                  {detectedCameras.length > 0 ? (
+                    <select
+                      value={preferredCameraId}
+                      onChange={(e) => setScannerConfig({ preferredCameraId: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                    >
+                      <option value="">-- កាមេរ៉ាលំនាំដើមរបស់ប្រព័ន្ធ (Default Auto) --</option>
+                      {detectedCameras.map((cam) => (
+                        <option key={cam.id} value={cam.id}>
+                          📷 {cam.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 flex items-center justify-between">
+                      <span>កំពុងស្វែងរកកាមេរ៉ា... (សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ាក្នុង Browser)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.mediaDevices?.enumerateDevices) {
+                            navigator.mediaDevices.enumerateDevices().then((devices) => {
+                              const v = devices.filter((d) => d.kind === "videoinput").map((d, i) => ({ id: d.deviceId, label: d.label || `Camera ${i + 1}` }));
+                              setDetectedCameras(v);
+                            });
+                          }
+                        }}
+                        className="text-teal-700 font-bold hover:underline"
+                      >
+                        ផ្ទុកឡើងវិញ
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3.5 flex flex-col justify-center space-y-1">
+                  <span className="text-[11px] font-bold text-slate-700">គន្លឹះការប្រើប្រាស់កាមេរ៉ា៖</span>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    នៅលើទូរស័ព្ទ ឬ iPad ប្រព័ន្ធនឹងជ្រើសរើស <strong>កាមេរ៉ាខាងក្រោយ (Rear/Environment Camera)</strong> ដោយស្វ័យប្រវត្តិដើម្បីងាយស្រួលតម្រង់ស្កេនបាកូដលើផលិតផល។
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section 3: Audio & Workflow Automation */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-5">
+            <div className="border-b border-slate-100 pb-3">
+              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Volume2 className="h-4 w-4 text-teal-700" />
+                សំឡេង & ប្រតិបត្តិការស្វ័យប្រវត្តិ (Feedback & Automation)
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                កំណត់សំឡេង Beep និងអាកប្បកិរិយារបស់កន្ត្រកទំនិញនៅពេលស្កេន
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Toggle 1: Beep sound */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 bg-slate-50/50">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold text-slate-900">
+                      សំឡេង Beep ពេលស្កេនជោគជ័យ (Audio Feedback)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => playScanSuccessBeep()}
+                      className="text-[10px] text-teal-700 hover:text-teal-800 font-bold bg-teal-50 border border-teal-200 px-2 py-0.5 rounded cursor-pointer"
+                    >
+                      ▶ ស្តាប់សំឡេងតេស្ត
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    បន្លឺសំឡេង Beep ដូចម៉ាស៊ីនស្កេនស្តង់ដារពេលចាប់យកបាកូដបានត្រឹមត្រូវ
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={scannerSoundFeedback}
+                  onChange={(e) => setScannerConfig({ scannerSoundFeedback: e.target.checked })}
+                  className="h-5 w-5 rounded-md border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Toggle 2: Auto-add to cart */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 bg-slate-50/50">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-extrabold text-slate-900">
+                    បញ្ចូលទំនិញទៅក្នុងកន្ត្រកភ្លាមៗ (Auto Add to Cart)
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    នៅពេលស្កេនត្រូវនឹងបាកូដទំនិញ ប្រព័ន្ធនឹងបន្ថែមទំនិញនោះចូលក្នុងកន្ត្រកភ្លាមៗដោយមិនបាច់ចុចបន្ថែម
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={scannerAutoAddToCart}
+                  onChange={(e) => setScannerConfig({ scannerAutoAddToCart: e.target.checked })}
+                  className="h-5 w-5 rounded-md border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Toggle 3: Continuous scanning */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 bg-slate-50/50">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-extrabold text-slate-900">
+                    ការស្កេនបន្តបន្ទាប់ (Continuous Camera Scan Mode)
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    រក្សាកាមេរ៉ាឱ្យបើកបន្តដើម្បីស្កេនទំនិញជាច្រើនមុខជាប់ៗគ្នាដោយមិនបាច់បើកផ្ទាំងឡើងវិញ
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={scannerContinuousMode}
+                  onChange={(e) => setScannerConfig({ scannerContinuousMode: e.target.checked })}
+                  className="h-5 w-5 rounded-md border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Hardware Scanner Gun Live Testing Area */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 pb-3">
+              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <ScanBarcode className="h-4 w-4 text-teal-700" />
+                ផ្ទាំងសាកល្បងកាំភ្លើងស្កេនបាកូដ (Hardware Scanner Gun Live Test)
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                ចុចលើប្រអប់ខាងក្រោម ហើយទាញកេះកាំភ្លើងស្កេនលើបាកូដទំនិញណាមួយដើម្បីពិនិត្យល្បឿន និងភាពត្រឹមត្រូវ
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={hwTestInput}
+                  onChange={(e) => setHwTestInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (hwTestInput.trim()) {
+                        playScanSuccessBeep();
+                        setHwTestResult(`✓ បានស្កេនកូដ: "${hwTestInput.trim()}" (ប្រវែង: ${hwTestInput.trim().length} តួអក្សរ) - ឧបករណ៍ស្កេនដំណើរការល្អឥតខ្ចោះ!`);
+                        setHwTestInput("");
+                      }
+                    }
+                  }}
+                  placeholder="ចុចទីនេះ រួចទាញកេះកាំភ្លើងស្កេនបាកូដរបស់អ្នក (Scan barcode here)..."
+                  className="w-full rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50/30 p-4 text-sm font-mono text-slate-800 placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:outline-hidden"
+                />
+              </div>
+
+              {hwTestResult && (
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-300 p-3 text-xs text-emerald-800 animate-in fade-in">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span className="font-semibold">{hwTestResult}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Test Camera Modal if opened */}
+          <BarcodeScannerModal
+            isOpen={testCameraModalOpen}
+            onClose={() => setTestCameraModalOpen(false)}
+            onScan={(code) => {
+              alert(`✓ ស្កេនបានជោគជ័យ! បាកូដ/QR: ${code}`);
+            }}
+            title="សាកល្បងស្កេនកាមេរ៉ា (Camera Scanner Test)"
+          />
         </div>
       )}
 
