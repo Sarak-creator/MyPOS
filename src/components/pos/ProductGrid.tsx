@@ -39,7 +39,12 @@ export interface ProductItem {
   imeiList?: string[];
 }
 
-export default function ProductGrid() {
+export interface ProductGridProps {
+  onOpenPayment?: () => void;
+  onOpenMobileCart?: () => void;
+}
+
+export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: ProductGridProps = {}) {
   const {
     language,
     addItem,
@@ -58,6 +63,8 @@ export default function ProductGrid() {
   const [stockWarning, setStockWarning] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [lastScannedId, setLastScannedId] = useState<string | null>(null);
+  const [scanFeedback, setScanFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchLiveProducts = async () => {
@@ -158,8 +165,13 @@ export default function ProductGrid() {
       if (scannerAutoAddToCart) {
         handleSelectProduct(match);
         setSearchQuery("");
-        setSuccessToast(`✓ បានស្កេន "${language === "km" ? match.nameKh : match.nameEn}" (${formatUSD(match.priceUsd)}) ចូលកន្ត្រក!`);
+        setLastScannedId(match.id);
+        const name = language === "km" ? match.nameKh : match.nameEn;
+        const msg = `✓ បានស្កេន "${name}" (${formatUSD(match.priceUsd)}) ទម្លាក់ចូលកន្ត្រក!`;
+        setSuccessToast(msg);
+        setScanFeedback({ type: "success", message: msg });
         setTimeout(() => setSuccessToast(null), 3000);
+        setTimeout(() => setScanFeedback(null), 3500);
       } else {
         setSearchQuery(match.barcode || match.sku || code);
       }
@@ -168,7 +180,10 @@ export default function ProductGrid() {
         playScanErrorBeep();
       }
       setSearchQuery(code);
-      showWarning(`⚠️ រកមិនឃើញទំនិញដែលមានបាកូដ / QR: "${code}" ទេ!`);
+      const errMsg = `⚠️ រកមិនឃើញទំនិញដែលមានបាកូដ / QR: "${code}" ទេ!`;
+      showWarning(errMsg);
+      setScanFeedback({ type: "error", message: errMsg });
+      setTimeout(() => setScanFeedback(null), 3500);
     }
   };
 
@@ -458,12 +473,19 @@ export default function ProductGrid() {
         )}
       </div>
 
-      {/* Barcode & QR Code Camera Scanner Modal */}
+      {/* Barcode & QR Code Camera Scanner Modal with Popup Cart */}
       <BarcodeScannerModal
         isOpen={isCameraOpen}
-        onClose={() => setIsCameraOpen(false)}
+        onClose={() => {
+          setIsCameraOpen(false);
+          setScanFeedback(null);
+        }}
         onScan={handleBarcodeScanned}
         title="ស្កេនបាកូដ & QR Code (POS Camera Scanner)"
+        showCart={true}
+        onOpenPayment={onOpenPayment}
+        lastScannedItemId={lastScannedId}
+        scanFeedback={scanFeedback}
       />
     </div>
   );

@@ -39,7 +39,10 @@ export default function POSPage() {
     <div className="relative h-[calc(100vh-8.5rem)] lg:h-[calc(100vh-6.5rem)] flex gap-4 overflow-hidden">
       {/* 1. Left: Product Catalog & Search (Full width on Mobile/Tablet, Flex on Desktop) */}
       <div className="flex-1 h-full min-w-0 pb-12 lg:pb-0">
-        <ProductGrid />
+        <ProductGrid
+          onOpenPayment={() => setIsPaymentOpen(true)}
+          onOpenMobileCart={() => setIsMobileCartOpen(true)}
+        />
       </div>
 
       {/* 2. Right: Desktop Cart & Checkout Panel */}
