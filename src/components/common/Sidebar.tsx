@@ -21,6 +21,7 @@ import {
   Shield,
   X,
   ChevronLeft,
+  BadgePercent,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -151,6 +152,13 @@ export default function Sidebar({
       icon: Users2,
       badge: null,
       permission: "customers:view",
+    },
+    {
+      label: t.installments || "បង់រំលោះ & បញ្ចាំ",
+      href: "/installments",
+      icon: BadgePercent,
+      badge: null,
+      permission: "sales:view",
     },
     {
       label: t.hrm,

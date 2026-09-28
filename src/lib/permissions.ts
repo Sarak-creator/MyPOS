@@ -174,6 +174,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/accounting": "accounting:view",
   "/crm": "crm:view",
   "/customers": "crm:view",
+  "/installments": "sales:view",
   "/suppliers": "purchases:view",
   "/hrm": "hrm:view",
   "/audit-logs": "audit:view",

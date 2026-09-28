@@ -67,6 +67,8 @@ model Branch {
   transfersTo   StockTransfer[] @relation("TransferDestination")
   attendances Attendance[]
   stockItems  StockItem[]
+  installmentContracts InstallmentContract[]
+  pawnTickets          PawnTicket[]
 
   @@unique([tenantId, code])
 }
@@ -191,6 +193,7 @@ model Product {
   unit          String       @default("Pcs") // Pcs, Box, Set, Pack
   imageUrl      String?
   isActive      Boolean      @default(true)
+  warrantyDays  Int          @default(30)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -202,6 +205,7 @@ model Product {
   orderItems    OrderItem[]
   repairParts   RepairPartUsed[]
   purchaseOrderItems PurchaseOrderItem[]
+  installmentContracts InstallmentContract[]
 }
 
 model ProductVariant {
@@ -354,6 +358,8 @@ model Customer {
   orders        Order[]
   repairs       RepairTicket[]
   debts         DebtPaymentSchedule[]
+  installmentContracts InstallmentContract[]
+  pawnTickets          PawnTicket[]
 }
 
 model Order {
@@ -396,6 +402,7 @@ model OrderItem {
   quantity        Int
   discountAmount  Decimal       @default(0) @db.Decimal(12, 2)
   totalPriceUsd   Decimal       @db.Decimal(12, 2)
+  warrantyDays    Int           @default(30)
 
   order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product         Product       @relation(fields: [productId], references: [id])
@@ -757,4 +764,157 @@ model SystemConfig {
 
   @@map("system_configs")
 }
+
+// ----------------------------------------------------
+// 11. Installment / Hire Purchase Module (បង់រំលោះ)
+// ----------------------------------------------------
+
+enum InstallmentStatus {
+  ACTIVE
+  COMPLETED
+  OVERDUE
+  DEFAULTED
+  CANCELLED
+}
+
+enum SchedulePaymentStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+model InstallmentContract {
+  id                    String                @id @default(uuid())
+  contractNumber        String                @unique // e.g. "INS-202609-0001"
+  tenantId              String
+  branchId              String
+  customerId            String
+  productId             String?
+  productName           String                // e.g. "iPhone 15 Pro Max 256GB"
+  productImeiOrSerial   String?               // Serial / IMEI
+  totalPriceUsd         Decimal               @db.Decimal(12, 2)
+  downPaymentUsd        Decimal               @default(0) @db.Decimal(12, 2)
+  downPaymentKhr        Decimal               @default(0) @db.Decimal(14, 2)
+  principalRemainingUsd Decimal               @db.Decimal(12, 2)
+  interestRatePercent   Decimal               @default(1.5) @db.Decimal(5, 2) // Monthly %
+  durationMonths        Int                   // 3, 6, 12, 18, 24
+  monthlyAmountUsd      Decimal               @db.Decimal(12, 2)
+  totalRepaymentUsd     Decimal               @db.Decimal(12, 2)
+  totalPaidUsd          Decimal               @default(0) @db.Decimal(12, 2)
+  startDate             DateTime              @default(now())
+  endDate               DateTime
+  status                InstallmentStatus     @default(ACTIVE)
+  guarantorName         String?
+  guarantorPhone        String?
+  guarantorNationalId   String?
+  guarantorAddress      String?
+  customerNationalId    String?
+  notes                 String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  customer              Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  branch                Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  product               Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  schedules             InstallmentSchedule[]
+}
+
+model InstallmentSchedule {
+  id                    String                @id @default(uuid())
+  contractId            String
+  installmentNumber     Int
+  dueDate               DateTime
+  principalAmountUsd    Decimal               @db.Decimal(12, 2)
+  interestAmountUsd     Decimal               @db.Decimal(12, 2)
+  totalDueUsd           Decimal               @db.Decimal(12, 2)
+  paidAmountUsd         Decimal               @default(0) @db.Decimal(12, 2)
+  paidDate              DateTime?
+  paymentMethod         PaymentMethod?
+  status                SchedulePaymentStatus @default(PENDING)
+  daysOverdue           Int                   @default(0)
+  penaltyAmountUsd      Decimal               @default(0) @db.Decimal(12, 2)
+  penaltyPaidUsd        Decimal               @default(0) @db.Decimal(12, 2)
+  notes                 String?
+  collectedBy           String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  contract              InstallmentContract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------
+// 12. Pawn / Collateral Loans Module (បញ្ចាំ)
+// ----------------------------------------------------
+
+enum PawnStatus {
+  ACTIVE
+  REDEEMED
+  EXTENDED
+  OVERDUE
+  DEFAULTED_FORFEITED
+}
+
+enum PawnPaymentType {
+  INTEREST_PAYMENT
+  LOAN_REDUCTION
+  FULL_REDEMPTION
+  PENALTY_FEE
+}
+
+model PawnTicket {
+  id                    String                @id @default(uuid())
+  ticketNumber          String                @unique // e.g. "PWN-202609-0001"
+  tenantId              String
+  branchId              String
+  customerId            String
+  customerNationalId    String?
+  itemName              String                // e.g. "iPhone 15 Pro Max 256GB"
+  itemCategory          String                // Phone, Vehicle, Jewelry, Electronics, Real Estate, Other
+  itemBrand             String?
+  itemModel             String?
+  imeiOrSerial          String?
+  itemCondition         String?
+  storageLocation       String?
+  estimatedValueUsd     Decimal               @db.Decimal(12, 2)
+  loanAmountUsd         Decimal               @db.Decimal(12, 2)
+  monthlyInterestRate   Decimal               @default(2.5) @db.Decimal(5, 2)
+  monthlyInterestUsd    Decimal               @db.Decimal(12, 2)
+  durationMonths        Int                   @default(1)
+  startDate             DateTime              @default(now())
+  maturityDate          DateTime
+  status                PawnStatus            @default(ACTIVE)
+  totalInterestPaidUsd  Decimal               @default(0) @db.Decimal(12, 2)
+  daysOverdue           Int                   @default(0)
+  penaltyAmountUsd      Decimal               @default(0) @db.Decimal(12, 2)
+  redeemedDate          DateTime?
+  redeemedAmountUsd     Decimal?              @db.Decimal(12, 2)
+  notes                 String?
+  handledBy             String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  customer              Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  branch                Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  paymentLogs           PawnPaymentLog[]
+}
+
+model PawnPaymentLog {
+  id                    String                @id @default(uuid())
+  pawnTicketId          String
+  paymentType           PawnPaymentType       @default(INTEREST_PAYMENT)
+  amountPaidUsd         Decimal               @db.Decimal(12, 2)
+  penaltyPaidUsd        Decimal               @default(0) @db.Decimal(12, 2)
+  paymentMethod         PaymentMethod         @default(CASH_USD)
+  monthsExtended        Int                   @default(0)
+  newMaturityDate       DateTime?
+  paidDate              DateTime              @default(now())
+  receivedBy            String
+  receiptNumber         String?
+  notes                 String?
+  createdAt             DateTime              @default(now())
+
+  pawnTicket            PawnTicket            @relation(fields: [pawnTicketId], references: [id], onDelete: Cascade)
+}
+
 

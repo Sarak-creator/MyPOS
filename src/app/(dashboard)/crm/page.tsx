@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Contact2,
   Plus,
@@ -18,6 +19,8 @@ import {
   X,
   CreditCard,
   Trash2,
+  BadgePercent,
+  ShieldCheck,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -452,13 +455,29 @@ export default function CRMPage() {
                       ${Number(c.currentDebtUsd || 0).toFixed(2)}
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => handleDeleteCustomer(c.id, c.name)}
-                        className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-red-700 hover:bg-red-50"
-                        title="លុប"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Link
+                          href={`/installments`}
+                          className="p-1.5 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 transition"
+                          title="បង់រំលោះ & បញ្ចាំ"
+                        >
+                          <BadgePercent className="h-3.5 w-3.5" />
+                        </Link>
+                        <Link
+                          href={`/installments`}
+                          className="p-1.5 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition"
+                          title="ឆែកប្រវត្តិទិញ & ការធានា"
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteCustomer(c.id, c.name)}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-red-700 hover:bg-red-50 transition"
+                          title="លុបអតិថិជន"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
