@@ -55,8 +55,9 @@ import { generateBakongKHQR, CAMBODIA_BANKS, validateKHQR, decodeKHQR } from "@/
 import { COLOR_PALETTES, ColorPaletteId, ThemeMode } from "@/lib/theme";
 import { playScanSuccessBeep } from "@/lib/scannerAudio";
 import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
+import LoanContractSettingsPanel from "@/components/loans/LoanContractSettingsPanel";
 
-type SettingsTab = "GENERAL" | "POS_CURRENCY" | "PAYMENTS" | "BRANCHES" | "RBAC" | "PRINTER" | "SCANNER" | "BACKUP" | "TELEGRAM" | "APPEARANCE";
+type SettingsTab = "GENERAL" | "POS_CURRENCY" | "PAYMENTS" | "BRANCHES" | "RBAC" | "PRINTER" | "SCANNER" | "BACKUP" | "TELEGRAM" | "APPEARANCE" | "LOANS_CONTRACTS";
 
 export default function SettingsPage() {
   const {
@@ -133,7 +134,7 @@ export default function SettingsPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab") as SettingsTab | null;
-      if (tabParam && ["GENERAL", "POS_CURRENCY", "PAYMENTS", "BRANCHES", "RBAC", "PRINTER", "SCANNER", "BACKUP", "TELEGRAM", "APPEARANCE"].includes(tabParam)) {
+      if (tabParam && ["GENERAL", "POS_CURRENCY", "PAYMENTS", "BRANCHES", "RBAC", "PRINTER", "SCANNER", "BACKUP", "TELEGRAM", "APPEARANCE", "LOANS_CONTRACTS"].includes(tabParam)) {
         setActiveTab(tabParam);
       }
     }
@@ -951,6 +952,7 @@ export default function SettingsPage() {
           { id: "RBAC", label: `បុគ្គលិក & សិទ្ធិ RBAC (${users.length})`, icon: Users },
           { id: "PRINTER", label: "ម៉ាស៊ីនបោះពុម្ព & វិក្កយបត្រ", icon: Printer },
           { id: "BACKUP", label: "បម្រុងទុក & Cloud DB", icon: Database },
+          { id: "LOANS_CONTRACTS", label: "កិច្ចសន្យា & ការប្រាក់ (Contracts)", icon: FileText },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -2962,6 +2964,13 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Loans & Contracts Customization */}
+      {activeTab === "LOANS_CONTRACTS" && (
+        <div className="animate-in fade-in duration-200">
+          <LoanContractSettingsPanel />
         </div>
       )}
 

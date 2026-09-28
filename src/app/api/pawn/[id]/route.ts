@@ -74,7 +74,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/pawn/[id] - Delete pawn ticket
+// DELETE /api/pawn/[id] - Delete pawn ticket and payment logs
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
@@ -82,8 +82,16 @@ export async function DELETE(
   try {
     const { id } = params;
 
-    await prisma.pawnTicket.delete({
-      where: { id },
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete associated pawn payment logs first to avoid FK constraint errors
+      await tx.pawnPaymentLog.deleteMany({
+        where: { pawnTicketId: id },
+      });
+
+      // 2. Delete the pawn ticket
+      await tx.pawnTicket.delete({
+        where: { id },
+      });
     });
 
     return NextResponse.json({

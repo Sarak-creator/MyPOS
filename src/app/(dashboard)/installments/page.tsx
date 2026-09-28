@@ -28,15 +28,23 @@ import {
   X,
   Wrench,
   Package,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { formatUSD, formatKHR } from "@/lib/utils";
 import InstallmentContractPrint from "@/components/print/InstallmentContractPrint";
 import InstallmentSchedulePrint from "@/components/print/InstallmentSchedulePrint";
 import PawnContractPrint from "@/components/print/PawnContractPrint";
+import ContractSettingsModal from "@/components/loans/ContractSettingsModal";
+import { LoanContractSettings } from "@/lib/config-manager";
 
 export default function InstallmentsAndPawnPage() {
   const { exchangeRateKhr } = usePOSStore();
+
+  // Contract & Loan Admin Settings
+  const [showContractSettingsModal, setShowContractSettingsModal] = useState(false);
+  const [loanSettings, setLoanSettings] = useState<LoanContractSettings | null>(null);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"INSTALLMENT" | "PAWN" | "OVERDUE" | "WARRANTY">("INSTALLMENT");
@@ -82,6 +90,48 @@ export default function InstallmentsAndPawnPage() {
   const [payPenalty, setPayPenalty] = useState<string>("0");
   const [payMethod, setPayMethod] = useState<string>("CASH_USD");
   const [payNotes, setPayNotes] = useState<string>("");
+
+  // Delete Confirmation Modal State
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "INSTALLMENT" | "PAWN";
+    id: string;
+    title: string;
+    customerName?: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
+    try {
+      const endpoint =
+        deleteConfirm.type === "INSTALLMENT"
+          ? `/api/installments/${deleteConfirm.id}`
+          : `/api/pawn/${deleteConfirm.id}`;
+
+      const res = await fetch(endpoint, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        if (deleteConfirm.type === "INSTALLMENT") {
+          setContracts((prev) => prev.filter((c) => c.id !== deleteConfirm.id));
+          if (selectedContract?.id === deleteConfirm.id) {
+            setSelectedContract(null);
+          }
+          fetchInstallments();
+        } else {
+          setPawnTickets((prev) => prev.filter((p) => p.id !== deleteConfirm.id));
+          fetchPawnTickets();
+        }
+        setDeleteConfirm(null);
+      } else {
+        alert(data.error || "បរាជ័យក្នុងការលុប!");
+      }
+    } catch (err: any) {
+      alert("កំហុសក្នុងការលុប: " + err.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   // Pawn Payment / Extension Modal
@@ -89,6 +139,8 @@ export default function InstallmentsAndPawnPage() {
   const [pawnPayType, setPawnPayType] = useState<"INTEREST_PAYMENT" | "FULL_REDEMPTION">("INTEREST_PAYMENT");
   const [pawnPayAmount, setPawnPayAmount] = useState<string>("");
   const [pawnMonthsExt, setPawnMonthsExt] = useState<number>(1);
+  const [pawnExtType, setPawnExtType] = useState<"DAYS" | "MONTHS">("DAYS");
+  const [pawnDaysExt, setPawnDaysExt] = useState<number>(30);
   const [pawnPayMethod, setPawnPayMethod] = useState<string>("CASH_USD");
 
   // New Installment Form Data
@@ -124,7 +176,10 @@ export default function InstallmentsAndPawnPage() {
     estimatedValueUsd: "",
     loanAmountUsd: "",
     monthlyInterestRate: "2.5",
+    durationType: "DAYS" as "DAYS" | "MONTHS",
+    durationDays: "30",
     durationMonths: "1",
+    interestAmountUsd: "",
     startDate: new Date().toISOString().split("T")[0],
     notes: "",
   });
@@ -208,10 +263,34 @@ export default function InstallmentsAndPawnPage() {
     }
   };
 
+  // Fetch loan & contract custom settings (Admin)
+  const fetchLoanSettings = async () => {
+    try {
+      const res = await fetch("/api/settings/loans");
+      const data = await res.json();
+      if (data.success && data.settings) {
+        setLoanSettings(data.settings);
+        setNewContractForm((prev) => ({
+          ...prev,
+          interestRatePercent: String(data.settings.installmentInterestRate ?? 1.5),
+        }));
+        setNewPawnForm((prev) => ({
+          ...prev,
+          monthlyInterestRate: String(data.settings.pawnMonthlyInterestRate ?? 2.5),
+          durationDays: String(data.settings.defaultPawnDurationDays ?? 30),
+          durationType: data.settings.defaultPawnDurationType || "DAYS",
+        }));
+      }
+    } catch (err) {
+      console.error("Error loading loan settings:", err);
+    }
+  };
+
   useEffect(() => {
     fetchInstallments();
     fetchPawnTickets();
     fetchDropdownData();
+    fetchLoanSettings();
   }, []);
 
   useEffect(() => {
@@ -251,6 +330,9 @@ export default function InstallmentsAndPawnPage() {
         alert(data.message);
         setShowNewContractModal(false);
         fetchInstallments();
+        if (data.contract) {
+          setPrintContractData(data.contract);
+        }
       } else {
         alert("កំហុស៖ " + data.error);
       }
@@ -268,16 +350,27 @@ export default function InstallmentsAndPawnPage() {
     }
 
     try {
+      const payload: any = {
+        ...newPawnForm,
+        durationDays: newPawnForm.durationType === "DAYS" ? parseInt(newPawnForm.durationDays) || 30 : null,
+        durationMonths:
+          newPawnForm.durationType === "MONTHS"
+            ? parseInt(newPawnForm.durationMonths) || 1
+            : Math.max(1, Math.round((parseInt(newPawnForm.durationDays) || 30) / 30)),
+      };
       const res = await fetch("/api/pawn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newPawnForm),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
         alert(data.message);
         setShowNewPawnModal(false);
         fetchPawnTickets();
+        if (data.ticket) {
+          setPrintPawnData(data.ticket);
+        }
       } else {
         alert("កំហុស៖ " + data.error);
       }
@@ -341,6 +434,8 @@ export default function InstallmentsAndPawnPage() {
     if (type === "INTEREST_PAYMENT") {
       setPawnPayAmount(String(ticket.monthlyInterestUsd));
       setPawnMonthsExt(1);
+      setPawnDaysExt(ticket.durationDays || 30);
+      setPawnExtType(ticket.durationDays ? "DAYS" : "MONTHS");
     } else {
       setPawnPayAmount(String(ticket.loanAmountUsd));
     }
@@ -353,17 +448,26 @@ export default function InstallmentsAndPawnPage() {
     if (!selectedPawnTicket || !pawnPayAmount) return;
 
     try {
+      const payload: any = {
+        pawnTicketId: selectedPawnTicket.id,
+        paymentType: pawnPayType,
+        amountPaidUsd: parseFloat(pawnPayAmount),
+        penaltyPaidUsd: 0,
+        paymentMethod: pawnPayMethod,
+      };
+
+      if (pawnPayType === "INTEREST_PAYMENT") {
+        if (pawnExtType === "DAYS") {
+          payload.daysExtended = pawnDaysExt;
+        } else {
+          payload.monthsExtended = pawnMonthsExt;
+        }
+      }
+
       const res = await fetch("/api/pawn/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pawnTicketId: selectedPawnTicket.id,
-          paymentType: pawnPayType,
-          amountPaidUsd: parseFloat(pawnPayAmount),
-          penaltyPaidUsd: 0,
-          paymentMethod: pawnPayMethod,
-          monthsExtended: pawnMonthsExt,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
@@ -438,6 +542,15 @@ export default function InstallmentsAndPawnPage() {
               បង្កើតប័ណ្ណបញ្ចាំថ្មី
             </button>
           )}
+
+          <button
+            onClick={() => setShowContractSettingsModal(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-xs"
+            title="កំណត់កិច្ចសន្យា និងអត្រាការប្រាក់ (Admin)"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5 text-teal-700" />
+            <span className="hidden sm:inline">កំណត់កិច្ចសន្យា & ការប្រាក់</span>
+          </button>
 
           <button
             onClick={() => {
@@ -684,6 +797,20 @@ export default function InstallmentsAndPawnPage() {
                               >
                                 <Printer className="h-4 w-4" />
                               </button>
+                              <button
+                                onClick={() =>
+                                  setDeleteConfirm({
+                                    type: "INSTALLMENT",
+                                    id: c.id,
+                                    title: `កិច្ចសន្យាបង់រំលស់ #${c.contractNumber}`,
+                                    customerName: c.customer?.name || "អតិថិជន",
+                                  })
+                                }
+                                className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                title="លុបកិច្ចសន្យានេះ"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -826,8 +953,11 @@ export default function InstallmentsAndPawnPage() {
                           <p className={`font-bold ${t.isOverdue ? "text-rose-700" : "text-slate-800"}`}>
                             {t.maturityDate}
                           </p>
+                          <span className="inline-block rounded-md bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.5 text-[10px] font-bold font-mono mt-0.5">
+                            {t.durationDays ? `${t.durationDays} ថ្ងៃ` : `${t.durationMonths} ខែ`}
+                          </span>
                           {t.isOverdue && (
-                            <span className="text-[10px] font-bold text-rose-600">
+                            <span className="text-[10px] font-bold text-rose-600 block">
                               ហួស {t.daysOverdue} ថ្ងៃ!
                             </span>
                           )}
@@ -878,6 +1008,20 @@ export default function InstallmentsAndPawnPage() {
                               title="ព្រីនប័ណ្ណបញ្ចាំ & កិច្ចសន្យា"
                             >
                               <Printer className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: "PAWN",
+                                  id: t.id,
+                                  title: `ប័ណ្ណបញ្ចាំ #${t.ticketNumber}`,
+                                  customerName: t.customerName || "អតិថិជន",
+                                })
+                              }
+                              className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                              title="លុបប័ណ្ណបញ្ចាំនេះ"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </td>
@@ -969,6 +1113,20 @@ export default function InstallmentsAndPawnPage() {
                             >
                               ទូទាត់ភ្លាមៗ
                             </button>
+                            <button
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: "INSTALLMENT",
+                                  id: c.id,
+                                  title: `កិច្ចសន្យាបង់រំលស់ #${c.contractNumber}`,
+                                  customerName: c.customerName || "អតិថិជន",
+                                })
+                              }
+                              className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                              title="លុបកិច្ចសន្យា"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1040,6 +1198,20 @@ export default function InstallmentsAndPawnPage() {
                               className="rounded-lg bg-amber-700 px-3 py-1 text-xs font-bold text-white hover:bg-amber-800 transition cursor-pointer"
                             >
                               បង់ការប្រាក់
+                            </button>
+                            <button
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: "PAWN",
+                                  id: p.id,
+                                  title: `ប័ណ្ណបញ្ចាំ #${p.ticketNumber}`,
+                                  customerName: p.customerName || "អតិថិជន",
+                                })
+                              }
+                              className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                              title="លុបប័ណ្ណបញ្ចាំ"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </td>
@@ -1207,6 +1379,21 @@ export default function InstallmentsAndPawnPage() {
                 >
                   <Printer className="h-3.5 w-3.5" />
                   ព្រីនតារាងបង់
+                </button>
+                <button
+                  onClick={() =>
+                    setDeleteConfirm({
+                      type: "INSTALLMENT",
+                      id: selectedContract.id,
+                      title: `កិច្ចសន្យាបង់រំលស់ #${selectedContract.contractNumber}`,
+                      customerName: selectedContract.customerName || "អតិថិជន",
+                    })
+                  }
+                  className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                  title="លុបកិច្ចសន្យានេះ"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">លុប</span>
                 </button>
                 <button
                   onClick={() => setSelectedContract(null)}
@@ -1600,56 +1787,168 @@ export default function InstallmentsAndPawnPage() {
                 </div>
               </div>
 
-              {/* Loan & Interest Calculation */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-amber-50/50 p-3.5 rounded-xl border border-amber-200">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">ទឹកប្រាក់កម្ចី ($) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newPawnForm.loanAmountUsd}
-                    onChange={(e) => setNewPawnForm({ ...newPawnForm, loanAmountUsd: e.target.value })}
-                    required
-                    placeholder="500.00"
-                    className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white text-rose-700"
-                  />
+              {/* Duration Type & Loan & Interest Calculation */}
+              <div className="space-y-3 bg-amber-50/60 p-4 rounded-xl border border-amber-200">
+                <div className="flex items-center justify-between pb-2 border-b border-amber-200/60">
+                  <span className="font-extrabold text-amber-950 text-xs flex items-center gap-1.5">
+                    <Coins className="h-4 w-4 text-amber-700" />
+                    ព័ត៌មានប្រាក់កម្ចី & រយៈពេលបញ្ចាំ (Loan & Duration)
+                  </span>
+                  {/* Duration Type selector */}
+                  <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-amber-300">
+                    <button
+                      type="button"
+                      onClick={() => setNewPawnForm({ ...newPawnForm, durationType: "DAYS" })}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer ${
+                        newPawnForm.durationType === "DAYS"
+                          ? "bg-amber-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      គិតជាថ្ងៃ (Days)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewPawnForm({ ...newPawnForm, durationType: "MONTHS" })}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer ${
+                        newPawnForm.durationType === "MONTHS"
+                          ? "bg-amber-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      គិតជាខែ (Months)
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">តម្លៃវាយតម្លៃ ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newPawnForm.estimatedValueUsd}
-                    onChange={(e) => setNewPawnForm({ ...newPawnForm, estimatedValueUsd: e.target.value })}
-                    placeholder="800.00"
-                    className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white"
-                  />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">ទឹកប្រាក់កម្ចី ($) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={newPawnForm.loanAmountUsd}
+                      onChange={(e) => setNewPawnForm({ ...newPawnForm, loanAmountUsd: e.target.value })}
+                      required
+                      placeholder="500.00"
+                      className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white text-rose-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">តម្លៃវាយតម្លៃ ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={newPawnForm.estimatedValueUsd}
+                      onChange={(e) => setNewPawnForm({ ...newPawnForm, estimatedValueUsd: e.target.value })}
+                      placeholder="800.00"
+                      className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">ការប្រាក់ (%/ខែ)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newPawnForm.monthlyInterestRate}
+                      onChange={(e) => setNewPawnForm({ ...newPawnForm, monthlyInterestRate: e.target.value })}
+                      className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white text-blue-700"
+                    />
+                  </div>
+
+                  {newPawnForm.durationType === "DAYS" ? (
+                    <div>
+                      <label className="font-bold text-amber-900 block mb-1">
+                        ចំនួនថ្ងៃបញ្ចាំ (Days) *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newPawnForm.durationDays}
+                        onChange={(e) => setNewPawnForm({ ...newPawnForm, durationDays: e.target.value })}
+                        className="w-full rounded-xl border-2 border-amber-400 p-2 font-mono font-bold text-xs bg-white text-slate-900"
+                        placeholder="30"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">រយៈពេល (ខែ)</label>
+                      <select
+                        value={newPawnForm.durationMonths}
+                        onChange={(e) => setNewPawnForm({ ...newPawnForm, durationMonths: e.target.value })}
+                        className="w-full rounded-xl border border-amber-300 p-2 font-bold text-xs bg-white"
+                      >
+                        <option value="1">1 ខែ</option>
+                        <option value="2">2 ខែ</option>
+                        <option value="3">3 ខែ</option>
+                        <option value="6">6 ខែ</option>
+                        <option value="12">12 ខែ</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">ការប្រាក់ (%/ខែ)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={newPawnForm.monthlyInterestRate}
-                    onChange={(e) => setNewPawnForm({ ...newPawnForm, monthlyInterestRate: e.target.value })}
-                    className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white text-blue-700"
-                  />
-                </div>
+                {/* Quick Chips for Days */}
+                {newPawnForm.durationType === "DAYS" && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[11px] text-slate-500 font-medium">ជ្រើសរើសរហ័ស៖</span>
+                    {[7, 10, 15, 20, 30, 45, 60, 90].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setNewPawnForm({ ...newPawnForm, durationDays: String(d) })}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                          newPawnForm.durationDays === String(d)
+                            ? "bg-amber-600 text-white shadow-xs"
+                            : "bg-white border border-amber-300 text-amber-900 hover:bg-amber-100"
+                        }`}
+                      >
+                        {d} ថ្ងៃ
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">រយៈពេល (ខែ)</label>
-                  <select
-                    value={newPawnForm.durationMonths}
-                    onChange={(e) => setNewPawnForm({ ...newPawnForm, durationMonths: e.target.value })}
-                    className="w-full rounded-xl border border-amber-300 p-2 font-bold text-xs bg-white"
-                  >
-                    <option value="1">1 ខែ</option>
-                    <option value="2">2 ខែ</option>
-                    <option value="3">3 ខែ</option>
-                    <option value="6">6 ខែ</option>
-                  </select>
+                {/* Live Maturity Date & Estimated Interest Display */}
+                <div className="rounded-xl bg-white/95 p-3 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">កាលបរិច្ឆេទផុតកំណត់ (Maturity Date)៖</span>
+                    <span className="font-bold text-rose-700 font-mono text-sm">
+                      {(() => {
+                        const s = new Date(newPawnForm.startDate || new Date());
+                        if (newPawnForm.durationType === "DAYS") {
+                          const days = parseInt(newPawnForm.durationDays) || 30;
+                          s.setDate(s.getDate() + days);
+                        } else {
+                          const months = parseInt(newPawnForm.durationMonths) || 1;
+                          s.setMonth(s.getMonth() + months);
+                        }
+                        return s.toISOString().split("T")[0];
+                      })()}
+                    </span>
+                    <span className="text-[10px] text-slate-500 ml-2">
+                      ({newPawnForm.durationType === "DAYS" ? `${newPawnForm.durationDays || 30} ថ្ងៃ` : `${newPawnForm.durationMonths} ខែ`})
+                    </span>
+                  </div>
+
+                  <div className="text-left sm:text-right">
+                    <span className="text-slate-500 block text-[11px]">ការប្រាក់ប៉ាន់ស្មាន៖</span>
+                    <span className="font-mono font-black text-blue-700 text-sm">
+                      {(() => {
+                        const loan = parseFloat(newPawnForm.loanAmountUsd) || 0;
+                        const rate = parseFloat(newPawnForm.monthlyInterestRate) || 2.5;
+                        if (newPawnForm.durationType === "DAYS") {
+                          const days = parseInt(newPawnForm.durationDays) || 30;
+                          return formatUSD((loan * (rate / 100) * (days / 30)));
+                        } else {
+                          const months = parseInt(newPawnForm.durationMonths) || 1;
+                          return formatUSD((loan * (rate / 100) * months));
+                        }
+                      })()}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1791,17 +2090,93 @@ export default function InstallmentsAndPawnPage() {
               </div>
 
               {pawnPayType === "INTEREST_PAYMENT" && (
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">ពន្យារពេលបញ្ចាំបន្ថែម (ខែ)</label>
-                  <select
-                    value={pawnMonthsExt}
-                    onChange={(e) => setPawnMonthsExt(parseInt(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold"
-                  >
-                    <option value={1}>1 ខែ</option>
-                    <option value={2}>2 ខែ</option>
-                    <option value={3}>3 ខែ</option>
-                  </select>
+                <div className="space-y-2 bg-amber-50/50 p-3 rounded-xl border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-amber-950 block">ពន្យារពេលបញ្ចាំបន្ថែម (Extension)</label>
+                    <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-amber-300">
+                      <button
+                        type="button"
+                        onClick={() => setPawnExtType("DAYS")}
+                        className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer ${
+                          pawnExtType === "DAYS" ? "bg-amber-600 text-white" : "text-slate-600"
+                        }`}
+                      >
+                        គិតជាថ្ងៃ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPawnExtType("MONTHS")}
+                        className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer ${
+                          pawnExtType === "MONTHS" ? "bg-amber-600 text-white" : "text-slate-600"
+                        }`}
+                      >
+                        គិតជាខែ
+                      </button>
+                    </div>
+                  </div>
+
+                  {pawnExtType === "DAYS" ? (
+                    <div>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          value={pawnDaysExt}
+                          onChange={(e) => setPawnDaysExt(parseInt(e.target.value) || 1)}
+                          className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white"
+                          placeholder="30"
+                        />
+                        <span className="flex items-center text-xs font-bold text-slate-500 whitespace-nowrap">ថ្ងៃ</span>
+                      </div>
+                      <div className="flex gap-1 pt-1.5">
+                        {[7, 15, 30, 45, 60].map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setPawnDaysExt(d)}
+                            className={`rounded px-2 py-0.5 text-[10px] font-bold border transition cursor-pointer ${
+                              pawnDaysExt === d
+                                ? "bg-amber-600 text-white border-amber-600"
+                                : "bg-white text-amber-900 border-amber-200 hover:bg-amber-100"
+                            }`}
+                          >
+                            +{d} ថ្ងៃ
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <select
+                        value={pawnMonthsExt}
+                        onChange={(e) => setPawnMonthsExt(parseInt(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold bg-white"
+                      >
+                        <option value={1}>1 ខែ</option>
+                        <option value={2}>2 ខែ</option>
+                        <option value={3}>3 ខែ</option>
+                        <option value={6}>6 ខែ</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* New Maturity Date Preview */}
+                  <div className="text-[11px] text-slate-500 pt-1">
+                    កាលបរិច្ឆេទផុតកំណត់ថ្មី៖{" "}
+                    <span className="font-bold text-rose-700 font-mono">
+                      {(() => {
+                        const cur = new Date(selectedPawnTicket.maturityDate);
+                        const base = cur < new Date() ? new Date() : cur;
+                        const n = new Date(base);
+                        if (pawnExtType === "DAYS") {
+                          n.setDate(n.getDate() + (pawnDaysExt || 30));
+                        } else {
+                          n.setMonth(n.getMonth() + (pawnMonthsExt || 1));
+                        }
+                        return n.toISOString().split("T")[0];
+                      })()}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -1846,6 +2221,7 @@ export default function InstallmentsAndPawnPage() {
         <InstallmentContractPrint
           contract={printContractData}
           onClose={() => setPrintContractData(null)}
+          customSettings={loanSettings}
         />
       )}
 
@@ -1853,6 +2229,7 @@ export default function InstallmentsAndPawnPage() {
         <InstallmentSchedulePrint
           contract={printScheduleData}
           onClose={() => setPrintScheduleData(null)}
+          customSettings={loanSettings}
         />
       )}
 
@@ -1860,7 +2237,91 @@ export default function InstallmentsAndPawnPage() {
         <PawnContractPrint
           ticket={printPawnData}
           onClose={() => setPrintPawnData(null)}
+          customSettings={loanSettings}
         />
+      )}
+
+      {/* Contract & Interest Rate Customization Modal (Admin) */}
+      <ContractSettingsModal
+        isOpen={showContractSettingsModal}
+        onClose={() => setShowContractSettingsModal(false)}
+        onSaved={(s) => {
+          setLoanSettings(s);
+          setNewContractForm((prev) => ({
+            ...prev,
+            interestRatePercent: String(s.installmentInterestRate),
+          }));
+          setNewPawnForm((prev) => ({
+            ...prev,
+            monthlyInterestRate: String(s.pawnMonthlyInterestRate),
+            durationDays: String(s.defaultPawnDurationDays),
+            durationType: s.defaultPawnDurationType || "DAYS",
+          }));
+        }}
+      />
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shrink-0">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  {deleteConfirm.type === "INSTALLMENT"
+                    ? "បញ្ជាក់ការលុបកិច្ចសន្យា"
+                    : "បញ្ជាក់ការលុបប័ណ្ណបញ្ចាំ"}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  សកម្មភាពនេះមិនអាចត្រឡប់វិញបានឡើយ
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-200 text-xs space-y-1">
+              <p className="font-extrabold text-slate-800">{deleteConfirm.title}</p>
+              {deleteConfirm.customerName && (
+                <p className="text-slate-600">
+                  អតិថិជន៖ <span className="font-bold">{deleteConfirm.customerName}</span>
+                </p>
+              )}
+              <p className="text-[11px] text-rose-600 font-semibold pt-1">
+                * រាល់ទិន្នន័យតារាងបង់ប្រាក់ និងប្រវត្តិប្រតិបត្តិការទាំងអស់ដែលពាក់ព័ន្ធនឹងត្រូវលុបចេញពីប្រព័ន្ធទាំងស្រុង។
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirm(null)}
+                className="rounded-xl border border-slate-200 bg-white hover:bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 transition cursor-pointer"
+              >
+                បោះបង់
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-900/20 transition cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>កំពុងលុប...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    <span>លុបជាអចិន្ត្រៃយ៍</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

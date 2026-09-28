@@ -18,6 +18,7 @@ export async function POST(request: Request) {
       penaltyPaidUsd = 0,
       paymentMethod = "CASH_USD",
       monthsExtended = 1,
+      daysExtended,
       notes,
     } = body;
 
@@ -47,12 +48,18 @@ export async function POST(request: Request) {
     if (paymentType === "FULL_REDEMPTION") {
       newStatus = PawnStatus.REDEEMED;
     } else if (paymentType === "INTEREST_PAYMENT") {
-      // Extend maturity date by specified months
-      const extMonths = parseInt(monthsExtended) || 1;
+      // Extend maturity date by specified days or months
       const currentMaturity = new Date(ticket.maturityDate);
       const baseDate = currentMaturity < now ? now : currentMaturity;
       newMaturity = new Date(baseDate);
-      newMaturity.setMonth(newMaturity.getMonth() + extMonths);
+
+      const parsedDays = daysExtended !== undefined && daysExtended !== null && daysExtended !== "" ? parseInt(daysExtended) : null;
+      if (parsedDays && parsedDays > 0) {
+        newMaturity.setDate(newMaturity.getDate() + parsedDays);
+      } else {
+        const extMonths = parseInt(monthsExtended) || 1;
+        newMaturity.setMonth(newMaturity.getMonth() + extMonths);
+      }
       newStatus = PawnStatus.ACTIVE;
     }
 

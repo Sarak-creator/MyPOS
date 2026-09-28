@@ -248,22 +248,62 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   }
 }
 
-/* Thermal receipt print layout */
+/* Global print styles */
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: auto;
+    margin: 8mm 10mm;
   }
-  #thermal-receipt, #thermal-receipt * {
-    visibility: visible;
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
   }
+
+  /* Hide app navigation, headers, sidebars, and buttons when printing */
+  nav,
+  aside,
+  header,
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 1. Thermal POS Receipt (80mm) */
+  #printable-receipt,
   #thermal-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 80mm;
-    margin: 0;
-    padding: 2mm;
-    background: white;
-    color: black;
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 2mm !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* 2. A4 Documents: Contracts, Schedules, and Reports */
+  .printable-document,
+  #printable-installment-contract,
+  #printable-installment-schedule,
+  #printable-pawn-ticket {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
   }
 }
+

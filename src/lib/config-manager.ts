@@ -41,6 +41,34 @@ export interface PosSystemSettings {
   appSlogan: string;
 }
 
+export interface LoanContractSettings {
+  installmentInterestRate: number; // default: 1.5%
+  pawnMonthlyInterestRate: number; // default: 2.5%
+  pawnDailyInterestRate: number; // default: 0.1%
+  latePenaltyPerDayUsd: number; // default: 1.0
+  defaultPawnDurationDays: number; // default: 30
+  defaultPawnDurationType: "DAYS" | "MONTHS"; // default: "DAYS"
+  storeName: string;
+  storePhone: string;
+  storeAddress: string;
+  witnessName: string;
+  installmentContractTitle: string;
+  installmentContractTerms: string;
+  pawnContractTitle: string;
+  pawnContractTerms: string;
+}
+
+export const DEFAULT_INSTALLMENT_TERMS = `មាត្រា ១៖ ភាគី "ក" បានប្រគល់ទំនិញដែលមានគុណភាពត្រឹមត្រូវតាមការបញ្ជាក់ខាងលើជូនភាគី "ខ" ហើយភាគី "ខ" បានពិនិត្យ និងយល់ព្រមទទួលយកទំនិញដោយពេញចិត្ត។
+មាត្រា ២៖ ភាគី "ខ" សន្យាបង់ប្រាក់រំលស់ប្រចាំខែតាមកាលបរិច្ឆេទកំណត់ក្នុងតារាងបង់ប្រាក់រំលស់។ ប្រសិនបើភាគី "ខ" បង់ប្រាក់យឺតយ៉ាវ ត្រូវបង់ប្រាក់ពិន័យបន្ថែមចំនួន $1.00 (មួយដុល្លារ) ក្នុងមួយថ្ងៃនៃថ្ងៃយឺត។
+មាត្រា ៣៖ ប្រសិនបើភាគី "ខ" ខកខានមិនបានបង់ប្រាក់រំលស់ជាប់ៗគ្នាចំនួន ២ (ពីរ) ខែ ភាគី "ក" មានសិទ្ធិស្របច្បាប់ក្នុងការដកហូត និងរឹបអូសទំនិញខាងលើមកវិញភ្លាមៗ ដោយភាគី "ខ" គ្មានសិទ្ធិទាមទារប្រាក់កក់ ឬប្រាក់រំលស់ដែលបានបង់កន្លងមកវិញឡើយ។
+មាត្រា ៤៖ ភាគី "គ" (អ្នកធានា) ត្រូវធានា និងទទួលខុសត្រូវជំនួសភាគី "ខ" ទាំងស្រុងចំពោះបំណុលទាំងអស់ក្នុងករណីភាគី "ខ" គេចវេះមិនព្រមទូទាត់។
+មាត្រា ៥៖ កិច្ចសន្យានេះត្រូវបានធ្វើឡើងជា ០២ ច្បាប់ដែលមានតម្លៃច្បាប់ស្មើគ្នា ដោយភាគីនីមួយៗរក្សាទុកម្នាក់មួយច្បាប់ជាភស្តុតាង។`;
+
+export const DEFAULT_PAWN_TERMS = `មាត្រា ១៖ ភាគី "ខ" បានយកទ្រព្យបញ្ចាំស្របច្បាប់ផ្ទាល់ខ្លួនខាងលើមកដាក់បញ្ចាំជាមួយភាគី "ក" ហើយបានទទួលទឹកប្រាក់កម្ចីគ្រប់ចំនួនរួចរាល់ហើយ។ ភាគី "ខ" ធានាថាទ្រព្យនេះមិនមែនជាផលនៃបទល្មើស ឬទ្រព្យខុសច្បាប់ឡើយ។
+មាត្រា ២៖ ភាគី "ខ" ត្រូវមកបង់ការប្រាក់ ឬលោះយកទ្រព្យបញ្ចាំវិញឱ្យបានត្រឹមត្រូវតាមកាលបរិច្ឆេទផុតកំណត់នៃកិច្ចសន្យាបញ្ចាំ។
+មាត្រា ៣ (លក្ខខណ្ឌដាច់បញ្ចាំ)៖ ប្រសិនបើហួសកាលបរិច្ឆេទផុតកំណត់លើសពី ០៧ (ប្រាំពីរ) ថ្ងៃ ដោយភាគី "ខ" មិនបានមកបង់ការប្រាក់ដើម្បីបន្តកិច្ចសន្យា ឬមិនបានមកលោះយកទ្រព្យវិញទេនោះ ទ្រព្យបញ្ចាំខាងលើនេះនឹងត្រូវចាត់ទុកថា "ដាច់បញ្ចាំជាស្ថាពរ" ហើយក្លាយជាកម្មសិទ្ធិស្របច្បាប់របស់អ្នកទទួលបញ្ចាំ (ភាគី ក) ដោយស្វ័យប្រវត្តិ។ ភាគី "ក" មានសិទ្ធិលក់ឡៃឡុង ឬចាត់ចែងតាមការគួរ ដោយភាគី "ខ" គ្មានសិទ្ធិតវ៉ា ឬទាមទារសំណងអ្វីទាំងអស់។
+មាត្រា ៤៖ កិច្ចសន្យានេះត្រូវបានធ្វើឡើងជា ០២ ច្បាប់ដែលមានតម្លៃច្បាប់ស្មើគ្នា ដោយភាគីនីមួយៗរក្សាទុកម្នាក់មួយច្បាប់ជាភស្តុតាង។`;
+
 // In-Memory Hot Cache
 const cache = new Map<string, { value: any; expiresAt: number }>();
 const CACHE_TTL_MS = 15000; // 15 seconds TTL for fast responses while allowing fast propagation
@@ -339,4 +367,41 @@ export class ConfigManager {
     };
     return this.set("POS_SETTINGS", merged, "GENERAL", "POS currency and exchange rate settings");
   }
+
+  /**
+   * Get Loan, Installment, and Pawn Contract Settings
+   */
+  static async getLoanContractSettings(forceRefresh = false): Promise<LoanContractSettings> {
+    const saved = await this.get<Partial<LoanContractSettings>>("LOAN_CONTRACT_SETTINGS", {}, forceRefresh);
+
+    return {
+      installmentInterestRate: saved?.installmentInterestRate !== undefined ? Number(saved.installmentInterestRate) : 1.5,
+      pawnMonthlyInterestRate: saved?.pawnMonthlyInterestRate !== undefined ? Number(saved.pawnMonthlyInterestRate) : 2.5,
+      pawnDailyInterestRate: saved?.pawnDailyInterestRate !== undefined ? Number(saved.pawnDailyInterestRate) : 0.1,
+      latePenaltyPerDayUsd: saved?.latePenaltyPerDayUsd !== undefined ? Number(saved.latePenaltyPerDayUsd) : 1.0,
+      defaultPawnDurationDays: saved?.defaultPawnDurationDays !== undefined ? Number(saved.defaultPawnDurationDays) : 30,
+      defaultPawnDurationType: saved?.defaultPawnDurationType || "DAYS",
+      storeName: saved?.storeName || process.env.NEXT_PUBLIC_APP_NAME || "អាណាចក្រPOS (ANACHAK POS)",
+      storePhone: saved?.storePhone || "012 345 678 / 096 376 0229",
+      storeAddress: saved?.storeAddress || "រាជធានីភ្នំពេញ, ព្រះរាជាណាចក្រកម្ពុជា",
+      witnessName: saved?.witnessName || "",
+      installmentContractTitle: saved?.installmentContractTitle || "កិច្ចសន្យាទិញ-លក់បង់រំលស់ទំនិញ",
+      installmentContractTerms: saved?.installmentContractTerms || DEFAULT_INSTALLMENT_TERMS,
+      pawnContractTitle: saved?.pawnContractTitle || "កិច្ចសន្យាបញ្ចាំទ្រព្យ និងប័ណ្ណទទួលបញ្ចាំ",
+      pawnContractTerms: saved?.pawnContractTerms || DEFAULT_PAWN_TERMS,
+    };
+  }
+
+  /**
+   * Save Loan, Installment, and Pawn Contract Settings
+   */
+  static async saveLoanContractSettings(config: Partial<LoanContractSettings>): Promise<boolean> {
+    const existing = await this.getLoanContractSettings();
+    const merged: LoanContractSettings = {
+      ...existing,
+      ...config,
+    };
+    return this.set("LOAN_CONTRACT_SETTINGS", merged, "LOANS", "Installment, Pawn contract terms and interest rate settings");
+  }
 }
+

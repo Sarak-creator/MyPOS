@@ -109,6 +109,7 @@ export async function GET(request: Request) {
         monthlyInterestRate: Number(t.monthlyInterestRate),
         monthlyInterestUsd: Number(t.monthlyInterestUsd),
         durationMonths: t.durationMonths,
+        durationDays: t.durationDays ?? null,
         startDate: t.startDate.toISOString().split("T")[0],
         maturityDate: t.maturityDate.toISOString().split("T")[0],
         status: isPastMaturity && t.status === "ACTIVE" ? "OVERDUE" : t.status,
@@ -188,6 +189,8 @@ export async function POST(request: Request) {
       loanAmountUsd,
       monthlyInterestRate = 2.5, // monthly %
       durationMonths = 1,
+      durationDays,
+      interestAmountUsd,
       startDate = new Date().toISOString(),
       notes,
     } = body;
@@ -203,7 +206,10 @@ export async function POST(request: Request) {
     const loanAmount = parseFloat(loanAmountUsd);
     const estimatedValue = parseFloat(estimatedValueUsd) || loanAmount * 1.5;
     const interestRate = parseFloat(monthlyInterestRate) || 2.5;
-    const duration = parseInt(durationMonths) || 1;
+    
+    // Parse duration (days or months)
+    const days = durationDays !== undefined && durationDays !== null && durationDays !== "" ? parseInt(durationDays) : null;
+    const duration = days && days > 0 ? Math.max(1, Math.round(days / 30)) : (parseInt(durationMonths) || 1);
 
     if (isNaN(loanAmount) || loanAmount <= 0) {
       return NextResponse.json({ success: false, error: "ទឹកប្រាក់កម្ចីបញ្ចាំត្រូវតែធំជាង 0 (Loan amount must be > 0)" }, { status: 400 });
@@ -223,10 +229,22 @@ export async function POST(request: Request) {
 
     const start = new Date(startDate);
     const maturity = new Date(start);
-    maturity.setMonth(maturity.getMonth() + duration);
+    if (days && days > 0) {
+      maturity.setDate(maturity.getDate() + days);
+    } else {
+      maturity.setMonth(maturity.getMonth() + duration);
+    }
 
-    // Monthly interest in USD
-    const monthlyInterestUsd = Number(((loanAmount * (interestRate / 100))).toFixed(2));
+    // Interest calculation:
+    // If interestAmountUsd is directly supplied, use it; otherwise compute based on days or months
+    let calculatedInterestUsd: number;
+    if (interestAmountUsd !== undefined && interestAmountUsd !== null && !isNaN(parseFloat(interestAmountUsd))) {
+      calculatedInterestUsd = Number(parseFloat(interestAmountUsd).toFixed(2));
+    } else if (days && days > 0) {
+      calculatedInterestUsd = Number(((loanAmount * (interestRate / 100) * (days / 30))).toFixed(2));
+    } else {
+      calculatedInterestUsd = Number(((loanAmount * (interestRate / 100))).toFixed(2));
+    }
 
     const newTicket = await prisma.pawnTicket.create({
       data: {
@@ -245,8 +263,9 @@ export async function POST(request: Request) {
         estimatedValueUsd: estimatedValue,
         loanAmountUsd: loanAmount,
         monthlyInterestRate: interestRate,
-        monthlyInterestUsd,
+        monthlyInterestUsd: calculatedInterestUsd,
         durationMonths: duration,
+        durationDays: days && days > 0 ? days : null,
         startDate: start,
         maturityDate: maturity,
         status: PawnStatus.ACTIVE,

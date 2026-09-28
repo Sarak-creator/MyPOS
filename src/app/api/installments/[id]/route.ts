@@ -89,7 +89,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/installments/[id] - Delete a contract
+// DELETE /api/installments/[id] - Delete a contract and its schedules
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
@@ -97,13 +97,21 @@ export async function DELETE(
   try {
     const { id } = params;
 
-    await prisma.installmentContract.delete({
-      where: { id },
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete associated installment schedules first to avoid FK constraint errors
+      await tx.installmentSchedule.deleteMany({
+        where: { contractId: id },
+      });
+
+      // 2. Delete the contract
+      await tx.installmentContract.delete({
+        where: { id },
+      });
     });
 
     return NextResponse.json({
       success: true,
-      message: "បានលុបកិច្ចសន្យាដោយជោគជ័យ!",
+      message: "បានលុបកិច្ចសន្យាបង់រំលស់ដោយជោគជ័យ!",
     });
   } catch (error: any) {
     console.error("DELETE /api/installments/[id] error:", error);

@@ -881,6 +881,7 @@ model PawnTicket {
   monthlyInterestRate   Decimal               @default(2.5) @db.Decimal(5, 2)
   monthlyInterestUsd    Decimal               @db.Decimal(12, 2)
   durationMonths        Int                   @default(1)
+  durationDays          Int?
   startDate             DateTime              @default(now())
   maturityDate          DateTime
   status                PawnStatus            @default(ACTIVE)
