@@ -9,6 +9,12 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      screens: {
+        "3xl": "1680px",
+        "4xl": "1920px",
+        "5xl": "2200px",
+        "6xl": "2560px",
+      },
       fontFamily: {
         sans: [
           '"Kantumruy Pro"',

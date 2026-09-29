@@ -349,7 +349,7 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
             <p className="text-xs font-bold text-slate-600">{t.noProductsFound}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 min-[1440px]:grid-cols-5 min-[1680px]:grid-cols-6 min-[1920px]:grid-cols-7 min-[2200px]:grid-cols-8 min-[2560px]:grid-cols-9 min-[2880px]:grid-cols-10">
             {filteredProducts.map((p) => {
               const isOutOfStock = p.type !== "SERVICE_LABOR" && p.stockQty <= 0;
               const cartItem = items.find((i) => i.id === p.id);
