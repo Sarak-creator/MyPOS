@@ -307,6 +307,13 @@ export default function InstallmentsAndPawnPage() {
         productId: p.id,
         productName: p.nameKh || p.nameEn,
         totalPriceUsd: p.salePriceUsd ? String(p.salePriceUsd) : "",
+        productImeiOrSerial: p.imeiList && p.imeiList.length > 0 ? p.imeiList[0] : "",
+      }));
+    } else {
+      setNewContractForm((prev) => ({
+        ...prev,
+        productId: "",
+        productImeiOrSerial: "",
       }));
     }
   };
@@ -330,6 +337,7 @@ export default function InstallmentsAndPawnPage() {
         alert(data.message);
         setShowNewContractModal(false);
         fetchInstallments();
+        fetchDropdownData();
         if (data.contract) {
           setPrintContractData(data.contract);
         }
@@ -1539,12 +1547,27 @@ export default function InstallmentsAndPawnPage() {
                     className="w-full rounded-xl border border-slate-200 p-2.5 bg-white text-xs font-medium focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="">-- ជ្រើសរើសទំនិញក្នុងស្តុក ឬវាយបញ្ចូលដោយដៃ --</option>
-                    {productList.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nameKh || p.nameEn} (${p.salePriceUsd})
-                      </option>
-                    ))}
+                    {productList.map((p) => {
+                      const isOut = p.type !== "SERVICE_LABOR" && p.stockQty <= 0;
+                      return (
+                        <option key={p.id} value={p.id} disabled={isOut}>
+                          {p.nameKh || p.nameEn} (${p.salePriceUsd}) — {isOut ? "[អស់ស្តុក / 0]" : `[ស្តុក: ${p.stockQty}]`}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {(() => {
+                    const sel = productList.find((p) => p.id === newContractForm.productId);
+                    if (!sel) return null;
+                    const isOut = sel.type !== "SERVICE_LABOR" && sel.stockQty <= 0;
+                    return (
+                      <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                        <span className={`px-2 py-0.5 rounded-md font-bold ${isOut ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-800"}`}>
+                          {isOut ? "✕ ទំនិញនេះអស់ពីស្តុកហើយ" : `✓ ស្តុកនៅសល់ ${sel.stockQty} គ្រឿង (នឹងត្រូវកាត់ 1 គ្រឿងពេលបង្កើត)`}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
@@ -1567,13 +1590,43 @@ export default function InstallmentsAndPawnPage() {
                   <label className="font-bold text-slate-700 block mb-1">
                     លេខសម្គាល់ Serial / IMEI (បើមាន)
                   </label>
-                  <input
-                    type="text"
-                    value={newContractForm.productImeiOrSerial}
-                    onChange={(e) => setNewContractForm({ ...newContractForm, productImeiOrSerial: e.target.value })}
-                    placeholder="352817291827182"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 font-mono text-xs focus:ring-2 focus:ring-teal-500"
-                  />
+                  {(() => {
+                    const sel = productList.find((p) => p.id === newContractForm.productId);
+                    if (sel && sel.imeiList && sel.imeiList.length > 0) {
+                      return (
+                        <div className="space-y-1.5">
+                          <select
+                            value={newContractForm.productImeiOrSerial}
+                            onChange={(e) => setNewContractForm({ ...newContractForm, productImeiOrSerial: e.target.value })}
+                            className="w-full rounded-xl border border-teal-300 bg-teal-50/30 p-2.5 font-mono text-xs font-semibold focus:ring-2 focus:ring-teal-500"
+                          >
+                            <option value="">-- ជ្រើសរើស IMEI ក្នុងស្តុក ({sel.imeiList.length} គ្រឿង) --</option>
+                            {sel.imeiList.map((imei: string) => (
+                              <option key={imei} value={imei}>
+                                {imei}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={newContractForm.productImeiOrSerial}
+                            onChange={(e) => setNewContractForm({ ...newContractForm, productImeiOrSerial: e.target.value })}
+                            placeholder="ឬវាយបញ្ចូលលេខ IMEI ដោយដៃ..."
+                            className="w-full rounded-xl border border-slate-200 p-2 font-mono text-[11px] focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <input
+                        type="text"
+                        value={newContractForm.productImeiOrSerial}
+                        onChange={(e) => setNewContractForm({ ...newContractForm, productImeiOrSerial: e.target.value })}
+                        placeholder="352817291827182"
+                        className="w-full rounded-xl border border-slate-200 p-2.5 font-mono text-xs focus:ring-2 focus:ring-teal-500"
+                      />
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">

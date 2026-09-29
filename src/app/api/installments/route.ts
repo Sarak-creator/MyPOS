@@ -273,17 +273,160 @@ export async function POST(request: Request) {
       });
     }
 
-    // Execute in transaction
+    // Execute in transaction with automatic stock deduction
     const newContract = await prisma.$transaction(async (tx) => {
+      let resolvedProductId = productId || null;
+      let resolvedImeiOrSerial = productImeiOrSerial ? productImeiOrSerial.trim() : null;
+
+      // 1. Stock validation & deduction for hire purchase / installment
+      if (resolvedImeiOrSerial) {
+        const imeiStock = await tx.stockItem.findFirst({
+          where: {
+            serialOrImei: resolvedImeiOrSerial,
+            status: "IN_STOCK",
+            branch: { tenantId },
+          },
+          include: { product: true },
+        });
+
+        if (!imeiStock) {
+          throw new Error(`លេខ Serial / IMEI "${resolvedImeiOrSerial}" មិនមានក្នុងស្តុក ឬត្រូវបានលក់រួចហើយ!`);
+        }
+
+        // Deduct IMEI stock item
+        await tx.stockItem.update({
+          where: { id: imeiStock.id },
+          data: { status: "SOLD", quantity: 0 },
+        });
+
+        if (!resolvedProductId) {
+          resolvedProductId = imeiStock.productId;
+        }
+      } else if (resolvedProductId) {
+        const product = await tx.product.findUnique({
+          where: { id: resolvedProductId },
+          include: {
+            stockItems: {
+              where: {
+                status: "IN_STOCK",
+                branchId: branchId!,
+              },
+              orderBy: { createdAt: "asc" },
+            },
+          },
+        });
+
+        if (!product) {
+          throw new Error(`រកមិនឃើញទំនិញក្នុងប្រព័ន្ធឡើយ`);
+        }
+
+        if (product.type !== "SERVICE_LABOR") {
+          let availableStocks = product.stockItems;
+          if (availableStocks.length === 0) {
+            availableStocks = await tx.stockItem.findMany({
+              where: {
+                productId: resolvedProductId,
+                status: "IN_STOCK",
+                branch: { tenantId },
+              },
+              orderBy: { createdAt: "asc" },
+            });
+          }
+
+          const totalAvailableStock = availableStocks.reduce((sum, s) => sum + s.quantity, 0);
+          if (totalAvailableStock <= 0) {
+            throw new Error(`ទំនិញ "${product.nameKh || product.nameEn}" អស់ពីស្តុកហើយ (ស្តុកនៅសល់ 0) មិនអាចបង់រំលោះបានទេ!`);
+          }
+
+          // If the product is SERIAL_IMEI_ITEM, pick first available IMEI
+          const serialStock = availableStocks.find((s) => s.serialOrImei);
+          if (product.type === "SERIAL_IMEI_ITEM" || serialStock) {
+            const targetStock = serialStock || availableStocks[0];
+            await tx.stockItem.update({
+              where: { id: targetStock.id },
+              data: { status: "SOLD", quantity: 0 },
+            });
+            if (targetStock.serialOrImei && !resolvedImeiOrSerial) {
+              resolvedImeiOrSerial = targetStock.serialOrImei;
+            }
+          } else {
+            // Standard / variant / spare part items: deduct 1 unit sequentially
+            let remainingToDeduct = 1;
+            for (const s of availableStocks) {
+              if (remainingToDeduct <= 0) break;
+              if (s.quantity <= remainingToDeduct) {
+                remainingToDeduct -= s.quantity;
+                await tx.stockItem.update({
+                  where: { id: s.id },
+                  data: { quantity: 0, status: "SOLD" },
+                });
+              } else {
+                await tx.stockItem.update({
+                  where: { id: s.id },
+                  data: { quantity: s.quantity - remainingToDeduct },
+                });
+                remainingToDeduct = 0;
+              }
+            }
+          }
+        }
+      } else {
+        // Fallback: Check if productName matches an existing product in tenant
+        const matchingProduct = await tx.product.findFirst({
+          where: {
+            tenantId,
+            OR: [
+              { nameKh: productName.trim() },
+              { nameEn: productName.trim() },
+              { sku: productName.trim() },
+            ],
+          },
+          include: {
+            stockItems: {
+              where: {
+                status: "IN_STOCK",
+                branch: { tenantId },
+              },
+              orderBy: { createdAt: "asc" },
+            },
+          },
+        });
+
+        if (matchingProduct && matchingProduct.type !== "SERVICE_LABOR" && matchingProduct.stockItems.length > 0) {
+          resolvedProductId = matchingProduct.id;
+          const s = matchingProduct.stockItems[0];
+          if (s.serialOrImei) {
+            resolvedImeiOrSerial = s.serialOrImei;
+            await tx.stockItem.update({
+              where: { id: s.id },
+              data: { status: "SOLD", quantity: 0 },
+            });
+          } else {
+            if (s.quantity <= 1) {
+              await tx.stockItem.update({
+                where: { id: s.id },
+                data: { quantity: 0, status: "SOLD" },
+              });
+            } else {
+              await tx.stockItem.update({
+                where: { id: s.id },
+                data: { quantity: s.quantity - 1 },
+              });
+            }
+          }
+        }
+      }
+
+      // 2. Create the installment contract
       const contract = await tx.installmentContract.create({
         data: {
           contractNumber,
           tenantId,
           branchId: branchId!,
           customerId,
-          productId: productId || null,
+          productId: resolvedProductId,
           productName: productName.trim(),
-          productImeiOrSerial: productImeiOrSerial ? productImeiOrSerial.trim() : null,
+          productImeiOrSerial: resolvedImeiOrSerial,
           totalPriceUsd: total,
           downPaymentUsd: downPayment,
           downPaymentKhr: parseFloat(downPaymentKhr) || 0,
