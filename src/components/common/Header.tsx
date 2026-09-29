@@ -176,7 +176,7 @@ export default function Header({
     !currentUser.branchId;
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-3 sm:px-6 backdrop-blur shadow-2xs">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-primary-950/20 bg-gradient-to-r from-primary-800 via-primary-700 to-primary-800 dark:from-slate-950 dark:via-primary-950 dark:to-slate-950 px-3 sm:px-6 backdrop-blur shadow-md text-white transition-all duration-300">
       {/* Left: Mobile Hamburger & Branch Selector */}
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         {/* Toggle Sidebar Button (Visible on Mobile, or on Desktop when in POS / collapsed mode) */}
@@ -185,7 +185,7 @@ export default function Header({
           onClick={onToggleSidebar}
           className={`${
             isPos || isDesktopCollapsed ? "flex" : "lg:hidden flex"
-          } h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition shadow-2xs shrink-0 cursor-pointer`}
+          } h-9 w-9 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white hover:bg-white/20 transition shadow-2xs shrink-0 cursor-pointer`}
           title={isPos ? "ម៉ឺនុយ (Menu)" : isDesktopCollapsed ? "បើកម៉ឺនុយ (Show Sidebar)" : "បិទម៉ឺនុយ (Hide Sidebar)"}
         >
           <Menu className="h-5 w-5" />
@@ -195,17 +195,17 @@ export default function Header({
           {isSuperAdminOrAdmin ? (
             <button
               onClick={() => setShowBranchMenu(!showBranchMenu)}
-              className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-teal-200 bg-teal-50/70 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-100 transition shadow-2xs"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-white/25 bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white hover:bg-white/25 transition shadow-2xs backdrop-blur-xs"
             >
-              <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-700 shrink-0" />
+              <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white shrink-0" />
               <span className="max-w-[110px] sm:max-w-[200px] md:max-w-[240px] truncate">{currentBranchName}</span>
-              <ArrowRightLeft className="h-3 w-3 text-teal-600 ml-0.5 shrink-0" />
+              <ArrowRightLeft className="h-3 w-3 text-white/80 ml-0.5 shrink-0" />
             </button>
           ) : (
-            <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-teal-200 bg-teal-50 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-teal-900 shadow-2xs">
-              <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-700 shrink-0" />
+            <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-white/25 bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white shadow-2xs backdrop-blur-xs">
+              <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white shrink-0" />
               <span className="max-w-[110px] sm:max-w-[200px] truncate">{currentBranchName}</span>
-              <span className="hidden sm:inline-block text-[10px] font-semibold bg-teal-200/70 text-teal-950 px-1.5 py-0.5 rounded">សាខាប្រចាំ</span>
+              <span className="hidden sm:inline-block text-[10px] font-semibold bg-white/20 text-white px-1.5 py-0.5 rounded">សាខាប្រចាំ</span>
             </div>
           )}
 
@@ -275,9 +275,9 @@ export default function Header({
         </div>
 
         {/* Live Exchange Rate Indicator */}
-        <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-          <span>អត្រាប្តូរប្រាក់:</span>
-          <span className="font-bold text-slate-800 font-mono">$1 = {exchangeRateKhr.toLocaleString()} ៛</span>
+        <div className="hidden xl:flex items-center gap-1.5 text-xs text-white/90 bg-white/15 border border-white/15 px-2.5 py-1 rounded-xl backdrop-blur-xs">
+          <span className="text-white/80">អត្រាប្តូរប្រាក់:</span>
+          <span className="font-bold text-white font-mono">$1 = {exchangeRateKhr.toLocaleString()} ៛</span>
         </div>
       </div>
 
@@ -285,13 +285,13 @@ export default function Header({
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Offline / Online Sync Status */}
         {isOnline ? (
-          <div className="hidden md:flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
-            <Wifi className="h-3.5 w-3.5 text-emerald-600" />
+          <div className="hidden md:flex items-center gap-1.5 rounded-full bg-emerald-500/25 px-2.5 py-1 text-xs font-bold text-emerald-100 border border-emerald-400/40 backdrop-blur-xs">
+            <Wifi className="h-3.5 w-3.5 text-emerald-200" />
             <span>Online</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] font-bold text-amber-800 border border-amber-300">
-            <WifiOff className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-600" />
+          <div className="flex items-center gap-1.5 rounded-full bg-amber-500/25 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] font-bold text-amber-100 border border-amber-400/40 backdrop-blur-xs">
+            <WifiOff className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-200" />
             <span className="hidden sm:inline">Offline</span>
           </div>
         )}
@@ -308,10 +308,10 @@ export default function Header({
         {/* Currency Switcher */}
         <button
           onClick={() => setCurrency(currency === "USD" ? "KHR" : "USD")}
-          className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+          className="flex items-center gap-1 rounded-xl border border-white/20 bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white hover:bg-white/25 transition shadow-2xs backdrop-blur-xs"
           title="Switch Display Currency"
         >
-          <DollarSign className="h-3.5 w-3.5 text-teal-600" />
+          <DollarSign className="h-3.5 w-3.5 text-amber-300" />
           <span>{currency}</span>
         </button>
 
@@ -321,10 +321,10 @@ export default function Header({
             const next: Record<"km" | "en" | "zh", "km" | "en" | "zh"> = { km: "en", en: "zh", zh: "km" };
             setLanguage(next[language] || "km");
           }}
-          className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+          className="flex items-center gap-1 rounded-xl border border-white/20 bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white hover:bg-white/25 transition shadow-2xs backdrop-blur-xs"
           title="Switch Language (ភាសាខ្មែរ / English / 中文)"
         >
-          <Globe className="h-3.5 w-3.5 text-blue-600" />
+          <Globe className="h-3.5 w-3.5 text-cyan-200" />
           <span className="hidden sm:inline">
             {language === "km" ? "ខ្មែរ" : language === "zh" ? "中文" : "EN"}
           </span>
@@ -342,24 +342,24 @@ export default function Header({
               setShowUserMenu(false);
               setShowBranchMenu(false);
             }}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+            className="flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white hover:bg-white/25 transition shadow-2xs backdrop-blur-xs"
             title="ប្តូរពណ៌ និងរូបរាង (Theme & Colors)"
           >
             {themeMode === "dark" ? (
-              <Moon className="h-3.5 w-3.5 text-indigo-400" />
+              <Moon className="h-3.5 w-3.5 text-indigo-200" />
             ) : themeMode === "system" ? (
-              <Laptop className="h-3.5 w-3.5 text-slate-500" />
+              <Laptop className="h-3.5 w-3.5 text-white/90" />
             ) : (
-              <Sun className="h-3.5 w-3.5 text-amber-500" />
+              <Sun className="h-3.5 w-3.5 text-amber-300" />
             )}
             <span
-              className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10 shrink-0"
+              className="h-2.5 w-2.5 rounded-full ring-2 ring-white/60 shrink-0"
               style={{
                 backgroundColor:
                   COLOR_PALETTES.find((p) => p.id === colorPalette)?.primaryColor || "#0f766e",
               }}
             />
-            <span className="hidden md:inline text-[11px] text-slate-600">
+            <span className="hidden md:inline text-[11px] text-white/90">
               {themeMode === "dark" ? "ងងឹត" : themeMode === "system" ? "ស្វ័យប្រវត្តិ" : "ពន្លឺ"}
             </span>
           </button>
@@ -467,19 +467,19 @@ export default function Header({
         </div>
 
         {/* User Profile Dropdown */}
-        <div className="relative pl-1 sm:pl-2 border-l border-slate-200">
+        <div className="relative pl-1 sm:pl-2 border-l border-white/20">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-2 rounded-xl p-1 hover:bg-slate-50 transition"
+            className="flex items-center gap-2 rounded-xl p-1 hover:bg-white/10 transition"
           >
-            <div className="h-8 w-8 rounded-full bg-teal-800 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+            <div className="h-8 w-8 rounded-full bg-white text-primary-900 flex items-center justify-center font-black text-xs shadow-xs">
               {userInitials}
             </div>
             <div className="hidden lg:block text-left">
-              <p className="text-xs font-bold text-slate-800 leading-tight">{currentUser.fullName}</p>
-              <p className="text-[10px] text-teal-700 font-semibold">{currentUser.role}</p>
+              <p className="text-xs font-bold text-white leading-tight">{currentUser.fullName}</p>
+              <p className="text-[10px] text-white/80 font-semibold">{currentUser.role}</p>
             </div>
-            <ChevronDown className="h-3.5 w-3.5 text-slate-400 hidden lg:block" />
+            <ChevronDown className="h-3.5 w-3.5 text-white/70 hidden lg:block" />
           </button>
 
           {showUserMenu && (
