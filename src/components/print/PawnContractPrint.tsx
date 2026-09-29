@@ -106,17 +106,22 @@ export default function PawnContractPrint({
           {/* Printable Pawn Agreement Body */}
           <div className="printable-pawn space-y-6 text-[13px] leading-relaxed">
             {/* Header */}
-            <div className="text-center space-y-1 pb-2">
-              <h2 className="font-extrabold text-base tracking-wide text-slate-900">
+            <div className="text-center space-y-1.5 pb-2">
+              <h2 className="font-moul font-normal text-base tracking-wide text-slate-900">
                 ព្រះរាជាណាចក្រកម្ពុជា
               </h2>
-              <h3 className="font-bold text-sm text-slate-800">
+              <h3 className="font-moul font-normal text-xs text-slate-800">
                 ជាតិ សាសនា ព្រះមហាក្សត្រ
               </h3>
-              <div className="text-xs tracking-widest text-slate-500 font-serif">
-                3 3 3
+              {/* Royal Traditional Emblem Flourish */}
+              <div className="flex items-center justify-center gap-2.5 py-0.5 select-none">
+                <span className="h-[1px] w-10 bg-slate-400/80 inline-block"></span>
+                <span className="text-sm font-moul tracking-widest text-slate-800 font-normal">
+                  ៚ ៚ ៚
+                </span>
+                <span className="h-[1px] w-10 bg-slate-400/80 inline-block"></span>
               </div>
-              <h1 className="text-lg font-black text-slate-900 pt-3 underline underline-offset-8">
+              <h1 className="text-lg font-moul font-normal text-slate-900 pt-2 underline underline-offset-8">
                 {contractTitle}
               </h1>
               <p className="text-xs font-mono font-bold text-slate-600 pt-1">

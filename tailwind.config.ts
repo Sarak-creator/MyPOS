@@ -26,6 +26,7 @@ const config: Config = {
           "sans-serif",
         ],
         mono: ['"JetBrains Mono"', "monospace"],
+        moul: ['"Moul"', '"Khmer OS Muol Light"', '"Khmer OS Muol"', "serif"],
       },
       colors: {
         background: "var(--background)",
