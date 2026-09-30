@@ -30,6 +30,8 @@ import {
   Package,
   Trash2,
   Loader2,
+  Bell,
+  BellRing,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { formatUSD, formatKHR } from "@/lib/utils";
@@ -47,7 +49,48 @@ export default function InstallmentsAndPawnPage() {
   const [loanSettings, setLoanSettings] = useState<LoanContractSettings | null>(null);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<"INSTALLMENT" | "PAWN" | "OVERDUE" | "WARRANTY">("INSTALLMENT");
+  const [activeTab, setActiveTab] = useState<"INSTALLMENT" | "PAWN" | "DUE_SOON" | "OVERDUE" | "WARRANTY">("INSTALLMENT");
+
+  // Due Soon Reminders State (2-3 days before due date)
+  const [dueReminders, setDueReminders] = useState<{
+    dueSoon: any[];
+    dueToday: any[];
+    overdue: any[];
+    allReminders: any[];
+    dueSoonCount: number;
+  }>({
+    dueSoon: [],
+    dueToday: [],
+    overdue: [],
+    allReminders: [],
+    dueSoonCount: 0,
+  });
+  const [remindersLoading, setRemindersLoading] = useState(false);
+  const [remindersFilterDays, setRemindersFilterDays] = useState<number>(3);
+  const [isSendingTelegramBatch, setIsSendingTelegramBatch] = useState(false);
+  const [telegramSendingId, setTelegramSendingId] = useState<string | null>(null);
+  const [telegramStatusMessage, setTelegramStatusMessage] = useState<string | null>(null);
+
+  const fetchReminders = async (days = 3) => {
+    setRemindersLoading(true);
+    try {
+      const res = await fetch(`/api/installments/reminders?days=${days}`);
+      const data = await res.json();
+      if (data.success) {
+        setDueReminders({
+          dueSoon: data.dueSoon || [],
+          dueToday: data.dueToday || [],
+          overdue: data.overdue || [],
+          allReminders: data.allReminders || [],
+          dueSoonCount: data.dueSoonCount || 0,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to fetch reminders:", err);
+    } finally {
+      setRemindersLoading(false);
+    }
+  };
 
   // Installment State
   const [contracts, setContracts] = useState<any[]>([]);
@@ -720,12 +763,14 @@ export default function InstallmentsAndPawnPage() {
     fetchPawnTickets();
     fetchDropdownData();
     fetchLoanSettings();
+    fetchReminders(3);
   }, []);
 
   useEffect(() => {
     if (activeTab === "INSTALLMENT") fetchInstallments();
     if (activeTab === "PAWN") fetchPawnTickets();
-  }, [installmentSearch, installmentStatusFilter, pawnSearch, pawnStatusFilter, activeTab]);
+    if (activeTab === "DUE_SOON") fetchReminders(remindersFilterDays);
+  }, [installmentSearch, installmentStatusFilter, pawnSearch, pawnStatusFilter, activeTab, remindersFilterDays]);
 
   // Handle Product Select in New Installment Modal
   const handleSelectProduct = (prodId: string) => {
@@ -956,7 +1001,114 @@ export default function InstallmentsAndPawnPage() {
     }
   };
 
-  // Quick Send Telegram / SMS Reminder
+  // Send single Telegram notification directly via Bot
+  const handleSendTelegramBotReminder = async (item: any, type: "INSTALLMENT" | "PAWN" = "INSTALLMENT") => {
+    const itemId = item.id || item.contractNumber;
+    setTelegramSendingId(itemId);
+    setTelegramStatusMessage(null);
+
+    const payload = {
+      contractNumber: item.contractNumber,
+      customerName: item.customerName || item.customer?.name || "អតិថិជន",
+      customerPhone: item.customerPhone || item.customer?.phone || "",
+      productName: item.productName || item.itemName || "ទំនិញ",
+      installmentNumber: item.installmentNumber || 1,
+      totalInstallments: item.totalInstallments,
+      dueDate: item.dueDate || item.maturityDate,
+      daysRemaining: item.daysRemaining !== undefined ? item.daysRemaining : 3,
+      amountDueUsd: Number(item.amountDueUsd || item.monthlyAmountUsd || item.monthlyInterestUsd || 0),
+      amountDueKhr: item.amountDueKhr ? Number(item.amountDueKhr) : undefined,
+      branchName: item.branchName || "សាខាកណ្តាល",
+      contractType: type,
+    };
+
+    try {
+      const res = await fetch("/api/installments/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SEND_ONE",
+          payload,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramStatusMessage(`✅ ${data.message}`);
+        setTimeout(() => setTelegramStatusMessage(null), 5000);
+      } else {
+        alert("កំហុសក្នុងការផ្ញើ Telegram៖ " + (data.error || "សូមពិនិត្យមើល Telegram Bot Token ក្នុង Settings"));
+      }
+    } catch (err: any) {
+      alert("បរាជ័យក្នុងការតភ្ជាប់៖ " + err.message);
+    } finally {
+      setTelegramSendingId(null);
+    }
+  };
+
+  // Send batch reminders for all customers due in 2-3 days
+  const handleSendAllDueReminders = async () => {
+    const count = dueReminders.dueSoon.length + dueReminders.dueToday.length;
+    if (count === 0) {
+      alert("មិនមានអតិថិជនជិតដល់ថ្ងៃបង់ក្នុងរយៈពេលនេះទេ!");
+      return;
+    }
+    if (!confirm(`តើអ្នកពិតជាចង់ផ្ញើសាររំលឹកតាម Telegram ទៅកាន់អតិថិជនដែលជិតដល់ថ្ងៃបង់ទាំងអស់ (${count} នាក់) មែនទេ?`)) {
+      return;
+    }
+
+    setIsSendingTelegramBatch(true);
+    setTelegramStatusMessage(null);
+    try {
+      const res = await fetch("/api/installments/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SEND_ALL",
+          days: remindersFilterDays,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramStatusMessage(`✅ ${data.message}`);
+        setTimeout(() => setTelegramStatusMessage(null), 6000);
+      } else {
+        alert("កំហុស៖ " + data.error);
+      }
+    } catch (err: any) {
+      alert("បរាជ័យ៖ " + err.message);
+    } finally {
+      setIsSendingTelegramBatch(false);
+    }
+  };
+
+  // Send consolidated digest report to Telegram
+  const handleSendDigestReport = async () => {
+    setIsSendingTelegramBatch(true);
+    setTelegramStatusMessage(null);
+    try {
+      const res = await fetch("/api/installments/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SEND_DIGEST",
+          days: remindersFilterDays,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramStatusMessage(`✅ ${data.message}`);
+        setTimeout(() => setTelegramStatusMessage(null), 6000);
+      } else {
+        alert("កំហុស៖ " + data.error);
+      }
+    } catch (err: any) {
+      alert("បរាជ័យ៖ " + err.message);
+    } finally {
+      setIsSendingTelegramBatch(false);
+    }
+  };
+
+  // Quick Send Telegram / SMS Reminder (supports both direct Telegram bot & copy)
   const handleSendReminder = (item: any, type: "INSTALLMENT" | "PAWN") => {
     const text =
       type === "INSTALLMENT"
@@ -971,8 +1123,16 @@ export default function InstallmentsAndPawnPage() {
           `ការប្រាក់ប្រចាំខែ៖ $${item.monthlyInterestUsd?.toFixed(2)} (ផុតកំណត់ថ្ងៃ ${item.maturityDate})។\n` +
           `សូមអរគុណ!`;
 
-    navigator.clipboard?.writeText(text);
-    alert(text + "\n\n(អត្ថបទត្រូវបានចម្លងទៅ Clipboard រួចរាល់សម្រាប់ផ្ញើតាម Telegram ឬ SMS)");
+    const sendViaBot = confirm(
+      `${text}\n\n━━━━━━━━━━━━━━━━━━━━\nតើអ្នកចង់ផ្ញើសារនេះតាម Telegram Bot ផ្ទាល់ទៅកាន់ Channel/Admin ដែរឬទេ?\n- ចុច [OK] ដើម្បីផ្ញើតាម Telegram Bot ភ្លាមៗ\n- ចុច [Cancel] ដើម្បីគ្រាន់តែចម្លងអត្ថបទទៅ Clipboard`
+    );
+
+    if (sendViaBot) {
+      handleSendTelegramBotReminder(item, type);
+    } else {
+      navigator.clipboard?.writeText(text);
+      alert(text + "\n\n(អត្ថបទត្រូវបានចម្លងទៅ Clipboard រួចរាល់សម្រាប់ផ្ញើតាម Telegram ឬ SMS)");
+    }
   };
 
   // Filter Overdue Items (both installments and pawns)
@@ -1058,7 +1218,7 @@ export default function InstallmentsAndPawnPage() {
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
             activeTab === "PAWN"
               ? "bg-amber-700 text-white shadow-sm"
-              : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+              : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
           }`}
         >
           <Coins className="h-4 w-4" />
@@ -1066,11 +1226,23 @@ export default function InstallmentsAndPawnPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab("DUE_SOON")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+            activeTab === "DUE_SOON"
+              ? "bg-amber-600 text-white shadow-sm"
+              : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-700"
+          }`}
+        >
+          <BellRing className={`h-4 w-4 ${dueReminders.dueSoon.length > 0 ? "text-amber-500 animate-bounce" : ""}`} />
+          ជិតដល់ថ្ងៃបង់ ២–៣ ថ្ងៃ ({dueReminders.dueSoon.length})
+        </button>
+
+        <button
           onClick={() => setActiveTab("OVERDUE")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
             activeTab === "OVERDUE"
               ? "bg-rose-700 text-white shadow-sm"
-              : "bg-white border border-slate-200 text-rose-700 hover:bg-rose-50"
+              : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-700"
           }`}
         >
           <AlertTriangle className="h-4 w-4 text-rose-600" />
@@ -1082,13 +1254,75 @@ export default function InstallmentsAndPawnPage() {
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
             activeTab === "WARRANTY"
               ? "bg-indigo-700 text-white shadow-sm"
-              : "bg-white border border-slate-200 text-indigo-700 hover:bg-indigo-50"
+              : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700"
           }`}
         >
           <ShieldCheck className="h-4 w-4 text-indigo-600" />
           ឆែកប្រវត្តិទិញ & រយៈពេលធានា
         </button>
       </div>
+
+      {/* Global Status Toast Message */}
+      {telegramStatusMessage && (
+        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <span>{telegramStatusMessage}</span>
+          </div>
+          <button
+            onClick={() => setTelegramStatusMessage(null)}
+            className="text-emerald-600 hover:text-emerald-900 dark:hover:text-white p-1 rounded-lg"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Top Automated Reminder Notice Banner (Visible across tabs when upcoming payments exist) */}
+      {dueReminders.dueSoon.length > 0 && activeTab !== "DUE_SOON" && (
+        <div className="rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/10 to-teal-500/10 border border-amber-300/80 dark:border-amber-700/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
+              <BellRing className="h-5 w-5 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="font-black text-amber-950 dark:text-amber-200 text-sm flex items-center gap-2">
+                ដំណឹងរំលឹកកាលកំណត់បង់ប្រាក់ ({dueReminders.dueSoon.length} នាក់ ក្នុងរយៈពេល {remindersFilterDays} ថ្ងៃខាងមុខ)
+              </h4>
+              <p className="text-amber-800 dark:text-amber-300/90 mt-0.5">
+                មានអតិថិជនជិតដល់ថ្ងៃបង់ប្រាក់រំលស់/ការប្រាក់បញ្ចាំ។ អ្នកអាចផ្ញើសាររំលឹកតាម Telegram Bot ភ្លាមៗ ឬពិនិត្យបញ្ជីលម្អិត។
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleSendAllDueReminders}
+              disabled={isSendingTelegramBatch}
+              className="flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-2 text-xs shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              {isSendingTelegramBatch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              ផ្ញើ Telegram ទាំងអស់
+            </button>
+            <button
+              type="button"
+              onClick={handleSendDigestReport}
+              disabled={isSendingTelegramBatch}
+              className="flex items-center gap-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-slate-700 font-bold px-3 py-2 text-xs shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              <FileText className="h-3.5 w-3.5 text-amber-600" />
+              ផ្ញើសេចក្តីសង្ខេប
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("DUE_SOON")}
+              className="rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold px-3 py-2 text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+            >
+              មើលបញ្ជី ({dueReminders.dueSoon.length})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* TAB 1: INSTALLMENT CONTRACTS                                              */}
@@ -1555,6 +1789,258 @@ export default function InstallmentsAndPawnPage() {
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: DUE SOON (2-3 DAYS BEFORE DUE DATE) TELEGRAM NOTIFICATION            */}
+      {/* ========================================================================= */}
+      {activeTab === "DUE_SOON" && (
+        <div className="space-y-5">
+          {/* Header Card */}
+          <div className="rounded-2xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/60 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-black text-amber-950 dark:text-amber-300 text-base flex items-center gap-2">
+                <BellRing className="h-5 w-5 text-amber-600 animate-pulse" />
+                ជូនដំណឹងតាម Telegram មុនថ្ងៃកំណត់បង់ ២–៣ ថ្ងៃ (Payment Due Soon Reminders)
+              </h3>
+              <p className="text-xs text-amber-800 dark:text-amber-400 mt-1">
+                បញ្ជីអតិថិជនដែលត្រូវបង់ប្រាក់រំលស់ ឬការប្រាក់បញ្ចាំក្នុងរយៈពេល ២-៣ ថ្ងៃខាងមុខ។
+                ចុច "ផ្ញើ Telegram" ដើម្បីបញ្ជូនសាររំលឹកស្វ័យប្រវត្តិតាមរយៈ Telegram Bot ភ្លាមៗ!
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Day filter selector */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 rounded-xl border border-amber-300 dark:border-amber-700 text-xs">
+                <span className="text-slate-500 dark:text-slate-400 px-1 font-bold">កាលវិភាគ:</span>
+                {[1, 2, 3, 5].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      setRemindersFilterDays(d);
+                      fetchReminders(d);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                      remindersFilterDays === d
+                        ? "bg-amber-600 text-white shadow-xs"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    {d} ថ្ងៃ
+                  </button>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <button
+                type="button"
+                onClick={handleSendAllDueReminders}
+                disabled={isSendingTelegramBatch || dueReminders.dueSoon.length === 0}
+                className="flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 text-xs shadow-md transition active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                {isSendingTelegramBatch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                ផ្ញើ Telegram ទាំងអស់ ({dueReminders.dueSoon.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendDigestReport}
+                disabled={isSendingTelegramBatch || dueReminders.dueSoon.length === 0}
+                className="flex items-center gap-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-slate-700 font-bold px-3.5 py-2 text-xs shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                <FileText className="h-4 w-4 text-amber-600" />
+                ផ្ញើសេចក្តីសង្ខេប
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fetchReminders(remindersFilterDays)}
+                disabled={remindersLoading}
+                className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-amber-600 ${remindersLoading ? "animate-spin" : ""}`} />
+                ផ្ទុកឡើងវិញ
+              </button>
+            </div>
+          </div>
+
+          {/* Stats KPI */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-slate-900 p-4 shadow-xs">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 block">ជិតដល់ថ្ងៃបង់ ({remindersFilterDays} ថ្ងៃខាងមុខ)</span>
+              <span className="text-2xl font-black font-mono text-amber-700 dark:text-amber-400 mt-1 block">
+                {dueReminders.dueSoon.length} នាក់
+              </span>
+              <span className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                ទឹកប្រាក់ត្រូវប្រមូល៖ ${dueReminders.dueSoon.reduce((s, r) => s + Number(r.amountDueUsd || 0), 0).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="rounded-2xl border border-rose-200 dark:border-rose-800/60 bg-white dark:bg-slate-900 p-4 shadow-xs">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 block">ដល់ថ្ងៃកំណត់ថ្ងៃនេះ (Due Today)</span>
+              <span className="text-2xl font-black font-mono text-rose-700 dark:text-rose-400 mt-1 block">
+                {dueReminders.dueToday.length} នាក់
+              </span>
+              <span className="text-[11px] text-rose-700 dark:text-rose-300 font-medium">
+                ទឹកប្រាក់ត្រូវប្រមូល៖ ${dueReminders.dueToday.reduce((s, r) => s + Number(r.amountDueUsd || 0), 0).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 block">សរុបអតិថិជនរង់ចាំបង់</span>
+              <span className="text-2xl font-black font-mono text-teal-800 dark:text-teal-400 mt-1 block">
+                {dueReminders.dueSoon.length + dueReminders.dueToday.length} នាក់
+              </span>
+              <span className="text-[11px] text-teal-700 dark:text-teal-300 font-medium">
+                សរុបជាដុល្លារ៖ ${(
+                  dueReminders.dueSoon.reduce((s, r) => s + Number(r.amountDueUsd || 0), 0) +
+                  dueReminders.dueToday.reduce((s, r) => s + Number(r.amountDueUsd || 0), 0)
+                ).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* Table of Due Soon Customers */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h4 className="font-extrabold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-amber-600" />
+                បញ្ជីកាលវិភាគបង់ប្រាក់ដែលជិតដល់កាលកំណត់ (សរុប {dueReminders.dueSoon.length + dueReminders.dueToday.length} នាក់)
+              </h4>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                អត្រាប្រាក់រៀល៖ $1 = {exchangeRateKhr || 4100}៛
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 font-bold text-slate-600 dark:text-slate-300">
+                  <tr>
+                    <th className="p-3">កិច្ចសន្យា / ប័ណ្ណ</th>
+                    <th className="p-3">អតិថិជន</th>
+                    <th className="p-3">ទំនិញ / ទ្រព្យបញ្ចាំ</th>
+                    <th className="p-3 text-center">លើកទី</th>
+                    <th className="p-3 text-right">ទឹកប្រាក់ត្រូវបង់</th>
+                    <th className="p-3 text-center">ថ្ងៃកំណត់បង់</th>
+                    <th className="p-3 text-center">ស្ថានភាពរាប់ថយក្រោយ</th>
+                    <th className="p-3 text-center">សកម្មភាពជូនដំណឹង Telegram</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {remindersLoading ? (
+                    <tr>
+                      <td colSpan={8} className="p-10 text-center text-slate-400">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-600 mb-2" />
+                        កំពុងពិនិត្យកាលវិភាគបង់ប្រាក់...
+                      </td>
+                    </tr>
+                  ) : dueReminders.dueSoon.length + dueReminders.dueToday.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-10 text-center text-slate-400 dark:text-slate-500">
+                        <CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" />
+                        <p className="font-bold text-slate-700 dark:text-slate-300">គ្មានអតិថិជនដែលត្រូវបង់ប្រាក់ក្នុងរយៈពេល {remindersFilterDays} ថ្ងៃខាងមុខនេះទេ!</p>
+                        <p className="text-xs text-slate-400 mt-1">កិច្ចសន្យាទាំងអស់ដំណើរការដោយរលូន</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    [...dueReminders.dueToday, ...dueReminders.dueSoon].map((item, idx) => {
+                      const isToday = item.daysRemaining === 0;
+                      const isPawn = item.contractType === "PAWN";
+                      const isSendingThis = telegramSendingId === (item.id || item.contractNumber);
+
+                      return (
+                        <tr
+                          key={`${item.contractNumber}-${idx}`}
+                          className={`hover:bg-amber-50/50 dark:hover:bg-slate-800/50 transition ${
+                            isToday ? "bg-rose-50/30 dark:bg-rose-950/10" : ""
+                          }`}
+                        >
+                          <td className="p-3 font-mono font-bold text-teal-800 dark:text-teal-400">
+                            {item.contractNumber}
+                          </td>
+                          <td className="p-3">
+                            <p className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              {item.customerName}
+                              {isPawn && (
+                                <span className="rounded px-1.5 py-0.2 bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 text-[10px] font-bold">
+                                  បញ្ចាំ
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1">
+                              <Phone className="h-3 w-3 text-slate-400" />
+                              {item.customerPhone || "គ្មានលេខ"}
+                            </p>
+                          </td>
+                          <td className="p-3 font-medium text-slate-800 dark:text-slate-200">
+                            {item.productName}
+                          </td>
+                          <td className="p-3 text-center font-bold text-slate-600 dark:text-slate-300">
+                            {isPawn ? "ការប្រាក់" : `លើកទី ${item.installmentNumber || 1}${item.totalInstallments ? ` / ${item.totalInstallments}` : ""}`}
+                          </td>
+                          <td className="p-3 text-right font-mono">
+                            <span className="font-black text-rose-600 dark:text-rose-400 text-sm block">
+                              {formatUSD(item.amountDueUsd)}
+                            </span>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                              ≈ {formatKHR(item.amountDueKhr || Math.round(item.amountDueUsd * (exchangeRateKhr || 4100)))}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                            {item.dueDate}
+                          </td>
+                          <td className="p-3 text-center">
+                            {isToday ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 dark:bg-rose-900/50 px-2.5 py-1 text-xs font-black text-rose-800 dark:text-rose-200 animate-pulse">
+                                🔔 ដល់ថ្ងៃកំណត់ថ្ងៃនេះ!
+                              </span>
+                            ) : item.daysRemaining === 1 ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 dark:bg-orange-900/50 px-2.5 py-1 text-xs font-bold text-orange-800 dark:text-orange-200">
+                                🚨 នៅសល់តែ 1 ថ្ងៃទៀត (ស្អែក)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/50 px-2.5 py-1 text-xs font-bold text-amber-800 dark:text-amber-200">
+                                ⏰ នៅសល់ {item.daysRemaining} ថ្ងៃទៀត
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleSendTelegramBotReminder(item, isPawn ? "PAWN" : "INSTALLMENT")}
+                                disabled={isSendingThis}
+                                className="flex items-center gap-1 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-3 py-1.5 text-xs shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                                title="ផ្ញើសាររំលឹកស្វ័យប្រវត្តិតាម Telegram Bot"
+                              >
+                                {isSendingThis ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Send className="h-3 w-3" />
+                                )}
+                                <span>{isSendingThis ? "កំពុងផ្ញើ..." : "ផ្ញើ Telegram"}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSendReminder(item, isPawn ? "PAWN" : "INSTALLMENT")}
+                                className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-2.5 py-1.5 text-xs font-bold transition cursor-pointer"
+                                title="ចម្លងអត្ថបទសម្រាប់ផ្ញើតាម SMS ឬ Chat ផ្ទាល់"
+                              >
+                                📋 ចម្លង
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

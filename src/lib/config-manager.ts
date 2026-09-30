@@ -16,6 +16,8 @@ export interface TelegramConfig {
   notifyOnLowStock: boolean;
   notifyOnRepair: boolean;
   notifyDailyReport: boolean;
+  notifyOnInstallmentDue?: boolean;
+  installmentReminderDays?: number;
 }
 
 export interface KhqrConfig {
@@ -277,6 +279,8 @@ export class ConfigManager {
       notifyOnLowStock: saved?.notifyOnLowStock ?? true,
       notifyOnRepair: saved?.notifyOnRepair ?? true,
       notifyDailyReport: saved?.notifyDailyReport ?? true,
+      notifyOnInstallmentDue: saved?.notifyOnInstallmentDue ?? true,
+      installmentReminderDays: saved?.installmentReminderDays ?? 3,
     };
   }
 
@@ -292,6 +296,8 @@ export class ConfigManager {
       notifyOnLowStock: config.notifyOnLowStock ?? existing.notifyOnLowStock ?? true,
       notifyOnRepair: config.notifyOnRepair ?? existing.notifyOnRepair ?? true,
       notifyDailyReport: config.notifyDailyReport ?? existing.notifyDailyReport ?? true,
+      notifyOnInstallmentDue: config.notifyOnInstallmentDue ?? existing.notifyOnInstallmentDue ?? true,
+      installmentReminderDays: config.installmentReminderDays ?? existing.installmentReminderDays ?? 3,
     };
 
     await this.set("TELEGRAM_CONFIG", merged, "TELEGRAM", "Telegram notification & alert settings");

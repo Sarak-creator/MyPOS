@@ -117,12 +117,16 @@ interface POSState {
   telegramNotifyOnSale?: boolean;
   telegramNotifyOnLowStock?: boolean;
   telegramNotifyOnRepair?: boolean;
+  telegramNotifyOnInstallment?: boolean;
+  telegramInstallmentReminderDays?: number;
   setTelegramConfig: (config: {
     botToken?: string;
     chatId?: string;
     notifyOnSale?: boolean;
     notifyOnLowStock?: boolean;
     notifyOnRepair?: boolean;
+    notifyOnInstallment?: boolean;
+    installmentReminderDays?: number;
   }) => void;
 
   // Actions
@@ -228,6 +232,8 @@ export const usePOSStore = create<POSState>()(
                 telegramNotifyOnSale: tgData.notifyOnSale ?? false,
                 telegramNotifyOnLowStock: tgData.notifyOnLowStock ?? false,
                 telegramNotifyOnRepair: tgData.notifyOnRepair ?? false,
+                telegramNotifyOnInstallment: tgData.notifyOnInstallmentDue ?? false,
+                telegramInstallmentReminderDays: tgData.installmentReminderDays ?? 3,
               });
             }
           } catch {}
@@ -257,6 +263,8 @@ export const usePOSStore = create<POSState>()(
       telegramNotifyOnSale: false,
       telegramNotifyOnLowStock: false,
       telegramNotifyOnRepair: false,
+      telegramNotifyOnInstallment: false,
+      telegramInstallmentReminderDays: 3,
       setTelegramConfig: (cfg) =>
         set((state) => ({
           telegramBotToken: cfg.botToken !== undefined ? cfg.botToken : state.telegramBotToken,
@@ -264,6 +272,8 @@ export const usePOSStore = create<POSState>()(
           telegramNotifyOnSale: cfg.notifyOnSale !== undefined ? cfg.notifyOnSale : state.telegramNotifyOnSale,
           telegramNotifyOnLowStock: cfg.notifyOnLowStock !== undefined ? cfg.notifyOnLowStock : state.telegramNotifyOnLowStock,
           telegramNotifyOnRepair: cfg.notifyOnRepair !== undefined ? cfg.notifyOnRepair : state.telegramNotifyOnRepair,
+          telegramNotifyOnInstallment: cfg.notifyOnInstallment !== undefined ? cfg.notifyOnInstallment : state.telegramNotifyOnInstallment,
+          telegramInstallmentReminderDays: cfg.installmentReminderDays !== undefined ? cfg.installmentReminderDays : state.telegramInstallmentReminderDays,
         })),
 
       items: [],
@@ -467,6 +477,8 @@ export const usePOSStore = create<POSState>()(
         telegramNotifyOnSale: state.telegramNotifyOnSale,
         telegramNotifyOnLowStock: state.telegramNotifyOnLowStock,
         telegramNotifyOnRepair: state.telegramNotifyOnRepair,
+        telegramNotifyOnInstallment: state.telegramNotifyOnInstallment,
+        telegramInstallmentReminderDays: state.telegramInstallmentReminderDays,
         // Extended Payment / KHQR fields
         merchantID: state.merchantID,
         acquiringBank: state.acquiringBank,

@@ -4,6 +4,8 @@ import {
   notifyNewSale,
   notifyLowStock,
   notifyRepairTicket,
+  notifyInstallmentReminder,
+  notifyInstallmentDigest,
   testTelegramConnection,
   getServerTelegramConfig,
   saveServerTelegramConfig,
@@ -37,6 +39,8 @@ export async function GET(request: Request) {
       notifyOnLowStock: config.notifyOnLowStock ?? true,
       notifyOnRepair: config.notifyOnRepair ?? true,
       notifyDailyReport: config.notifyDailyReport ?? true,
+      notifyOnInstallmentDue: config.notifyOnInstallmentDue ?? true,
+      installmentReminderDays: config.installmentReminderDays ?? 3,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -70,6 +74,8 @@ export async function POST(request: Request) {
         notifyOnLowStock: config?.notifyOnLowStock ?? true,
         notifyOnRepair: config?.notifyOnRepair ?? true,
         notifyDailyReport: config?.notifyDailyReport ?? true,
+        notifyOnInstallmentDue: config?.notifyOnInstallmentDue ?? true,
+        installmentReminderDays: config?.installmentReminderDays ?? 3,
       });
 
       saveServerTelegramConfig({
@@ -79,6 +85,8 @@ export async function POST(request: Request) {
         notifyOnLowStock: config?.notifyOnLowStock ?? true,
         notifyOnRepair: config?.notifyOnRepair ?? true,
         notifyDailyReport: config?.notifyDailyReport ?? true,
+        notifyOnInstallmentDue: config?.notifyOnInstallmentDue ?? true,
+        installmentReminderDays: config?.installmentReminderDays ?? 3,
       });
 
       return NextResponse.json({
@@ -152,7 +160,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: res.success, error: res.error });
     }
 
-    // 5. SEND CUSTOM MESSAGE
+    // 5. NOTIFY INSTALLMENT DUE REMINDER (Individual)
+    if (action === "NOTIFY_INSTALLMENT") {
+      if (!payload || !payload.contractNumber) {
+        return NextResponse.json({ success: false, error: "Missing installment payload" }, { status: 400 });
+      }
+      const res = await notifyInstallmentReminder(payload, { botToken, chatId });
+      return NextResponse.json({ success: res.success, error: res.error, message: res.success ? "សាររំលឹកត្រូវបានផ្ញើទៅ Telegram ដោយជោគជ័យ!" : res.error });
+    }
+
+    // 6. NOTIFY INSTALLMENT DUE DIGEST (Batch Summary)
+    if (action === "NOTIFY_INSTALLMENT_DIGEST") {
+      if (!payload || !Array.isArray(payload.reminders)) {
+        return NextResponse.json({ success: false, error: "Missing reminders list" }, { status: 400 });
+      }
+      const res = await notifyInstallmentDigest(payload.reminders, { botToken, chatId });
+      return NextResponse.json({ success: res.success, error: res.error, message: res.success ? "របាយការណ៍សង្ខេបត្រូវបានផ្ញើទៅ Telegram ដោយជោគជ័យ!" : res.error });
+    }
+
+    // 7. SEND CUSTOM MESSAGE
     if (action === "SEND_MESSAGE") {
       if (!body.text) {
         return NextResponse.json({ success: false, error: "Missing message text" }, { status: 400 });

@@ -10,6 +10,25 @@ export interface TelegramConfig {
   notifyOnLowStock?: boolean;
   notifyOnRepair?: boolean;
   notifyDailyReport?: boolean;
+  notifyOnInstallmentDue?: boolean;
+  installmentReminderDays?: number;
+}
+
+export interface InstallmentReminderPayload {
+  contractNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  productName: string;
+  installmentNumber: number;
+  totalInstallments?: number;
+  dueDate: string;
+  daysRemaining: number;
+  amountDueUsd: number;
+  amountDueKhr?: number;
+  currency?: string;
+  branchName?: string;
+  contractType?: "INSTALLMENT" | "PAWN";
+  notes?: string;
 }
 
 export interface SaleNotificationPayload {
@@ -142,6 +161,8 @@ export function getServerTelegramConfig(): TelegramConfig {
     notifyOnLowStock: savedConfig.notifyOnLowStock ?? true,
     notifyOnRepair: savedConfig.notifyOnRepair ?? true,
     notifyDailyReport: savedConfig.notifyDailyReport ?? true,
+    notifyOnInstallmentDue: savedConfig.notifyOnInstallmentDue ?? true,
+    installmentReminderDays: savedConfig.installmentReminderDays ?? 3,
   };
 }
 
@@ -156,6 +177,8 @@ export function saveServerTelegramConfig(config: Partial<TelegramConfig>): boole
         notifyOnLowStock: config.notifyOnLowStock ?? existing.notifyOnLowStock ?? true,
         notifyOnRepair: config.notifyOnRepair ?? existing.notifyOnRepair ?? true,
         notifyDailyReport: config.notifyDailyReport ?? existing.notifyDailyReport ?? true,
+        notifyOnInstallmentDue: config.notifyOnInstallmentDue ?? existing.notifyOnInstallmentDue ?? true,
+        installmentReminderDays: config.installmentReminderDays ?? existing.installmentReminderDays ?? 3,
       };
 
       // 1. Update in-memory cache and environment variables
@@ -433,4 +456,91 @@ export async function testTelegramConnection(botToken: string, chatId: string) {
 
   return sendTelegramMessage(testMsg, { botToken, chatId }, "HTML");
 }
+
+/**
+ * Format & Send Individual Installment Payment Reminder (2-3 days before due date)
+ */
+export async function notifyInstallmentReminder(
+  payload: InstallmentReminderPayload,
+  config?: Partial<TelegramConfig>
+) {
+  const phoneText = payload.customerPhone ? ` <code>(${escapeHtml(payload.customerPhone)})</code>` : "";
+  const isPawn = payload.contractType === "PAWN";
+  const title = isPawn
+    ? "⏰ <b>ការរំលឹកកាលកំណត់បង់ការប្រាក់បញ្ចាំ (PAWN DUE REMINDER)</b>"
+    : "⏰ <b>ការរំលឹកកាលកំណត់បង់ប្រាក់រំលស់ (INSTALLMENT DUE REMINDER)</b>";
+
+  let statusBadge = "";
+  if (payload.daysRemaining > 1) {
+    statusBadge = `📢 <b>ជិតដល់ថ្ងៃកំណត់បង់: នៅសល់ ${payload.daysRemaining} ថ្ងៃទៀត!</b>`;
+  } else if (payload.daysRemaining === 1) {
+    statusBadge = `🚨 <b>ប្រញាប់: នៅសល់តែ 1 ថ្ងៃទៀតប៉ុណ្ណោះ! (Tomorrow)</b>`;
+  } else if (payload.daysRemaining === 0) {
+    statusBadge = `🔔 <b>ថ្ងៃនេះជាថ្ងៃកំណត់បង់ប្រាក់! (DUE TODAY)</b>`;
+  } else {
+    statusBadge = `⚠️ <b>ហួសកាលកំណត់បង់ប្រាក់ ${Math.abs(payload.daysRemaining)} ថ្ងៃ! (OVERDUE)</b>`;
+  }
+
+  const khrText = payload.amountDueKhr ? ` (~ ${payload.amountDueKhr.toLocaleString()} ៛)` : "";
+  const installmentText = isPawn
+    ? ""
+    : `\n🔢 <b>លើកទី:</b> លើកទី ${payload.installmentNumber}${payload.totalInstallments ? ` / ${payload.totalInstallments} ដង` : ""}`;
+
+  const message = `
+${title}
+━━━━━━━━━━━━━━━━━━━
+${statusBadge}
+
+🧾 <b>${isPawn ? "ប័ណ្ណបញ្ចាំលេខ:" : "កិច្ចសន្យាលេខ:"}</b> <code>#${escapeHtml(payload.contractNumber)}</code>
+👤 <b>អតិថិជន:</b> <b>${escapeHtml(payload.customerName)}</b>${phoneText}
+📦 <b>${isPawn ? "ទ្រព្យបញ្ចាំ:" : "ទំនិញ/សេវា:"}</b> <b>${escapeHtml(payload.productName)}</b>${installmentText}
+📅 <b>កាលកំណត់បង់:</b> <b>${escapeHtml(payload.dueDate)}</b>
+💵 <b>ទឹកប្រាក់ត្រូវបង់:</b> <b>$${payload.amountDueUsd.toFixed(2)}</b>${khrText}
+🏢 <b>សាខា:</b> ${escapeHtml(payload.branchName || "សាខាកណ្តាល")}
+${payload.notes ? `💬 <b>កំណត់ចំណាំ:</b> <i>${escapeHtml(payload.notes)}</i>\n` : ""}━━━━━━━━━━━━━━━━━━━
+💡 <i>សូមជម្រាបជូនអតិថិជនរៀបចំការទូទាត់ឱ្យបានទាន់ពេលវេលា ឬទាក់ទងមកកាន់ហាង!</i>
+<i>អាណាចក្រPOS • Automated Payment Reminder</i>
+`.trim();
+
+  return sendTelegramMessage(message, config, "HTML");
+}
+
+/**
+ * Format & Send Consolidated Due Soon Digest Summary
+ */
+export async function notifyInstallmentDigest(
+  reminders: InstallmentReminderPayload[],
+  config?: Partial<TelegramConfig>
+): Promise<{ success: boolean; data?: any; error?: string; message?: string }> {
+  if (!reminders || reminders.length === 0) {
+    return { success: true, message: "No upcoming reminders to send" };
+  }
+
+  const totalUsd = reminders.reduce((sum, r) => sum + Number(r.amountDueUsd || 0), 0);
+  const itemsText = reminders
+    .slice(0, 15)
+    .map((r, idx) => {
+      const remainingTag = r.daysRemaining > 0 ? `(នៅសល់ ${r.daysRemaining} ថ្ងៃ)` : r.daysRemaining === 0 ? `(ថ្ងៃនេះ)` : `(យឺត ${Math.abs(r.daysRemaining)} ថ្ងៃ)`;
+      return `${idx + 1}. <b>${escapeHtml(r.customerName)}</b> - ${escapeHtml(r.productName)}\n   💵 $${r.amountDueUsd.toFixed(2)} • 📅 ${escapeHtml(r.dueDate)} ${remainingTag}`;
+    })
+    .join("\n\n");
+
+  const extraCount = reminders.length > 15 ? `\n\n...និង ${reminders.length - 15} នាក់ផ្សេងទៀត` : "";
+
+  const message = `
+📢 <b>របាយការណ៍អតិថិជនជិតដល់ថ្ងៃបង់ (DUE SOON DIGEST)</b>
+━━━━━━━━━━━━━━━━━━━
+⏰ <b>បញ្ជីកាលវិភាគបង់ប្រាក់ក្នុងរយៈពេល ២-៣ ថ្ងៃខាងមុខ</b>
+📊 <b>សរុបអតិថិជន:</b> <b>${reminders.length} នាក់</b>
+💰 <b>សរុបទឹកប្រាក់ត្រូវប្រមូល:</b> <b>$${totalUsd.toFixed(2)}</b>
+━━━━━━━━━━━━━━━━━━━
+${itemsText}${extraCount}
+━━━━━━━━━━━━━━━━━━━
+🕒 <b>ម៉ោងបញ្ជូន:</b> ${formatSafeDate()}
+<i>អាណាចក្រPOS • Daily Payment Schedule Digest</i>
+`.trim();
+
+  return sendTelegramMessage(message, config, "HTML");
+}
+
 

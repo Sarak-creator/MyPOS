@@ -85,6 +85,8 @@ export default function SettingsPage() {
     telegramNotifyOnSale,
     telegramNotifyOnLowStock,
     telegramNotifyOnRepair,
+    telegramNotifyOnInstallment,
+    telegramInstallmentReminderDays,
     setTelegramConfig,
     themeMode,
     setThemeMode,
@@ -234,6 +236,8 @@ export default function SettingsPage() {
     notifyOnLowStock: telegramNotifyOnLowStock ?? false,
     notifyOnRepair: telegramNotifyOnRepair ?? false,
     notifyDailyReport: false,
+    notifyOnInstallmentDue: telegramNotifyOnInstallment ?? true,
+    installmentReminderDays: telegramInstallmentReminderDays ?? 3,
   });
 
   // Load saved Telegram config from Server on component mount
@@ -250,6 +254,8 @@ export default function SettingsPage() {
             notifyOnLowStock: data.notifyOnLowStock ?? prev.notifyOnLowStock,
             notifyOnRepair: data.notifyOnRepair ?? prev.notifyOnRepair,
             notifyDailyReport: data.notifyDailyReport ?? prev.notifyDailyReport,
+            notifyOnInstallmentDue: data.notifyOnInstallmentDue ?? prev.notifyOnInstallmentDue,
+            installmentReminderDays: data.installmentReminderDays ?? prev.installmentReminderDays,
           }));
           setTelegramConfig({
             botToken: data.botToken,
@@ -257,6 +263,8 @@ export default function SettingsPage() {
             notifyOnSale: data.notifyOnSale,
             notifyOnLowStock: data.notifyOnLowStock,
             notifyOnRepair: data.notifyOnRepair,
+            notifyOnInstallment: data.notifyOnInstallmentDue,
+            installmentReminderDays: data.installmentReminderDays,
           });
         }
       })
@@ -326,6 +334,8 @@ export default function SettingsPage() {
           notifyOnSale: telegramForm.notifyOnSale,
           notifyOnLowStock: telegramForm.notifyOnLowStock,
           notifyOnRepair: telegramForm.notifyOnRepair,
+          notifyOnInstallment: telegramForm.notifyOnInstallmentDue,
+          installmentReminderDays: telegramForm.installmentReminderDays,
         });
 
         // Also persist to server
@@ -341,6 +351,8 @@ export default function SettingsPage() {
               notifyOnLowStock: telegramForm.notifyOnLowStock,
               notifyOnRepair: telegramForm.notifyOnRepair,
               notifyDailyReport: telegramForm.notifyDailyReport,
+              notifyOnInstallmentDue: telegramForm.notifyOnInstallmentDue,
+              installmentReminderDays: telegramForm.installmentReminderDays,
             },
           }),
         }).catch(() => {});
@@ -373,6 +385,8 @@ export default function SettingsPage() {
       notifyOnSale: telegramForm.notifyOnSale,
       notifyOnLowStock: telegramForm.notifyOnLowStock,
       notifyOnRepair: telegramForm.notifyOnRepair,
+      notifyOnInstallment: telegramForm.notifyOnInstallmentDue,
+      installmentReminderDays: telegramForm.installmentReminderDays,
     });
 
     // 2. Persist to server config (.env & JSON file)
@@ -389,6 +403,8 @@ export default function SettingsPage() {
             notifyOnLowStock: telegramForm.notifyOnLowStock,
             notifyOnRepair: telegramForm.notifyOnRepair,
             notifyDailyReport: telegramForm.notifyDailyReport,
+            notifyOnInstallmentDue: telegramForm.notifyOnInstallmentDue,
+            installmentReminderDays: telegramForm.installmentReminderDays,
           },
         }),
       });
@@ -2020,6 +2036,12 @@ export default function SettingsPage() {
                     val: telegramForm.notifyOnRepair,
                   },
                   {
+                    id: "notifyOnInstallmentDue",
+                    name: "⏰ ដំណឹងរំលឹកកាលកំណត់បង់ប្រាក់រំលោះ (Installment Due Reminder)",
+                    desc: `ជូនដំណឹងតាម Telegram មុនថ្ងៃកំណត់បង់ ${telegramForm.installmentReminderDays || 3} ថ្ងៃ សម្រាប់អតិថិជនជិតដល់ថ្ងៃបង់`,
+                    val: telegramForm.notifyOnInstallmentDue,
+                  },
+                  {
                     id: "notifyDailyReport",
                     name: "📊 របាយការណ៍សរុបប្រចាំថ្ងៃ (Daily Sales Report)",
                     desc: "ផ្ញើសេចក្តីសង្ខេបចំណូលសរុបប្រចាំថ្ងៃវេលាម៉ោង ៩:០០ យប់",
@@ -2043,6 +2065,28 @@ export default function SettingsPage() {
                     />
                   </label>
                 ))}
+
+                {/* Reminder Window Days Selector */}
+                {telegramForm.notifyOnInstallmentDue && (
+                  <div className="flex items-center justify-between p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-950">
+                    <div>
+                      <span className="font-bold block">រយៈពេលរំលឹកទុកមុន (Reminder Window):</span>
+                      <span className="text-[11px] text-amber-700">ចំនួនថ្ងៃមុនកាលកំណត់បង់ប្រាក់ ដែល Bot ត្រូវជូនដំណឹង</span>
+                    </div>
+                    <select
+                      value={telegramForm.installmentReminderDays || 3}
+                      onChange={(e) => setTelegramForm({ ...telegramForm, installmentReminderDays: parseInt(e.target.value, 10) })}
+                      disabled={!canEditSettings}
+                      className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-bold text-amber-900 text-xs shadow-xs"
+                    >
+                      <option value="1">1 ថ្ងៃមុនកាលកំណត់ (1 Day Before)</option>
+                      <option value="2">2 ថ្ងៃមុនកាលកំណត់ (2 Days Before)</option>
+                      <option value="3">3 ថ្ងៃមុនកាលកំណត់ (3 Days Before - Recommend)</option>
+                      <option value="5">5 ថ្ងៃមុនកាលកំណត់ (5 Days Before)</option>
+                      <option value="7">7 ថ្ងៃមុនកាលកំណត់ (1 Week Before)</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Supabase Dynamic Cloud Notice */}
