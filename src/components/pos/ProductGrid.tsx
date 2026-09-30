@@ -22,6 +22,7 @@ import { formatUSD, formatKHR } from "@/lib/utils";
 import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner";
 import { playScanErrorBeep } from "@/lib/scannerAudio";
+import { subscribeToStockSync, StockSyncEvent } from "@/lib/stockSync";
 
 export interface ProductItem {
   id: string;
@@ -99,6 +100,52 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
 
   useEffect(() => {
     fetchLiveProducts();
+
+    // 1. Subscribe to real-time stock sync events (Sales, ReStock, Voids, Transfers)
+    const unsubscribe = subscribeToStockSync((event: StockSyncEvent) => {
+      // Optimistically decrement local stock immediately on sale
+      if (event.type === "SALE" && event.quantities) {
+        setProducts((prev) =>
+          prev.map((p) => {
+            const deducted = event.quantities?.[p.id] || event.quantities?.[p.productId];
+            if (deducted && deducted > 0) {
+              return {
+                ...p,
+                stockQty: Math.max(0, p.stockQty - deducted),
+              };
+            }
+            return p;
+          })
+        );
+      }
+
+      // Re-fetch live products from server to ensure exact sync
+      fetchLiveProducts();
+    });
+
+    // 2. Re-sync whenever the user focuses the POS tab/window
+    const handleFocus = () => {
+      fetchLiveProducts();
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        fetchLiveProducts();
+      }
+    });
+
+    // 3. Background pulse poll every 12 seconds for multi-device/multi-cashier real-time sync
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchLiveProducts();
+      }
+    }, 12000);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   // Hotkey listener for F2 Search

@@ -32,6 +32,7 @@ import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import { formatUSD, formatKHR } from "@/lib/utils";
 import ThermalReceipt, { ReceiptData } from "@/components/print/ThermalReceipt";
+import { broadcastStockChange } from "@/lib/stockSync";
 
 export default function SalesPage() {
   const { language, exchangeRateKhr } = usePOSStore();
@@ -112,6 +113,13 @@ export default function SalesPage() {
       if (data.success) {
         setShowRefundModal(false);
         setRefundReason("");
+
+        // Broadcast real-time stock restoration
+        broadcastStockChange({
+          type: "REFUND",
+          timestamp: Date.now(),
+        });
+
         fetchSales();
       } else {
         setRefundMessage(data.error || "Failed to process refund");

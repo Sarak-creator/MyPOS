@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 import { InstallmentStatus, SchedulePaymentStatus } from "@prisma/client";
+import { CacheManager } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -949,6 +950,9 @@ export async function POST(request: Request) {
 
       return contract;
     });
+
+    CacheManager.invalidatePrefix("products:");
+    CacheManager.invalidatePrefix("dashboard:");
 
     return NextResponse.json({
       success: true,

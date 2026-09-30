@@ -20,6 +20,7 @@ import { generateBakongKHQR } from "@/lib/khqr";
 import { formatUSD, formatKHR, generateInvoiceNumber } from "@/lib/utils";
 import ThermalReceipt, { ReceiptData } from "@/components/print/ThermalReceipt";
 import { OfflineSyncManager } from "@/lib/offline-sync";
+import { broadcastStockChange } from "@/lib/stockSync";
 
 /**
  * Modern POS chime sound using Web Audio API (cross-platform, no external asset dependencies)
@@ -378,6 +379,26 @@ export default function PaymentModal({ isOpen, onClose }: PaymentModalProps) {
 
       setCompletedReceipt(receipt);
       setIsSuccess(true);
+
+      // Broadcast real-time stock deduction immediately to all tabs, POS screens, and Inventory
+      try {
+        const quantities: Record<string, number> = {};
+        const productIds = items.map((i) => {
+          const pId = i.productId || i.id;
+          quantities[pId] = (quantities[pId] || 0) + i.quantity;
+          return pId;
+        });
+
+        broadcastStockChange({
+          type: "SALE",
+          branchId: currentBranchId,
+          productIds,
+          quantities,
+        });
+      } catch (broadcastErr) {
+        console.warn("Stock sync broadcast warning:", broadcastErr);
+      }
+
       clearCart();
     } catch (err: any) {
       setErrorMessage(err.message || "មានបញ្ហាបច្ចេកទេសក្នុងការទូទាត់");

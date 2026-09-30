@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { POStatus } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
+import { CacheManager } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -312,6 +313,11 @@ export async function POST(request: Request) {
       }
     );
 
+    if (isReceived) {
+      CacheManager.invalidatePrefix("products:");
+      CacheManager.invalidatePrefix("dashboard:");
+    }
+
     return NextResponse.json({
       success: true,
       purchaseOrder: newPO,
@@ -328,14 +334,15 @@ export async function PATCH(request: Request) {
   try {
     const session = await getAuthSession(request);
     const body = await request.json();
-    const { poId, status, notes } = body;
+    const { poId, id, status, notes } = body;
+    const targetPoId = poId || id;
 
-    if (!poId || !status) {
+    if (!targetPoId || !status) {
       return NextResponse.json({ success: false, error: "PO ID and Status are required." }, { status: 400 });
     }
 
     const po = await prisma.purchaseOrder.findUnique({
-      where: { id: poId },
+      where: { id: targetPoId },
       include: {
         supplier: true,
         items: true,
@@ -357,7 +364,7 @@ export async function PATCH(request: Request) {
     const updatedPO = await prisma.$transaction(
       async (tx) => {
         const updated = await tx.purchaseOrder.update({
-          where: { id: poId },
+          where: { id: targetPoId },
           data: {
             status: status as POStatus,
             notes: notes ? `${po.notes || ""} [Update: ${notes}]`.trim() : po.notes,
@@ -428,6 +435,11 @@ export async function PATCH(request: Request) {
         timeout: 60000,
       }
     );
+
+    if (isNowReceived) {
+      CacheManager.invalidatePrefix("products:");
+      CacheManager.invalidatePrefix("dashboard:");
+    }
 
     return NextResponse.json({
       success: true,

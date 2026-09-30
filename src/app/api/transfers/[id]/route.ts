@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 import { notifyStockTransfer } from "@/lib/telegram";
+import { CacheManager } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -432,6 +433,9 @@ export async function PATCH(
       maxWait: 15000,
       timeout: 60000,
     });
+
+    CacheManager.invalidatePrefix("products:");
+    CacheManager.invalidatePrefix("dashboard:");
 
     // Notify Telegram asynchronously
     try {

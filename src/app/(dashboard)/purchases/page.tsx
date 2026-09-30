@@ -32,6 +32,7 @@ import {
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import { formatUSD, formatKHR } from "@/lib/utils";
+import { broadcastStockChange, subscribeToStockSync } from "@/lib/stockSync";
 
 type ActiveTab = "POS" | "SUPPLIERS";
 
@@ -124,6 +125,28 @@ export default function PurchasesPage() {
 
   useEffect(() => {
     fetchData();
+
+    // 1. Subscribe to real-time stock sync events
+    const unsubscribe = subscribeToStockSync(() => {
+      fetchData();
+    });
+
+    // 2. Focus and visibility listener
+    const handleFocus = () => fetchData();
+    window.addEventListener("focus", handleFocus);
+
+    // 3. Periodic pulse poll every 15s
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchData();
+      }
+    }, 15000);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(timer);
+    };
   }, [searchQuery, selectedStatus, selectedSupplierId, page]);
 
   // Add Item Row to Create PO
@@ -209,6 +232,14 @@ export default function PurchasesPage() {
         setPoItems([]);
         setPoNotes("");
         setPoSupplierId("");
+
+        if (poStatus === "RECEIVED") {
+          broadcastStockChange({
+            type: "RESTOCK",
+            timestamp: Date.now(),
+          });
+        }
+
         fetchData();
       } else {
         setPoFormError(data.error || "Failed to create PO");
@@ -227,6 +258,7 @@ export default function PurchasesPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          poId,
           id: poId,
           status: "RECEIVED",
         }),
@@ -237,6 +269,13 @@ export default function PurchasesPage() {
         if (selectedPO && selectedPO.id === poId) {
           setSelectedPO(data.purchaseOrder);
         }
+
+        // Broadcast real-time ReStock event across POS and inventory screens
+        broadcastStockChange({
+          type: "RESTOCK",
+          timestamp: Date.now(),
+        });
+
         fetchData();
       }
     } catch (err) {

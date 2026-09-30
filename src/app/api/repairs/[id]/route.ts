@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { RepairStatus } from "@prisma/client";
+import { CacheManager } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -153,6 +154,9 @@ export async function PATCH(
         partsUsed: { include: { product: true } },
       },
     });
+
+    CacheManager.invalidatePrefix("products:");
+    CacheManager.invalidatePrefix("dashboard:");
 
     return NextResponse.json({
       success: true,

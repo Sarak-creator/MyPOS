@@ -38,6 +38,7 @@ import {
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
+import { broadcastStockChange, subscribeToStockSync } from "@/lib/stockSync";
 
 interface InventoryItem {
   id: string;
@@ -307,6 +308,36 @@ export default function InventoryPage() {
     fetchCategories();
     fetchBranches();
     fetchTransfers();
+
+    // 1. Subscribe to real-time stock sync events (Sales, Purchases, Transfers)
+    const unsubscribe = subscribeToStockSync(() => {
+      fetchProducts();
+      fetchTransfers();
+    });
+
+    // 2. Focus and visibility listener to revalidate stock when switching back
+    const handleFocus = () => {
+      fetchProducts();
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        fetchProducts();
+      }
+    });
+
+    // 3. Periodic pulse poll every 15s
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchProducts();
+      }
+    }, 15000);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(timer);
+    };
   }, []);
 
   // Category Handlers: Add / Update
@@ -636,6 +667,12 @@ export default function InventoryPage() {
 
       setIsModalOpen(false);
       await fetchProducts();
+
+      // Broadcast stock adjustment/creation to POS and other screens
+      broadcastStockChange({
+        type: "ADJUST",
+        timestamp: Date.now(),
+      });
     } catch (err: any) {
       alert("បរាជ័យក្នុងការរក្សាទុក: " + err.message);
     } finally {
@@ -651,6 +688,10 @@ export default function InventoryPage() {
       const data = await res.json();
       if (data.success) {
         setProducts((prev) => prev.filter((p) => p.id !== id));
+        broadcastStockChange({
+          type: "ADJUST",
+          timestamp: Date.now(),
+        });
       } else {
         alert("បរាជ័យក្នុងការលុប: " + data.error);
       }
