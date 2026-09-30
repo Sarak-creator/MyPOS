@@ -248,46 +248,55 @@ export async function POST(request: Request) {
     const rate = parseInt(exchangeRate) || 4100;
     const isKhr = currency === "KHR";
 
-    let totalUsd = parseFloat(totalPriceUsd);
-    let totalKhr = parseFloat(totalPriceKhr);
+    let totalKhr = 0;
+    let totalUsd = 0;
+    let downKhr = 0;
+    let downUsd = 0;
+
     if (isKhr) {
-      if (!totalKhr || isNaN(totalKhr)) {
-        totalKhr = (totalUsd || 0) * rate;
+      totalKhr = parseFloat(totalPriceKhr) || 0;
+      if (totalKhr === 0 && totalPriceUsd) {
+        totalKhr = Math.round((parseFloat(totalPriceUsd) || 0) * rate);
       }
-      totalUsd = Number((totalKhr / rate).toFixed(2));
+      totalUsd = totalKhr > 0 ? Number((totalKhr / rate).toFixed(2)) : 0;
+
+      downKhr = parseFloat(downPaymentKhr) || 0;
+      if (downKhr === 0 && downPaymentUsd && downPaymentUsd !== "0") {
+        downKhr = Math.round((parseFloat(downPaymentUsd) || 0) * rate);
+      }
+      downUsd = downKhr > 0 ? Number((downKhr / rate).toFixed(2)) : 0;
+
+      if (totalKhr <= 0) {
+        return NextResponse.json({ success: false, error: "តម្លៃទំនិញត្រូវតែធំជាង 0 (Total price must be > 0)" }, { status: 400 });
+      }
+
+      if (downKhr >= totalKhr) {
+        return NextResponse.json({ success: false, error: "ប្រាក់កក់មិនអាចធំជាង ឬស្មើនឹងតម្លៃទំនិញសរុបទេ" }, { status: 400 });
+      }
     } else {
-      if (!totalUsd || isNaN(totalUsd)) {
-        totalUsd = (totalKhr || 0) / rate;
+      totalUsd = parseFloat(totalPriceUsd) || 0;
+      if (totalUsd === 0 && totalPriceKhr) {
+        totalUsd = Number(((parseFloat(totalPriceKhr) || 0) / rate).toFixed(2));
       }
       totalKhr = Math.round(totalUsd * rate);
-    }
 
-    let downUsd = parseFloat(downPaymentUsd) || 0;
-    let downKhr = parseFloat(downPaymentKhr) || 0;
-    if (isKhr) {
-      if (downKhr > 0 && downUsd === 0) {
-        downUsd = Number((downKhr / rate).toFixed(2));
-      } else if (downUsd > 0 && downKhr === 0) {
-        downKhr = Math.round(downUsd * rate);
+      downUsd = parseFloat(downPaymentUsd) || 0;
+      if (downUsd === 0 && downPaymentKhr && downPaymentKhr !== "0") {
+        downUsd = Number(((parseFloat(downPaymentKhr) || 0) / rate).toFixed(2));
       }
-    } else {
-      if (downUsd > 0 && downKhr === 0) {
-        downKhr = Math.round(downUsd * rate);
-      } else if (downKhr > 0 && downUsd === 0) {
-        downUsd = Number((downKhr / rate).toFixed(2));
+      downKhr = Math.round(downUsd * rate);
+
+      if (totalUsd <= 0) {
+        return NextResponse.json({ success: false, error: "តម្លៃទំនិញត្រូវតែធំជាង 0 (Total price must be > 0)" }, { status: 400 });
+      }
+
+      if (downUsd >= totalUsd) {
+        return NextResponse.json({ success: false, error: "ប្រាក់កក់មិនអាចធំជាង ឬស្មើនឹងតម្លៃទំនិញសរុបទេ" }, { status: 400 });
       }
     }
 
-    if (isNaN(totalUsd) || totalUsd <= 0) {
-      return NextResponse.json({ success: false, error: "តម្លៃទំនិញត្រូវតែធំជាង 0 (Total price must be > 0)" }, { status: 400 });
-    }
-
-    if (downUsd >= totalUsd) {
-      return NextResponse.json({ success: false, error: "ប្រាក់កក់មិនអាចធំជាង ឬស្មើនឹងតម្លៃទំនិញសរុបទេ" }, { status: 400 });
-    }
-
-    const principalRemainingUsd = Number((totalUsd - downUsd).toFixed(2));
-    const principalRemainingKhr = Math.round(principalRemainingUsd * rate);
+    const principalRemainingKhr = Math.max(0, totalKhr - downKhr);
+    const principalRemainingUsd = Math.max(0, Number((totalUsd - downUsd).toFixed(2)));
     const ratePercent = parseFloat(interestRatePercent) || 0;
 
     let scheduleData: any[] = [];
@@ -310,190 +319,330 @@ export async function POST(request: Request) {
       calculatedIntervalDays = interval;
       calculatedDurationDays = count * interval;
       calculatedDurationMonths = Math.max(1, Math.round(calculatedDurationDays / 30));
-
       const monthsEquivalent = calculatedDurationDays / 30;
-      const totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
-      const interestPerInstallmentUsd = Number((totalInterestUsd / count).toFixed(2));
-      const principalPerInstallmentUsd = Number((principalRemainingUsd / count).toFixed(2));
-      const totalDuePerInstallmentUsd = Number((principalPerInstallmentUsd + interestPerInstallmentUsd).toFixed(2));
 
-      calculatedInstallmentAmountUsd = totalDuePerInstallmentUsd;
-      calculatedInstallmentAmountKhr = Math.round(totalDuePerInstallmentUsd * rate);
+      if (isKhr) {
+        const totalInterestKhr = Math.round(principalRemainingKhr * (ratePercent / 100) * monthsEquivalent);
+        const iPerInstKhr = Math.floor(totalInterestKhr / count);
+        const pPerInstKhr = Math.floor(principalRemainingKhr / count);
+        const totPerInstKhr = pPerInstKhr + iPerInstKhr;
 
-      for (let i = 1; i <= count; i++) {
-        const dueDate = new Date(start);
-        if (interval === 30) {
-          dueDate.setMonth(dueDate.getMonth() + i);
-        } else {
-          dueDate.setDate(dueDate.getDate() + (i * interval));
+        calculatedInstallmentAmountKhr = totPerInstKhr;
+        calculatedInstallmentAmountUsd = Number((totPerInstKhr / rate).toFixed(2));
+
+        for (let i = 1; i <= count; i++) {
+          const dueDate = new Date(start);
+          if (interval === 30) dueDate.setMonth(dueDate.getMonth() + i);
+          else dueDate.setDate(dueDate.getDate() + (i * interval));
+
+          const isLast = i === count;
+          const pKhr = isLast ? Math.max(0, principalRemainingKhr - (pPerInstKhr * (count - 1))) : pPerInstKhr;
+          const iKhr = isLast ? Math.max(0, totalInterestKhr - (iPerInstKhr * (count - 1))) : iPerInstKhr;
+          const totKhr = pKhr + iKhr;
+
+          scheduleData.push({
+            installmentNumber: i,
+            dueDate,
+            principalAmountKhr: pKhr,
+            interestAmountKhr: iKhr,
+            totalDueKhr: totKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((iKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totKhr / rate).toFixed(2)),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
         }
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentKhr = downKhr + scheduleData.reduce((sum, s) => sum + s.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+      } else {
+        const totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
+        const interestPerInstallmentUsd = Number((totalInterestUsd / count).toFixed(2));
+        const principalPerInstallmentUsd = Number((principalRemainingUsd / count).toFixed(2));
+        const totalDuePerInstallmentUsd = Number((principalPerInstallmentUsd + interestPerInstallmentUsd).toFixed(2));
 
-        const isLast = i === count;
-        const pUsd = isLast
-          ? Number((principalRemainingUsd - (principalPerInstallmentUsd * (count - 1))).toFixed(2))
-          : principalPerInstallmentUsd;
-        const iUsd = isLast
-          ? Number((totalInterestUsd - (interestPerInstallmentUsd * (count - 1))).toFixed(2))
-          : interestPerInstallmentUsd;
-        const totUsd = Number((pUsd + iUsd).toFixed(2));
+        calculatedInstallmentAmountUsd = totalDuePerInstallmentUsd;
+        calculatedInstallmentAmountKhr = Math.round(totalDuePerInstallmentUsd * rate);
 
-        scheduleData.push({
-          installmentNumber: i,
-          dueDate,
-          principalAmountUsd: pUsd,
-          interestAmountUsd: iUsd,
-          totalDueUsd: totUsd,
-          principalAmountKhr: Math.round(pUsd * rate),
-          interestAmountKhr: Math.round(iUsd * rate),
-          totalDueKhr: Math.round(totUsd * rate),
-          paidAmountUsd: 0,
-          paidAmountKhr: 0,
-          status: SchedulePaymentStatus.PENDING,
-          daysOverdue: 0,
-          penaltyAmountUsd: 0,
-          penaltyPaidUsd: 0,
-          penaltyAmountKhr: 0,
-          penaltyPaidKhr: 0,
-        });
+        for (let i = 1; i <= count; i++) {
+          const dueDate = new Date(start);
+          if (interval === 30) dueDate.setMonth(dueDate.getMonth() + i);
+          else dueDate.setDate(dueDate.getDate() + (i * interval));
+
+          const isLast = i === count;
+          const pUsd = isLast
+            ? Number((principalRemainingUsd - (principalPerInstallmentUsd * (count - 1))).toFixed(2))
+            : principalPerInstallmentUsd;
+          const iUsd = isLast
+            ? Number((totalInterestUsd - (interestPerInstallmentUsd * (count - 1))).toFixed(2))
+            : interestPerInstallmentUsd;
+          const totUsd = Number((pUsd + iUsd).toFixed(2));
+
+          scheduleData.push({
+            installmentNumber: i,
+            dueDate,
+            principalAmountUsd: pUsd,
+            interestAmountUsd: iUsd,
+            totalDueUsd: totUsd,
+            principalAmountKhr: Math.round(pUsd * rate),
+            interestAmountKhr: Math.round(iUsd * rate),
+            totalDueKhr: Math.round(totUsd * rate),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
+        }
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
       }
-      endDate = scheduleData[scheduleData.length - 1].dueDate;
-      totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
-      totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
 
     } else if (repaymentPlanType === "DAYS") {
       // 2. គិតជាចំនួនថ្ងៃ (Days)
       const totalDays = Math.max(1, parseInt(durationDays) || 30);
-      const interval = Math.max(1, parseInt(intervalDays) || 1); // 1 = daily, etc.
+      const interval = Math.max(1, parseInt(intervalDays) || 1);
       calculatedDurationDays = totalDays;
       calculatedIntervalDays = interval;
       const count = Math.max(1, Math.ceil(totalDays / interval));
       calculatedTotalInstallments = count;
       calculatedDurationMonths = Math.max(1, Math.round(totalDays / 30));
-
       const monthsEquivalent = totalDays / 30;
-      const totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
-      const interestPerInstallmentUsd = Number((totalInterestUsd / count).toFixed(2));
-      const principalPerInstallmentUsd = Number((principalRemainingUsd / count).toFixed(2));
-      const totalDuePerInstallmentUsd = Number((principalPerInstallmentUsd + interestPerInstallmentUsd).toFixed(2));
 
-      calculatedInstallmentAmountUsd = totalDuePerInstallmentUsd;
-      calculatedInstallmentAmountKhr = Math.round(totalDuePerInstallmentUsd * rate);
+      if (isKhr) {
+        const totalInterestKhr = Math.round(principalRemainingKhr * (ratePercent / 100) * monthsEquivalent);
+        const iPerInstKhr = Math.floor(totalInterestKhr / count);
+        const pPerInstKhr = Math.floor(principalRemainingKhr / count);
+        const totPerInstKhr = pPerInstKhr + iPerInstKhr;
 
-      for (let i = 1; i <= count; i++) {
-        const dueDate = new Date(start);
-        dueDate.setDate(dueDate.getDate() + (i * interval));
+        calculatedInstallmentAmountKhr = totPerInstKhr;
+        calculatedInstallmentAmountUsd = Number((totPerInstKhr / rate).toFixed(2));
 
-        const isLast = i === count;
-        const pUsd = isLast
-          ? Number((principalRemainingUsd - (principalPerInstallmentUsd * (count - 1))).toFixed(2))
-          : principalPerInstallmentUsd;
-        const iUsd = isLast
-          ? Number((totalInterestUsd - (interestPerInstallmentUsd * (count - 1))).toFixed(2))
-          : interestPerInstallmentUsd;
-        const totUsd = Number((pUsd + iUsd).toFixed(2));
+        for (let i = 1; i <= count; i++) {
+          const dueDate = new Date(start);
+          dueDate.setDate(dueDate.getDate() + (i * interval));
 
-        scheduleData.push({
-          installmentNumber: i,
-          dueDate,
-          principalAmountUsd: pUsd,
-          interestAmountUsd: iUsd,
-          totalDueUsd: totUsd,
-          principalAmountKhr: Math.round(pUsd * rate),
-          interestAmountKhr: Math.round(iUsd * rate),
-          totalDueKhr: Math.round(totUsd * rate),
-          paidAmountUsd: 0,
-          paidAmountKhr: 0,
-          status: SchedulePaymentStatus.PENDING,
-          daysOverdue: 0,
-          penaltyAmountUsd: 0,
-          penaltyPaidUsd: 0,
-          penaltyAmountKhr: 0,
-          penaltyPaidKhr: 0,
-        });
+          const isLast = i === count;
+          const pKhr = isLast ? Math.max(0, principalRemainingKhr - (pPerInstKhr * (count - 1))) : pPerInstKhr;
+          const iKhr = isLast ? Math.max(0, totalInterestKhr - (iPerInstKhr * (count - 1))) : iPerInstKhr;
+          const totKhr = pKhr + iKhr;
+
+          scheduleData.push({
+            installmentNumber: i,
+            dueDate,
+            principalAmountKhr: pKhr,
+            interestAmountKhr: iKhr,
+            totalDueKhr: totKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((iKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totKhr / rate).toFixed(2)),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
+        }
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentKhr = downKhr + scheduleData.reduce((sum, s) => sum + s.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+      } else {
+        const totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
+        const interestPerInstallmentUsd = Number((totalInterestUsd / count).toFixed(2));
+        const principalPerInstallmentUsd = Number((principalRemainingUsd / count).toFixed(2));
+        const totalDuePerInstallmentUsd = Number((principalPerInstallmentUsd + interestPerInstallmentUsd).toFixed(2));
+
+        calculatedInstallmentAmountUsd = totalDuePerInstallmentUsd;
+        calculatedInstallmentAmountKhr = Math.round(totalDuePerInstallmentUsd * rate);
+
+        for (let i = 1; i <= count; i++) {
+          const dueDate = new Date(start);
+          dueDate.setDate(dueDate.getDate() + (i * interval));
+
+          const isLast = i === count;
+          const pUsd = isLast
+            ? Number((principalRemainingUsd - (principalPerInstallmentUsd * (count - 1))).toFixed(2))
+            : principalPerInstallmentUsd;
+          const iUsd = isLast
+            ? Number((totalInterestUsd - (interestPerInstallmentUsd * (count - 1))).toFixed(2))
+            : interestPerInstallmentUsd;
+          const totUsd = Number((pUsd + iUsd).toFixed(2));
+
+          scheduleData.push({
+            installmentNumber: i,
+            dueDate,
+            principalAmountUsd: pUsd,
+            interestAmountUsd: iUsd,
+            totalDueUsd: totUsd,
+            principalAmountKhr: Math.round(pUsd * rate),
+            interestAmountKhr: Math.round(iUsd * rate),
+            totalDueKhr: Math.round(totUsd * rate),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
+        }
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
       }
-      endDate = scheduleData[scheduleData.length - 1].dueDate;
-      totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
-      totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
 
     } else if (repaymentPlanType === "FIXED_AMOUNT") {
       // 3. គិតតាមចំនួនទឹកប្រាក់កំណត់ (Fixed Payment Amount)
-      let targetPayUsd = parseFloat(installmentAmountUsd);
-      const targetPayKhr = parseFloat(installmentAmountKhr);
-      if (isKhr && targetPayKhr > 0) {
-        targetPayUsd = Number((targetPayKhr / rate).toFixed(2));
-      }
-      if (!targetPayUsd || targetPayUsd <= 0) {
-        targetPayUsd = 50;
-      }
-
       const interval = Math.max(1, parseInt(intervalDays) || 30);
       calculatedIntervalDays = interval;
       const periodMonths = interval / 30;
-      const singlePeriodInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * periodMonths).toFixed(2));
+      const maxSteps = 120;
 
-      if (targetPayUsd <= singlePeriodInterestUsd && ratePercent > 0) {
-        return NextResponse.json({
-          success: false,
-          error: `ចំនួនទឹកប្រាក់បង់ (${isKhr ? targetPayKhr + " ៛" : "$" + targetPayUsd}) ត្រូវតែធំជាងការប្រាក់ក្នុងមួយលើក (${isKhr ? Math.round(singlePeriodInterestUsd * rate) + " ៛" : "$" + singlePeriodInterestUsd})!`,
-        }, { status: 400 });
-      }
-
-      let curPrincipal = principalRemainingUsd;
-      let step = 1;
-      const maxSteps = 120; // up to 120 installments safety
-
-      while (curPrincipal > 0.01 && step <= maxSteps) {
-        const periodInterest = Number((curPrincipal * (ratePercent / 100) * periodMonths).toFixed(2));
-        const dueDate = new Date(start);
-        if (interval === 30) {
-          dueDate.setMonth(dueDate.getMonth() + step);
-        } else {
-          dueDate.setDate(dueDate.getDate() + (step * interval));
+      if (isKhr) {
+        let targetPayKhr = parseFloat(installmentAmountKhr);
+        if (!targetPayKhr || targetPayKhr <= 0) {
+          targetPayKhr = (parseFloat(installmentAmountUsd) || 50) * rate || 200000;
         }
 
-        let pUsd = 0;
-        let totDueUsd = 0;
-
-        if (curPrincipal + periodInterest <= targetPayUsd) {
-          pUsd = curPrincipal;
-          totDueUsd = Number((pUsd + periodInterest).toFixed(2));
-          curPrincipal = 0;
-        } else {
-          totDueUsd = targetPayUsd;
-          pUsd = Number((totDueUsd - periodInterest).toFixed(2));
-          curPrincipal = Number((curPrincipal - pUsd).toFixed(2));
+        const singlePeriodInterestKhr = Math.round(principalRemainingKhr * (ratePercent / 100) * periodMonths);
+        if (targetPayKhr <= singlePeriodInterestKhr && ratePercent > 0) {
+          return NextResponse.json({
+            success: false,
+            error: `ចំនួនទឹកប្រាក់បង់ (${targetPayKhr.toLocaleString()} ៛) ត្រូវតែធំជាងការប្រាក់ក្នុងមួយលើក (${singlePeriodInterestKhr.toLocaleString()} ៛)!`,
+          }, { status: 400 });
         }
 
-        scheduleData.push({
-          installmentNumber: step,
-          dueDate,
-          principalAmountUsd: pUsd,
-          interestAmountUsd: periodInterest,
-          totalDueUsd: totDueUsd,
-          principalAmountKhr: Math.round(pUsd * rate),
-          interestAmountKhr: Math.round(periodInterest * rate),
-          totalDueKhr: Math.round(totDueUsd * rate),
-          paidAmountUsd: 0,
-          paidAmountKhr: 0,
-          status: SchedulePaymentStatus.PENDING,
-          daysOverdue: 0,
-          penaltyAmountUsd: 0,
-          penaltyPaidUsd: 0,
-          penaltyAmountKhr: 0,
-          penaltyPaidKhr: 0,
-        });
+        let curPrincipal = principalRemainingKhr;
+        let step = 1;
 
-        step++;
+        while (curPrincipal > 100 && step <= maxSteps) {
+          const periodInterestKhr = Math.round(curPrincipal * (ratePercent / 100) * periodMonths);
+          const dueDate = new Date(start);
+          if (interval === 30) dueDate.setMonth(dueDate.getMonth() + step);
+          else dueDate.setDate(dueDate.getDate() + (step * interval));
+
+          let pKhr = 0;
+          let totDueKhr = 0;
+
+          if (curPrincipal + periodInterestKhr <= targetPayKhr) {
+            pKhr = curPrincipal;
+            totDueKhr = pKhr + periodInterestKhr;
+            curPrincipal = 0;
+          } else {
+            totDueKhr = targetPayKhr;
+            pKhr = Math.max(0, totDueKhr - periodInterestKhr);
+            curPrincipal = Math.max(0, curPrincipal - pKhr);
+          }
+
+          scheduleData.push({
+            installmentNumber: step,
+            dueDate,
+            principalAmountKhr: pKhr,
+            interestAmountKhr: periodInterestKhr,
+            totalDueKhr: totDueKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((periodInterestKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totDueKhr / rate).toFixed(2)),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
+          step++;
+        }
+
+        calculatedTotalInstallments = scheduleData.length;
+        calculatedDurationDays = scheduleData.length * interval;
+        calculatedDurationMonths = Math.max(1, Math.round(calculatedDurationDays / 30));
+        calculatedInstallmentAmountKhr = targetPayKhr;
+        calculatedInstallmentAmountUsd = Number((targetPayKhr / rate).toFixed(2));
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentKhr = downKhr + scheduleData.reduce((sum, s) => sum + s.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+
+      } else {
+        let targetPayUsd = parseFloat(installmentAmountUsd) || 50;
+        const singlePeriodInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * periodMonths).toFixed(2));
+
+        if (targetPayUsd <= singlePeriodInterestUsd && ratePercent > 0) {
+          return NextResponse.json({
+            success: false,
+            error: `ចំនួនទឹកប្រាក់បង់ ($${targetPayUsd}) ត្រូវតែធំជាងការប្រាក់ក្នុងមួយលើក ($${singlePeriodInterestUsd})!`,
+          }, { status: 400 });
+        }
+
+        let curPrincipal = principalRemainingUsd;
+        let step = 1;
+
+        while (curPrincipal > 0.01 && step <= maxSteps) {
+          const periodInterest = Number((curPrincipal * (ratePercent / 100) * periodMonths).toFixed(2));
+          const dueDate = new Date(start);
+          if (interval === 30) dueDate.setMonth(dueDate.getMonth() + step);
+          else dueDate.setDate(dueDate.getDate() + (step * interval));
+
+          let pUsd = 0;
+          let totDueUsd = 0;
+
+          if (curPrincipal + periodInterest <= targetPayUsd) {
+            pUsd = curPrincipal;
+            totDueUsd = Number((pUsd + periodInterest).toFixed(2));
+            curPrincipal = 0;
+          } else {
+            totDueUsd = targetPayUsd;
+            pUsd = Number((totDueUsd - periodInterest).toFixed(2));
+            curPrincipal = Number((curPrincipal - pUsd).toFixed(2));
+          }
+
+          scheduleData.push({
+            installmentNumber: step,
+            dueDate,
+            principalAmountUsd: pUsd,
+            interestAmountUsd: periodInterest,
+            totalDueUsd: totDueUsd,
+            principalAmountKhr: Math.round(pUsd * rate),
+            interestAmountKhr: Math.round(periodInterest * rate),
+            totalDueKhr: Math.round(totDueUsd * rate),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
+
+          step++;
+        }
+
+        calculatedTotalInstallments = scheduleData.length;
+        calculatedDurationDays = scheduleData.length * interval;
+        calculatedDurationMonths = Math.max(1, Math.round(calculatedDurationDays / 30));
+        calculatedInstallmentAmountUsd = targetPayUsd;
+        calculatedInstallmentAmountKhr = Math.round(targetPayUsd * rate);
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
       }
-
-      calculatedTotalInstallments = scheduleData.length;
-      calculatedDurationDays = scheduleData.length * interval;
-      calculatedDurationMonths = Math.max(1, Math.round(calculatedDurationDays / 30));
-      calculatedInstallmentAmountUsd = targetPayUsd;
-      calculatedInstallmentAmountKhr = Math.round(targetPayUsd * rate);
-      endDate = scheduleData[scheduleData.length - 1].dueDate;
-      totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
-      totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
 
     } else {
       // 4. Default: MONTHLY (ចំនួនខែ)
@@ -503,46 +652,89 @@ export async function POST(request: Request) {
       calculatedTotalInstallments = months;
       calculatedIntervalDays = 30;
 
-      const monthlyInterestAmount = Number(((principalRemainingUsd * (ratePercent / 100))).toFixed(2));
-      const monthlyPrincipalAmount = Number((principalRemainingUsd / months).toFixed(2));
-      const monthlyTotalAmount = Number((monthlyPrincipalAmount + monthlyInterestAmount).toFixed(2));
+      if (isKhr) {
+        const monthlyInterestKhr = Math.round(principalRemainingKhr * (ratePercent / 100));
+        const monthlyPrincipalKhr = Math.floor(principalRemainingKhr / months);
+        const monthlyTotalKhr = monthlyPrincipalKhr + monthlyInterestKhr;
 
-      calculatedInstallmentAmountUsd = monthlyTotalAmount;
-      calculatedInstallmentAmountKhr = Math.round(monthlyTotalAmount * rate);
+        calculatedInstallmentAmountKhr = monthlyTotalKhr;
+        calculatedInstallmentAmountUsd = Number((monthlyTotalKhr / rate).toFixed(2));
 
-      for (let i = 1; i <= months; i++) {
-        const dueDate = new Date(start);
-        dueDate.setMonth(dueDate.getMonth() + i);
+        for (let i = 1; i <= months; i++) {
+          const dueDate = new Date(start);
+          dueDate.setMonth(dueDate.getMonth() + i);
 
-        const isLast = i === months;
-        const pUsd = isLast
-          ? Number((principalRemainingUsd - (monthlyPrincipalAmount * (months - 1))).toFixed(2))
-          : monthlyPrincipalAmount;
-        const iUsd = monthlyInterestAmount;
-        const totUsd = Number((pUsd + iUsd).toFixed(2));
+          const isLast = i === months;
+          const pKhr = isLast
+            ? Math.max(0, principalRemainingKhr - (monthlyPrincipalKhr * (months - 1)))
+            : monthlyPrincipalKhr;
+          const iKhr = monthlyInterestKhr;
+          const totKhr = pKhr + iKhr;
 
-        scheduleData.push({
-          installmentNumber: i,
-          dueDate,
-          principalAmountUsd: pUsd,
-          interestAmountUsd: iUsd,
-          totalDueUsd: totUsd,
-          principalAmountKhr: Math.round(pUsd * rate),
-          interestAmountKhr: Math.round(iUsd * rate),
-          totalDueKhr: Math.round(totUsd * rate),
-          paidAmountUsd: 0,
-          paidAmountKhr: 0,
-          status: SchedulePaymentStatus.PENDING,
-          daysOverdue: 0,
-          penaltyAmountUsd: 0,
-          penaltyPaidUsd: 0,
-          penaltyAmountKhr: 0,
-          penaltyPaidKhr: 0,
-        });
+          scheduleData.push({
+            installmentNumber: i,
+            dueDate,
+            principalAmountKhr: pKhr,
+            interestAmountKhr: iKhr,
+            totalDueKhr: totKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((iKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totKhr / rate).toFixed(2)),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
+        }
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentKhr = downKhr + scheduleData.reduce((sum, s) => sum + s.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+      } else {
+        const monthlyInterestAmount = Number(((principalRemainingUsd * (ratePercent / 100))).toFixed(2));
+        const monthlyPrincipalAmount = Number((principalRemainingUsd / months).toFixed(2));
+        const monthlyTotalAmount = Number((monthlyPrincipalAmount + monthlyInterestAmount).toFixed(2));
+
+        calculatedInstallmentAmountUsd = monthlyTotalAmount;
+        calculatedInstallmentAmountKhr = Math.round(monthlyTotalAmount * rate);
+
+        for (let i = 1; i <= months; i++) {
+          const dueDate = new Date(start);
+          dueDate.setMonth(dueDate.getMonth() + i);
+
+          const isLast = i === months;
+          const pUsd = isLast
+            ? Number((principalRemainingUsd - (monthlyPrincipalAmount * (months - 1))).toFixed(2))
+            : monthlyPrincipalAmount;
+          const iUsd = monthlyInterestAmount;
+          const totUsd = Number((pUsd + iUsd).toFixed(2));
+
+          scheduleData.push({
+            installmentNumber: i,
+            dueDate,
+            principalAmountUsd: pUsd,
+            interestAmountUsd: iUsd,
+            totalDueUsd: totUsd,
+            principalAmountKhr: Math.round(pUsd * rate),
+            interestAmountKhr: Math.round(iUsd * rate),
+            totalDueKhr: Math.round(totUsd * rate),
+            paidAmountUsd: 0,
+            paidAmountKhr: 0,
+            status: SchedulePaymentStatus.PENDING,
+            daysOverdue: 0,
+            penaltyAmountUsd: 0,
+            penaltyPaidUsd: 0,
+            penaltyAmountKhr: 0,
+            penaltyPaidKhr: 0,
+          });
+        }
+        endDate = scheduleData[scheduleData.length - 1].dueDate;
+        totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
       }
-      endDate = scheduleData[scheduleData.length - 1].dueDate;
-      totalRepaymentUsd = Number((downUsd + scheduleData.reduce((sum, s) => sum + s.totalDueUsd, 0)).toFixed(2));
-      totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
     }
 
     // Branch selection

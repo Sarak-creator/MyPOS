@@ -181,28 +181,39 @@ export default function InstallmentsAndPawnPage() {
     const rate = form.exchangeRate || fallbackRate || 4100;
     const isKhr = form.currency === "KHR";
 
-    let totalUsd = parseFloat(form.totalPriceUsd) || 0;
-    let totalKhr = parseFloat(form.totalPriceKhr) || 0;
+    let totalKhr = 0;
+    let totalUsd = 0;
+    let downKhr = 0;
+    let downUsd = 0;
+
     if (isKhr) {
-      if (totalKhr > 0 && totalUsd === 0) totalUsd = Number((totalKhr / rate).toFixed(2));
-      else if (totalUsd > 0 && totalKhr === 0) totalKhr = Math.round(totalUsd * rate);
+      totalKhr = parseFloat(form.totalPriceKhr) || 0;
+      if (totalKhr === 0 && form.totalPriceUsd) {
+        totalKhr = Math.round((parseFloat(form.totalPriceUsd) || 0) * rate);
+      }
+      totalUsd = totalKhr > 0 ? Number((totalKhr / rate).toFixed(2)) : 0;
+
+      downKhr = parseFloat(form.downPaymentKhr) || 0;
+      if (downKhr === 0 && form.downPaymentUsd && form.downPaymentUsd !== "0") {
+        downKhr = Math.round((parseFloat(form.downPaymentUsd) || 0) * rate);
+      }
+      downUsd = downKhr > 0 ? Number((downKhr / rate).toFixed(2)) : 0;
     } else {
-      if (totalUsd > 0 && totalKhr === 0) totalKhr = Math.round(totalUsd * rate);
-      else if (totalKhr > 0 && totalUsd === 0) totalUsd = Number((totalKhr / rate).toFixed(2));
+      totalUsd = parseFloat(form.totalPriceUsd) || 0;
+      if (totalUsd === 0 && form.totalPriceKhr) {
+        totalUsd = Number(((parseFloat(form.totalPriceKhr) || 0) / rate).toFixed(2));
+      }
+      totalKhr = Math.round(totalUsd * rate);
+
+      downUsd = parseFloat(form.downPaymentUsd) || 0;
+      if (downUsd === 0 && form.downPaymentKhr && form.downPaymentKhr !== "0") {
+        downUsd = Number(((parseFloat(form.downPaymentKhr) || 0) / rate).toFixed(2));
+      }
+      downKhr = Math.round(downUsd * rate);
     }
 
-    let downUsd = parseFloat(form.downPaymentUsd) || 0;
-    let downKhr = parseFloat(form.downPaymentKhr) || 0;
-    if (isKhr) {
-      if (downKhr > 0 && downUsd === 0) downUsd = Number((downKhr / rate).toFixed(2));
-      else if (downUsd > 0 && downKhr === 0) downKhr = Math.round(downUsd * rate);
-    } else {
-      if (downUsd > 0 && downKhr === 0) downKhr = Math.round(downUsd * rate);
-      else if (downKhr > 0 && downUsd === 0) downUsd = Number((downKhr / rate).toFixed(2));
-    }
-
+    const principalRemainingKhr = Math.max(0, totalKhr - downKhr);
     const principalRemainingUsd = Math.max(0, Number((totalUsd - downUsd).toFixed(2)));
-    const principalRemainingKhr = Math.round(principalRemainingUsd * rate);
     const ratePercent = parseFloat(form.interestRatePercent) || 0;
     const start = new Date(form.startDate || new Date());
 
@@ -213,7 +224,9 @@ export default function InstallmentsAndPawnPage() {
     let installmentAmountUsd = 0;
     let installmentAmountKhr = 0;
     let totalInterestUsd = 0;
+    let totalInterestKhr = 0;
     let totalRepaymentUsd = 0;
+    let totalRepaymentKhr = 0;
 
     if (form.repaymentPlanType === "INSTALLMENT_COUNT") {
       const count = Math.max(1, parseInt(form.totalInstallments) || 4);
@@ -221,38 +234,77 @@ export default function InstallmentsAndPawnPage() {
       const interval = Math.max(1, parseInt(form.intervalDays) || 30);
       durationDays = count * interval;
       durationMonths = Math.max(1, Math.round(durationDays / 30));
-
       const monthsEquivalent = durationDays / 30;
-      totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
-      const iPerInstUsd = Number((totalInterestUsd / count).toFixed(2));
-      const pPerInstUsd = Number((principalRemainingUsd / count).toFixed(2));
-      const totPerInstUsd = Number((pPerInstUsd + iPerInstUsd).toFixed(2));
 
-      installmentAmountUsd = totPerInstUsd;
-      installmentAmountKhr = Math.round(totPerInstUsd * rate);
+      if (isKhr) {
+        totalInterestKhr = Math.round(principalRemainingKhr * (ratePercent / 100) * monthsEquivalent);
+        totalInterestUsd = Number((totalInterestKhr / rate).toFixed(2));
 
-      for (let i = 1; i <= count; i++) {
-        const d = new Date(start);
-        if (interval === 30) d.setMonth(d.getMonth() + i);
-        else d.setDate(d.getDate() + (i * interval));
+        const iPerInstKhr = Math.floor(totalInterestKhr / count);
+        const pPerInstKhr = Math.floor(principalRemainingKhr / count);
+        const totPerInstKhr = pPerInstKhr + iPerInstKhr;
 
-        const isLast = i === count;
-        const p = isLast ? Number((principalRemainingUsd - (pPerInstUsd * (count - 1))).toFixed(2)) : pPerInstUsd;
-        const intr = isLast ? Number((totalInterestUsd - (iPerInstUsd * (count - 1))).toFixed(2)) : iPerInstUsd;
-        const tot = Number((p + intr).toFixed(2));
+        installmentAmountKhr = totPerInstKhr;
+        installmentAmountUsd = Number((totPerInstKhr / rate).toFixed(2));
 
-        schedules.push({
-          installmentNumber: i,
-          dueDate: d.toISOString().split("T")[0],
-          principalAmountUsd: p,
-          interestAmountUsd: intr,
-          totalDueUsd: tot,
-          principalAmountKhr: Math.round(p * rate),
-          interestAmountKhr: Math.round(intr * rate),
-          totalDueKhr: Math.round(tot * rate),
-        });
+        for (let i = 1; i <= count; i++) {
+          const d = new Date(start);
+          if (interval === 30) d.setMonth(d.getMonth() + i);
+          else d.setDate(d.getDate() + (i * interval));
+
+          const isLast = i === count;
+          const pKhr = isLast ? Math.max(0, principalRemainingKhr - (pPerInstKhr * (count - 1))) : pPerInstKhr;
+          const iKhr = isLast ? Math.max(0, totalInterestKhr - (iPerInstKhr * (count - 1))) : iPerInstKhr;
+          const totKhr = pKhr + iKhr;
+
+          schedules.push({
+            installmentNumber: i,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountKhr: pKhr,
+            interestAmountKhr: iKhr,
+            totalDueKhr: totKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((iKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totKhr / rate).toFixed(2)),
+          });
+        }
+        totalRepaymentKhr = downKhr + schedules.reduce((s, item) => s + item.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+      } else {
+        totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
+        totalInterestKhr = Math.round(totalInterestUsd * rate);
+
+        const iPerInstUsd = Number((totalInterestUsd / count).toFixed(2));
+        const pPerInstUsd = Number((principalRemainingUsd / count).toFixed(2));
+        const totPerInstUsd = Number((pPerInstUsd + iPerInstUsd).toFixed(2));
+
+        installmentAmountUsd = totPerInstUsd;
+        installmentAmountKhr = Math.round(totPerInstUsd * rate);
+
+        for (let i = 1; i <= count; i++) {
+          const d = new Date(start);
+          if (interval === 30) d.setMonth(d.getMonth() + i);
+          else d.setDate(d.getDate() + (i * interval));
+
+          const isLast = i === count;
+          const pUsd = isLast ? Number((principalRemainingUsd - (pPerInstUsd * (count - 1))).toFixed(2)) : pPerInstUsd;
+          const iUsd = isLast ? Number((totalInterestUsd - (iPerInstUsd * (count - 1))).toFixed(2)) : iPerInstUsd;
+          const totUsd = Number((pUsd + iUsd).toFixed(2));
+
+          schedules.push({
+            installmentNumber: i,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountUsd: pUsd,
+            interestAmountUsd: iUsd,
+            totalDueUsd: totUsd,
+            principalAmountKhr: Math.round(pUsd * rate),
+            interestAmountKhr: Math.round(iUsd * rate),
+            totalDueKhr: Math.round(totUsd * rate),
+          });
+        }
+        totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
       }
-      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
 
     } else if (form.repaymentPlanType === "DAYS") {
       const days = Math.max(1, parseInt(form.durationDays) || 30);
@@ -261,130 +313,259 @@ export default function InstallmentsAndPawnPage() {
       const count = Math.max(1, Math.ceil(days / interval));
       totalInstallments = count;
       durationMonths = Math.max(1, Math.round(days / 30));
-
       const monthsEquivalent = days / 30;
-      totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
-      const iPerInstUsd = Number((totalInterestUsd / count).toFixed(2));
-      const pPerInstUsd = Number((principalRemainingUsd / count).toFixed(2));
-      const totPerInstUsd = Number((pPerInstUsd + iPerInstUsd).toFixed(2));
 
-      installmentAmountUsd = totPerInstUsd;
-      installmentAmountKhr = Math.round(totPerInstUsd * rate);
+      if (isKhr) {
+        totalInterestKhr = Math.round(principalRemainingKhr * (ratePercent / 100) * monthsEquivalent);
+        totalInterestUsd = Number((totalInterestKhr / rate).toFixed(2));
 
-      for (let i = 1; i <= count; i++) {
-        const d = new Date(start);
-        d.setDate(d.getDate() + (i * interval));
+        const iPerInstKhr = Math.floor(totalInterestKhr / count);
+        const pPerInstKhr = Math.floor(principalRemainingKhr / count);
+        const totPerInstKhr = pPerInstKhr + iPerInstKhr;
 
-        const isLast = i === count;
-        const p = isLast ? Number((principalRemainingUsd - (pPerInstUsd * (count - 1))).toFixed(2)) : pPerInstUsd;
-        const intr = isLast ? Number((totalInterestUsd - (iPerInstUsd * (count - 1))).toFixed(2)) : iPerInstUsd;
-        const tot = Number((p + intr).toFixed(2));
+        installmentAmountKhr = totPerInstKhr;
+        installmentAmountUsd = Number((totPerInstKhr / rate).toFixed(2));
 
-        schedules.push({
-          installmentNumber: i,
-          dueDate: d.toISOString().split("T")[0],
-          principalAmountUsd: p,
-          interestAmountUsd: intr,
-          totalDueUsd: tot,
-          principalAmountKhr: Math.round(p * rate),
-          interestAmountKhr: Math.round(intr * rate),
-          totalDueKhr: Math.round(tot * rate),
-        });
+        for (let i = 1; i <= count; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + (i * interval));
+
+          const isLast = i === count;
+          const pKhr = isLast ? Math.max(0, principalRemainingKhr - (pPerInstKhr * (count - 1))) : pPerInstKhr;
+          const iKhr = isLast ? Math.max(0, totalInterestKhr - (iPerInstKhr * (count - 1))) : iPerInstKhr;
+          const totKhr = pKhr + iKhr;
+
+          schedules.push({
+            installmentNumber: i,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountKhr: pKhr,
+            interestAmountKhr: iKhr,
+            totalDueKhr: totKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((iKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totKhr / rate).toFixed(2)),
+          });
+        }
+        totalRepaymentKhr = downKhr + schedules.reduce((s, item) => s + item.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+      } else {
+        totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
+        totalInterestKhr = Math.round(totalInterestUsd * rate);
+
+        const iPerInstUsd = Number((totalInterestUsd / count).toFixed(2));
+        const pPerInstUsd = Number((principalRemainingUsd / count).toFixed(2));
+        const totPerInstUsd = Number((pPerInstUsd + iPerInstUsd).toFixed(2));
+
+        installmentAmountUsd = totPerInstUsd;
+        installmentAmountKhr = Math.round(totPerInstUsd * rate);
+
+        for (let i = 1; i <= count; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + (i * interval));
+
+          const isLast = i === count;
+          const pUsd = isLast ? Number((principalRemainingUsd - (pPerInstUsd * (count - 1))).toFixed(2)) : pPerInstUsd;
+          const iUsd = isLast ? Number((totalInterestUsd - (iPerInstUsd * (count - 1))).toFixed(2)) : iPerInstUsd;
+          const totUsd = Number((pUsd + iUsd).toFixed(2));
+
+          schedules.push({
+            installmentNumber: i,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountUsd: pUsd,
+            interestAmountUsd: iUsd,
+            totalDueUsd: totUsd,
+            principalAmountKhr: Math.round(pUsd * rate),
+            interestAmountKhr: Math.round(iUsd * rate),
+            totalDueKhr: Math.round(totUsd * rate),
+          });
+        }
+        totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
       }
-      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
 
     } else if (form.repaymentPlanType === "FIXED_AMOUNT") {
-      let targetPayUsd = parseFloat(form.installmentAmountUsd) || 0;
-      const targetPayKhr = parseFloat(form.installmentAmountKhr) || 0;
-      if (isKhr && targetPayKhr > 0) targetPayUsd = Number((targetPayKhr / rate).toFixed(2));
-      if (!targetPayUsd || targetPayUsd <= 0) targetPayUsd = 50;
-
       const interval = Math.max(1, parseInt(form.intervalDays) || 30);
       const periodMonths = interval / 30;
-
-      let curP = principalRemainingUsd;
-      let step = 1;
       const maxSteps = 120;
 
-      while (curP > 0.01 && step <= maxSteps) {
-        const pIntr = Number((curP * (ratePercent / 100) * periodMonths).toFixed(2));
-        totalInterestUsd += pIntr;
-        const d = new Date(start);
-        if (interval === 30) d.setMonth(d.getMonth() + step);
-        else d.setDate(d.getDate() + (step * interval));
-
-        let p = 0;
-        let tot = 0;
-        if (curP + pIntr <= targetPayUsd) {
-          p = curP;
-          tot = Number((p + pIntr).toFixed(2));
-          curP = 0;
-        } else {
-          tot = targetPayUsd;
-          p = Number((tot - pIntr).toFixed(2));
-          curP = Number((curP - p).toFixed(2));
+      if (isKhr) {
+        let targetPayKhr = parseFloat(form.installmentAmountKhr) || 0;
+        if (!targetPayKhr || targetPayKhr <= 0) {
+          targetPayKhr = (parseFloat(form.installmentAmountUsd) || 50) * rate || 200000;
         }
 
-        schedules.push({
-          installmentNumber: step,
-          dueDate: d.toISOString().split("T")[0],
-          principalAmountUsd: p,
-          interestAmountUsd: pIntr,
-          totalDueUsd: tot,
-          principalAmountKhr: Math.round(p * rate),
-          interestAmountKhr: Math.round(pIntr * rate),
-          totalDueKhr: Math.round(tot * rate),
-        });
-        step++;
+        let curP = principalRemainingKhr;
+        let step = 1;
+
+        while (curP > 100 && step <= maxSteps) {
+          const periodInterestKhr = Math.round(curP * (ratePercent / 100) * periodMonths);
+          totalInterestKhr += periodInterestKhr;
+
+          const d = new Date(start);
+          if (interval === 30) d.setMonth(d.getMonth() + step);
+          else d.setDate(d.getDate() + (step * interval));
+
+          let pKhr = 0;
+          let totKhr = 0;
+
+          if (curP + periodInterestKhr <= targetPayKhr) {
+            pKhr = curP;
+            totKhr = pKhr + periodInterestKhr;
+            curP = 0;
+          } else {
+            totKhr = targetPayKhr;
+            pKhr = Math.max(0, totKhr - periodInterestKhr);
+            curP = Math.max(0, curP - pKhr);
+          }
+
+          schedules.push({
+            installmentNumber: step,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountKhr: pKhr,
+            interestAmountKhr: periodInterestKhr,
+            totalDueKhr: totKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((periodInterestKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totKhr / rate).toFixed(2)),
+          });
+          step++;
+        }
+
+        totalInstallments = schedules.length;
+        durationDays = schedules.length * interval;
+        durationMonths = Math.max(1, Math.round(durationDays / 30));
+        installmentAmountKhr = targetPayKhr;
+        installmentAmountUsd = Number((targetPayKhr / rate).toFixed(2));
+        totalRepaymentKhr = downKhr + schedules.reduce((s, item) => s + item.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+        totalInterestUsd = Number((totalInterestKhr / rate).toFixed(2));
+
+      } else {
+        let targetPayUsd = parseFloat(form.installmentAmountUsd) || 0;
+        if (!targetPayUsd || targetPayUsd <= 0) targetPayUsd = 50;
+
+        let curP = principalRemainingUsd;
+        let step = 1;
+
+        while (curP > 0.01 && step <= maxSteps) {
+          const periodInterestUsd = Number((curP * (ratePercent / 100) * periodMonths).toFixed(2));
+          totalInterestUsd += periodInterestUsd;
+
+          const d = new Date(start);
+          if (interval === 30) d.setMonth(d.getMonth() + step);
+          else d.setDate(d.getDate() + (step * interval));
+
+          let pUsd = 0;
+          let totUsd = 0;
+
+          if (curP + periodInterestUsd <= targetPayUsd) {
+            pUsd = curP;
+            totUsd = Number((pUsd + periodInterestUsd).toFixed(2));
+            curP = 0;
+          } else {
+            totUsd = targetPayUsd;
+            pUsd = Number((totUsd - periodInterestUsd).toFixed(2));
+            curP = Number((curP - pUsd).toFixed(2));
+          }
+
+          schedules.push({
+            installmentNumber: step,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountUsd: pUsd,
+            interestAmountUsd: periodInterestUsd,
+            totalDueUsd: totUsd,
+            principalAmountKhr: Math.round(pUsd * rate),
+            interestAmountKhr: Math.round(periodInterestUsd * rate),
+            totalDueKhr: Math.round(totUsd * rate),
+          });
+          step++;
+        }
+
+        totalInstallments = schedules.length;
+        durationDays = schedules.length * interval;
+        durationMonths = Math.max(1, Math.round(durationDays / 30));
+        installmentAmountUsd = targetPayUsd;
+        installmentAmountKhr = Math.round(targetPayUsd * rate);
+        totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
+        totalInterestKhr = Math.round(totalInterestUsd * rate);
       }
 
-      totalInstallments = schedules.length;
-      durationDays = schedules.length * interval;
-      durationMonths = Math.max(1, Math.round(durationDays / 30));
-      installmentAmountUsd = targetPayUsd;
-      installmentAmountKhr = Math.round(targetPayUsd * rate);
-      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
-
     } else {
-      // MONTHLY
+      // MONTHLY (default)
       const months = Math.max(1, parseInt(form.durationMonths) || 6);
       totalInstallments = months;
       durationMonths = months;
       durationDays = months * 30;
 
-      const monthlyInterest = Number((principalRemainingUsd * (ratePercent / 100)).toFixed(2));
-      const monthlyPrincipal = Number((principalRemainingUsd / months).toFixed(2));
-      const monthlyTotal = Number((monthlyPrincipal + monthlyInterest).toFixed(2));
-      totalInterestUsd = Number((monthlyInterest * months).toFixed(2));
+      if (isKhr) {
+        const monthlyInterestKhr = Math.round(principalRemainingKhr * (ratePercent / 100));
+        totalInterestKhr = monthlyInterestKhr * months;
+        totalInterestUsd = Number((totalInterestKhr / rate).toFixed(2));
 
-      installmentAmountUsd = monthlyTotal;
-      installmentAmountKhr = Math.round(monthlyTotal * rate);
+        const monthlyPrincipalKhr = Math.floor(principalRemainingKhr / months);
+        const monthlyTotalKhr = monthlyPrincipalKhr + monthlyInterestKhr;
 
-      for (let i = 1; i <= months; i++) {
-        const d = new Date(start);
-        d.setMonth(d.getMonth() + i);
+        installmentAmountKhr = monthlyTotalKhr;
+        installmentAmountUsd = Number((monthlyTotalKhr / rate).toFixed(2));
 
-        const isLast = i === months;
-        const p = isLast ? Number((principalRemainingUsd - (monthlyPrincipal * (months - 1))).toFixed(2)) : monthlyPrincipal;
-        const intr = monthlyInterest;
-        const tot = Number((p + intr).toFixed(2));
+        for (let i = 1; i <= months; i++) {
+          const d = new Date(start);
+          d.setMonth(d.getMonth() + i);
 
-        schedules.push({
-          installmentNumber: i,
-          dueDate: d.toISOString().split("T")[0],
-          principalAmountUsd: p,
-          interestAmountUsd: intr,
-          totalDueUsd: tot,
-          principalAmountKhr: Math.round(p * rate),
-          interestAmountKhr: Math.round(intr * rate),
-          totalDueKhr: Math.round(tot * rate),
-        });
+          const isLast = i === months;
+          const pKhr = isLast ? Math.max(0, principalRemainingKhr - (monthlyPrincipalKhr * (months - 1))) : monthlyPrincipalKhr;
+          const iKhr = monthlyInterestKhr;
+          const totKhr = pKhr + iKhr;
+
+          schedules.push({
+            installmentNumber: i,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountKhr: pKhr,
+            interestAmountKhr: iKhr,
+            totalDueKhr: totKhr,
+            principalAmountUsd: Number((pKhr / rate).toFixed(2)),
+            interestAmountUsd: Number((iKhr / rate).toFixed(2)),
+            totalDueUsd: Number((totKhr / rate).toFixed(2)),
+          });
+        }
+        totalRepaymentKhr = downKhr + schedules.reduce((s, item) => s + item.totalDueKhr, 0);
+        totalRepaymentUsd = Number((totalRepaymentKhr / rate).toFixed(2));
+      } else {
+        const monthlyInterest = Number((principalRemainingUsd * (ratePercent / 100)).toFixed(2));
+        const monthlyPrincipal = Number((principalRemainingUsd / months).toFixed(2));
+        const monthlyTotal = Number((monthlyPrincipal + monthlyInterest).toFixed(2));
+        totalInterestUsd = Number((monthlyInterest * months).toFixed(2));
+        totalInterestKhr = Math.round(totalInterestUsd * rate);
+
+        installmentAmountUsd = monthlyTotal;
+        installmentAmountKhr = Math.round(monthlyTotal * rate);
+
+        for (let i = 1; i <= months; i++) {
+          const d = new Date(start);
+          d.setMonth(d.getMonth() + i);
+
+          const isLast = i === months;
+          const p = isLast ? Number((principalRemainingUsd - (monthlyPrincipal * (months - 1))).toFixed(2)) : monthlyPrincipal;
+          const intr = monthlyInterest;
+          const tot = Number((p + intr).toFixed(2));
+
+          schedules.push({
+            installmentNumber: i,
+            dueDate: d.toISOString().split("T")[0],
+            principalAmountUsd: p,
+            interestAmountUsd: intr,
+            totalDueUsd: tot,
+            principalAmountKhr: Math.round(p * rate),
+            interestAmountKhr: Math.round(intr * rate),
+            totalDueKhr: Math.round(tot * rate),
+          });
+        }
+        totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+        totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
       }
-      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
     }
 
-    const totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
-    const totalInterestKhr = Math.round(totalInterestUsd * rate);
     const completionDate = schedules.length > 0 ? schedules[schedules.length - 1].dueDate : "";
 
     return {

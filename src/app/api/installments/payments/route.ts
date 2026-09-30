@@ -79,7 +79,9 @@ export async function POST(request: Request) {
     const prevPaidKhr = Number(schedule.paidAmountKhr || Math.round(prevPaidUsd * rate));
     const newPaidKhr = Math.round(prevPaidKhr + payAmountKhr);
 
-    const isFullyPaid = newPaidUsd >= (totalDueUsd - 0.01) || newPaidKhr >= (totalDueKhr - 50);
+    const isFullyPaid = schedule.contract?.currency === "KHR"
+      ? newPaidKhr >= (totalDueKhr - 100)
+      : (newPaidUsd >= (totalDueUsd - 0.01) || newPaidKhr >= (totalDueKhr - 100));
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Update schedule item
