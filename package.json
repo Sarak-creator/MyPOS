@@ -18,7 +18,8 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "cap:sync": "cap sync android",
     "cap:open": "cap open android",
-    "build:apk": "cd android && .\\gradlew.bat assembleDebug"
+    "build:apk": "cd android && .\\gradlew.bat assembleDebug",
+    "push": "git add -A && git commit -m \"auto update\" && git push origin main"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
