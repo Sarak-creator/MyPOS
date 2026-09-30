@@ -163,27 +163,55 @@ export default function InstallmentContractPrint({
                     <td className="p-2 font-mono">{contract.productImeiOrSerial || "N/A"}</td>
                   </tr>
                   <tr className="border-b border-slate-300">
-                    <td className="p-2 font-bold bg-slate-100/70">តម្លៃទំនិញសរុប (Total Price)</td>
-                    <td className="p-2 font-black text-slate-900">{formatUSD(contract.totalPriceUsd)}</td>
+                    <td className="p-2 font-bold bg-slate-100/70">
+                      តម្លៃទំនិញសរុប ({contract.currency || "USD"})
+                    </td>
+                    <td className="p-2 font-black text-slate-900">
+                      {contract.currency === "KHR"
+                        ? `${(contract.totalPriceKhr || Math.round(contract.totalPriceUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛ ($${contract.totalPriceUsd})`
+                        : `${formatUSD(contract.totalPriceUsd)} (${(contract.totalPriceKhr || Math.round(contract.totalPriceUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛)`}
+                    </td>
                     <td className="p-2 font-bold bg-slate-100/70">ប្រាក់កក់បង់មុន (Down Payment)</td>
-                    <td className="p-2 font-bold text-emerald-700">{formatUSD(contract.downPaymentUsd)}</td>
+                    <td className="p-2 font-bold text-emerald-700">
+                      {contract.currency === "KHR"
+                        ? `${(contract.downPaymentKhr || Math.round(contract.downPaymentUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛`
+                        : formatUSD(contract.downPaymentUsd)}
+                    </td>
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 font-bold bg-slate-100/70">ប្រាក់ដើមនៅសល់ (Principal)</td>
-                    <td className="p-2 font-bold">{formatUSD(contract.principalRemainingUsd)}</td>
+                    <td className="p-2 font-bold">
+                      {contract.currency === "KHR"
+                        ? `${(contract.principalRemainingKhr || Math.round(contract.principalRemainingUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛`
+                        : formatUSD(contract.principalRemainingUsd)}
+                    </td>
                     <td className="p-2 font-bold bg-slate-100/70">អត្រាការប្រាក់ (Interest)</td>
                     <td className="p-2 font-bold text-blue-700">{contract.interestRatePercent}% / ខែ</td>
                   </tr>
                   <tr className="border-b border-slate-300">
-                    <td className="p-2 font-bold bg-slate-100/70">រយៈពេលបង់រំលស់ (Duration)</td>
-                    <td className="p-2 font-bold">{contract.durationMonths} ខែ</td>
-                    <td className="p-2 font-bold bg-slate-100/70">ត្រូវបង់ប្រចាំខែ (Monthly Pay)</td>
-                    <td className="p-2 font-black text-rose-700 text-sm">{formatUSD(contract.monthlyAmountUsd)} / ខែ</td>
+                    <td className="p-2 font-bold bg-slate-100/70">រូបបែបបង់ & រយៈពេល (Plan)</td>
+                    <td className="p-2 font-bold">
+                      {contract.repaymentPlanType === "INSTALLMENT_COUNT"
+                        ? `បង់តាមចំនួនដង (${contract.totalInstallments || contract.schedules?.length} ដង / ${contract.intervalDays || 30} ថ្ងៃម្តង)`
+                        : contract.repaymentPlanType === "DAYS"
+                        ? `បង់តាមចំនួនថ្ងៃ (${contract.durationDays || 30} ថ្ងៃ / រៀងរាល់ ${contract.intervalDays || 1} ថ្ងៃ)`
+                        : contract.repaymentPlanType === "FIXED_AMOUNT"
+                        ? `បង់តាមចំនួនទឹកប្រាក់កំណត់ (${contract.totalInstallments || contract.schedules?.length} លើក)`
+                        : `បង់តាមចំនួនខែ (${contract.durationMonths} ខែ)`}
+                    </td>
+                    <td className="p-2 font-bold bg-slate-100/70">ទឹកប្រាក់បង់ក្នុងមួយលើក (Payment)</td>
+                    <td className="p-2 font-black text-rose-700 text-sm">
+                      {contract.currency === "KHR"
+                        ? `${(contract.installmentAmountKhr || contract.monthlyAmountKhr || Math.round(contract.monthlyAmountUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛ / លើក`
+                        : `${formatUSD(contract.installmentAmountUsd || contract.monthlyAmountUsd)} / លើក`}
+                    </td>
                   </tr>
                   <tr>
                     <td className="p-2 font-bold bg-slate-100/70">ទឹកប្រាក់សរុបត្រូវសង (Total Repayment)</td>
                     <td colSpan={3} className="p-2 font-black text-slate-900 text-sm">
-                      {formatUSD(contract.totalRepaymentUsd)}
+                      {contract.currency === "KHR"
+                        ? `${(contract.totalRepaymentKhr || Math.round(contract.totalRepaymentUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛ ($${contract.totalRepaymentUsd})`
+                        : `${formatUSD(contract.totalRepaymentUsd)} (${(contract.totalRepaymentKhr || Math.round(contract.totalRepaymentUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛)`}
                     </td>
                   </tr>
                 </tbody>

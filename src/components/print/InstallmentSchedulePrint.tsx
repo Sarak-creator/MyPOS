@@ -120,14 +120,30 @@ export default function InstallmentSchedulePrint({
                 <p className="text-[11px] text-slate-500 font-mono">IMEI: {contract.productImeiOrSerial || "N/A"}</p>
               </div>
               <div>
-                <p className="text-slate-400 text-[10px] uppercase font-bold">តម្លៃសរុប & ប្រាក់កក់</p>
-                <p className="font-mono font-bold text-slate-900">{formatUSD(contract.totalPriceUsd)}</p>
-                <p className="text-[11px] text-emerald-700 font-mono font-bold">កក់: {formatUSD(contract.downPaymentUsd)}</p>
+                <p className="text-slate-400 text-[10px] uppercase font-bold">តម្លៃសរុប & ប្រាក់កក់ ({contract.currency || "USD"})</p>
+                <p className="font-mono font-bold text-slate-900">
+                  {contract.currency === "KHR"
+                    ? `${(contract.totalPriceKhr || Math.round(contract.totalPriceUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛ ($${contract.totalPriceUsd})`
+                    : `${formatUSD(contract.totalPriceUsd)} (${(contract.totalPriceKhr || Math.round(contract.totalPriceUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛)`}
+                </p>
+                <p className="text-[11px] text-emerald-700 font-mono font-bold">
+                  កក់: {contract.currency === "KHR"
+                    ? `${(contract.downPaymentKhr || Math.round(contract.downPaymentUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛`
+                    : formatUSD(contract.downPaymentUsd)}
+                </p>
               </div>
               <div>
-                <p className="text-slate-400 text-[10px] uppercase font-bold">ការប្រាក់ & រយៈពេល</p>
+                <p className="text-slate-400 text-[10px] uppercase font-bold">គម្រោងបង់ & ការប្រាក់</p>
                 <p className="font-mono font-bold text-blue-700">{contract.interestRatePercent}% / ខែ</p>
-                <p className="text-[11px] text-slate-600 font-bold">{contract.durationMonths} ខែ ({formatUSD(contract.monthlyAmountUsd)}/ខែ)</p>
+                <p className="text-[11px] text-slate-700 font-bold">
+                  {contract.repaymentPlanType === "INSTALLMENT_COUNT"
+                    ? `បង់ ${contract.totalInstallments || contract.schedules?.length} ដង (${contract.intervalDays || 30} ថ្ងៃ/ដង)`
+                    : contract.repaymentPlanType === "DAYS"
+                    ? `បង់ ${contract.durationDays || 30} ថ្ងៃ (រៀងរាល់ ${contract.intervalDays || 1} ថ្ងៃ)`
+                    : contract.repaymentPlanType === "FIXED_AMOUNT"
+                    ? `បង់កំណត់ ${contract.currency === "KHR" ? (contract.installmentAmountKhr || Math.round((contract.installmentAmountUsd || 0) * 4100)).toLocaleString() + " ៛" : "$" + (contract.installmentAmountUsd || 0)} /លើក (${contract.totalInstallments || contract.schedules?.length} លើក)`
+                    : `${contract.durationMonths} ខែ (${contract.currency === "KHR" ? (contract.monthlyAmountKhr || Math.round(contract.monthlyAmountUsd * 4100)).toLocaleString() + " ៛" : formatUSD(contract.monthlyAmountUsd)}/ខែ)`}
+                </p>
               </div>
             </div>
 
@@ -136,11 +152,17 @@ export default function InstallmentSchedulePrint({
               <table className="w-full text-left border border-slate-300">
                 <thead className="bg-slate-100 border-b border-slate-300 font-bold text-slate-700">
                   <tr>
-                    <th className="p-2 text-center w-12">ខែទី</th>
+                    <th className="p-2 text-center w-14">លើកទី</th>
                     <th className="p-2">កាលបរិច្ឆេទត្រូវបង់</th>
-                    <th className="p-2 text-right">ប្រាក់ដើម ($)</th>
-                    <th className="p-2 text-right">ការប្រាក់ ($)</th>
-                    <th className="p-2 text-right">ទឹកប្រាក់ត្រូវបង់ ($)</th>
+                    <th className="p-2 text-right">
+                      ប្រាក់ដើម {contract.currency === "KHR" ? "(៛ / $)" : "($ / ៛)"}
+                    </th>
+                    <th className="p-2 text-right">
+                      ការប្រាក់ {contract.currency === "KHR" ? "(៛ / $)" : "($ / ៛)"}
+                    </th>
+                    <th className="p-2 text-right">
+                      ទឹកប្រាក់ត្រូវបង់ {contract.currency === "KHR" ? "(៛)" : "($)"}
+                    </th>
                     <th className="p-2 text-center">ស្ថានភាព</th>
                     <th className="p-2 text-center">ហត្ថលេខាអ្នកទទួល</th>
                   </tr>
@@ -149,13 +171,54 @@ export default function InstallmentSchedulePrint({
                   {contract.schedules && contract.schedules.length > 0 ? (
                     contract.schedules.map((s: any) => {
                       const isPaid = s.status === "PAID";
+                      const rate = contract.exchangeRate || 4100;
+                      const principalKhr = s.principalAmountKhr || Math.round(s.principalAmountUsd * rate);
+                      const interestKhr = s.interestAmountKhr || Math.round(s.interestAmountUsd * rate);
+                      const totalDueKhr = s.totalDueKhr || Math.round(s.totalDueUsd * rate);
+
                       return (
                         <tr key={s.id || s.installmentNumber} className={isPaid ? "bg-emerald-50/30" : ""}>
                           <td className="p-2 text-center font-bold text-slate-800">{s.installmentNumber}</td>
                           <td className="p-2 font-bold text-slate-800">{s.dueDate}</td>
-                          <td className="p-2 text-right">{formatUSD(s.principalAmountUsd)}</td>
-                          <td className="p-2 text-right">{formatUSD(s.interestAmountUsd)}</td>
-                          <td className="p-2 text-right font-black text-rose-700">{formatUSD(s.totalDueUsd)}</td>
+                          <td className="p-2 text-right">
+                            {contract.currency === "KHR" ? (
+                              <>
+                                <span className="font-bold text-slate-900">{principalKhr.toLocaleString()} ៛</span>
+                                <span className="text-[10px] text-slate-400 block">${s.principalAmountUsd}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-bold text-slate-900">{formatUSD(s.principalAmountUsd)}</span>
+                                <span className="text-[10px] text-slate-400 block">{principalKhr.toLocaleString()} ៛</span>
+                              </>
+                            )}
+                          </td>
+                          <td className="p-2 text-right">
+                            {contract.currency === "KHR" ? (
+                              <>
+                                <span className="font-bold text-blue-700">{interestKhr.toLocaleString()} ៛</span>
+                                <span className="text-[10px] text-slate-400 block">${s.interestAmountUsd}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-bold text-blue-700">{formatUSD(s.interestAmountUsd)}</span>
+                                <span className="text-[10px] text-slate-400 block">{interestKhr.toLocaleString()} ៛</span>
+                              </>
+                            )}
+                          </td>
+                          <td className="p-2 text-right font-black text-rose-700">
+                            {contract.currency === "KHR" ? (
+                              <>
+                                <span>{totalDueKhr.toLocaleString()} ៛</span>
+                                <span className="text-[10px] text-slate-500 font-normal block">(${s.totalDueUsd})</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>{formatUSD(s.totalDueUsd)}</span>
+                                <span className="text-[10px] text-slate-500 font-normal block">({totalDueKhr.toLocaleString()} ៛)</span>
+                              </>
+                            )}
+                          </td>
                           <td className="p-2 text-center">
                             {isPaid ? (
                               <span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
@@ -187,7 +250,9 @@ export default function InstallmentSchedulePrint({
                       សរុបទឹកប្រាក់ត្រូវសងទាំងអស់ (Total Repayment):
                     </td>
                     <td className="p-2 text-right font-mono font-black text-rose-800 text-sm">
-                      {formatUSD(contract.totalRepaymentUsd)}
+                      {contract.currency === "KHR"
+                        ? `${(contract.totalRepaymentKhr || Math.round(contract.totalRepaymentUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛ ($${contract.totalRepaymentUsd})`
+                        : `${formatUSD(contract.totalRepaymentUsd)} (${(contract.totalRepaymentKhr || Math.round(contract.totalRepaymentUsd * (contract.exchangeRate || 4100))).toLocaleString()} ៛)`}
                     </td>
                     <td colSpan={2}></td>
                   </tr>

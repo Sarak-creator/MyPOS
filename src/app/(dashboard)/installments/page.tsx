@@ -86,6 +86,7 @@ export default function InstallmentsAndPawnPage() {
 
   // Payment Form Modal
   const [payModalSchedule, setPayModalSchedule] = useState<any | null>(null);
+  const [payCurrency, setPayCurrency] = useState<"USD" | "KHR">("USD");
   const [payAmount, setPayAmount] = useState<string>("");
   const [payPenalty, setPayPenalty] = useState<string>("0");
   const [payMethod, setPayMethod] = useState<string>("CASH_USD");
@@ -143,16 +144,26 @@ export default function InstallmentsAndPawnPage() {
   const [pawnDaysExt, setPawnDaysExt] = useState<number>(30);
   const [pawnPayMethod, setPawnPayMethod] = useState<string>("CASH_USD");
 
-  // New Installment Form Data
+  // New Installment Form Data (គាំទ្រ ចំនួនដង ចំនួនថ្ងៃ ចំនួនខែ ចំនួនទឹកប្រាក់ និង KHR/USD)
   const [newContractForm, setNewContractForm] = useState({
     customerId: "",
     productId: "",
     productName: "",
     productImeiOrSerial: "",
+    currency: "USD" as "USD" | "KHR",
+    repaymentPlanType: "MONTHLY" as "INSTALLMENT_COUNT" | "DAYS" | "MONTHLY" | "FIXED_AMOUNT",
+    exchangeRate: 4100,
     totalPriceUsd: "",
+    totalPriceKhr: "",
     downPaymentUsd: "0",
+    downPaymentKhr: "0",
     interestRatePercent: "1.5",
     durationMonths: "6",
+    durationDays: "30",
+    totalInstallments: "4",
+    intervalDays: "30",
+    installmentAmountUsd: "",
+    installmentAmountKhr: "",
     startDate: new Date().toISOString().split("T")[0],
     guarantorName: "",
     guarantorPhone: "",
@@ -161,6 +172,243 @@ export default function InstallmentsAndPawnPage() {
     customerNationalId: "",
     notes: "",
   });
+
+  // Toggle Live Preview Table in New Contract Modal
+  const [showPreviewSchedule, setShowPreviewSchedule] = useState(false);
+
+  // Real-time calculation helper for New Installment Contract
+  const getContractPreview = (form: typeof newContractForm, fallbackRate: number) => {
+    const rate = form.exchangeRate || fallbackRate || 4100;
+    const isKhr = form.currency === "KHR";
+
+    let totalUsd = parseFloat(form.totalPriceUsd) || 0;
+    let totalKhr = parseFloat(form.totalPriceKhr) || 0;
+    if (isKhr) {
+      if (totalKhr > 0 && totalUsd === 0) totalUsd = Number((totalKhr / rate).toFixed(2));
+      else if (totalUsd > 0 && totalKhr === 0) totalKhr = Math.round(totalUsd * rate);
+    } else {
+      if (totalUsd > 0 && totalKhr === 0) totalKhr = Math.round(totalUsd * rate);
+      else if (totalKhr > 0 && totalUsd === 0) totalUsd = Number((totalKhr / rate).toFixed(2));
+    }
+
+    let downUsd = parseFloat(form.downPaymentUsd) || 0;
+    let downKhr = parseFloat(form.downPaymentKhr) || 0;
+    if (isKhr) {
+      if (downKhr > 0 && downUsd === 0) downUsd = Number((downKhr / rate).toFixed(2));
+      else if (downUsd > 0 && downKhr === 0) downKhr = Math.round(downUsd * rate);
+    } else {
+      if (downUsd > 0 && downKhr === 0) downKhr = Math.round(downUsd * rate);
+      else if (downKhr > 0 && downUsd === 0) downUsd = Number((downKhr / rate).toFixed(2));
+    }
+
+    const principalRemainingUsd = Math.max(0, Number((totalUsd - downUsd).toFixed(2)));
+    const principalRemainingKhr = Math.round(principalRemainingUsd * rate);
+    const ratePercent = parseFloat(form.interestRatePercent) || 0;
+    const start = new Date(form.startDate || new Date());
+
+    let schedules: any[] = [];
+    let totalInstallments = 1;
+    let durationDays = 30;
+    let durationMonths = 1;
+    let installmentAmountUsd = 0;
+    let installmentAmountKhr = 0;
+    let totalInterestUsd = 0;
+    let totalRepaymentUsd = 0;
+
+    if (form.repaymentPlanType === "INSTALLMENT_COUNT") {
+      const count = Math.max(1, parseInt(form.totalInstallments) || 4);
+      totalInstallments = count;
+      const interval = Math.max(1, parseInt(form.intervalDays) || 30);
+      durationDays = count * interval;
+      durationMonths = Math.max(1, Math.round(durationDays / 30));
+
+      const monthsEquivalent = durationDays / 30;
+      totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
+      const iPerInstUsd = Number((totalInterestUsd / count).toFixed(2));
+      const pPerInstUsd = Number((principalRemainingUsd / count).toFixed(2));
+      const totPerInstUsd = Number((pPerInstUsd + iPerInstUsd).toFixed(2));
+
+      installmentAmountUsd = totPerInstUsd;
+      installmentAmountKhr = Math.round(totPerInstUsd * rate);
+
+      for (let i = 1; i <= count; i++) {
+        const d = new Date(start);
+        if (interval === 30) d.setMonth(d.getMonth() + i);
+        else d.setDate(d.getDate() + (i * interval));
+
+        const isLast = i === count;
+        const p = isLast ? Number((principalRemainingUsd - (pPerInstUsd * (count - 1))).toFixed(2)) : pPerInstUsd;
+        const intr = isLast ? Number((totalInterestUsd - (iPerInstUsd * (count - 1))).toFixed(2)) : iPerInstUsd;
+        const tot = Number((p + intr).toFixed(2));
+
+        schedules.push({
+          installmentNumber: i,
+          dueDate: d.toISOString().split("T")[0],
+          principalAmountUsd: p,
+          interestAmountUsd: intr,
+          totalDueUsd: tot,
+          principalAmountKhr: Math.round(p * rate),
+          interestAmountKhr: Math.round(intr * rate),
+          totalDueKhr: Math.round(tot * rate),
+        });
+      }
+      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+
+    } else if (form.repaymentPlanType === "DAYS") {
+      const days = Math.max(1, parseInt(form.durationDays) || 30);
+      const interval = Math.max(1, parseInt(form.intervalDays) || 1);
+      durationDays = days;
+      const count = Math.max(1, Math.ceil(days / interval));
+      totalInstallments = count;
+      durationMonths = Math.max(1, Math.round(days / 30));
+
+      const monthsEquivalent = days / 30;
+      totalInterestUsd = Number((principalRemainingUsd * (ratePercent / 100) * monthsEquivalent).toFixed(2));
+      const iPerInstUsd = Number((totalInterestUsd / count).toFixed(2));
+      const pPerInstUsd = Number((principalRemainingUsd / count).toFixed(2));
+      const totPerInstUsd = Number((pPerInstUsd + iPerInstUsd).toFixed(2));
+
+      installmentAmountUsd = totPerInstUsd;
+      installmentAmountKhr = Math.round(totPerInstUsd * rate);
+
+      for (let i = 1; i <= count; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + (i * interval));
+
+        const isLast = i === count;
+        const p = isLast ? Number((principalRemainingUsd - (pPerInstUsd * (count - 1))).toFixed(2)) : pPerInstUsd;
+        const intr = isLast ? Number((totalInterestUsd - (iPerInstUsd * (count - 1))).toFixed(2)) : iPerInstUsd;
+        const tot = Number((p + intr).toFixed(2));
+
+        schedules.push({
+          installmentNumber: i,
+          dueDate: d.toISOString().split("T")[0],
+          principalAmountUsd: p,
+          interestAmountUsd: intr,
+          totalDueUsd: tot,
+          principalAmountKhr: Math.round(p * rate),
+          interestAmountKhr: Math.round(intr * rate),
+          totalDueKhr: Math.round(tot * rate),
+        });
+      }
+      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+
+    } else if (form.repaymentPlanType === "FIXED_AMOUNT") {
+      let targetPayUsd = parseFloat(form.installmentAmountUsd) || 0;
+      const targetPayKhr = parseFloat(form.installmentAmountKhr) || 0;
+      if (isKhr && targetPayKhr > 0) targetPayUsd = Number((targetPayKhr / rate).toFixed(2));
+      if (!targetPayUsd || targetPayUsd <= 0) targetPayUsd = 50;
+
+      const interval = Math.max(1, parseInt(form.intervalDays) || 30);
+      const periodMonths = interval / 30;
+
+      let curP = principalRemainingUsd;
+      let step = 1;
+      const maxSteps = 120;
+
+      while (curP > 0.01 && step <= maxSteps) {
+        const pIntr = Number((curP * (ratePercent / 100) * periodMonths).toFixed(2));
+        totalInterestUsd += pIntr;
+        const d = new Date(start);
+        if (interval === 30) d.setMonth(d.getMonth() + step);
+        else d.setDate(d.getDate() + (step * interval));
+
+        let p = 0;
+        let tot = 0;
+        if (curP + pIntr <= targetPayUsd) {
+          p = curP;
+          tot = Number((p + pIntr).toFixed(2));
+          curP = 0;
+        } else {
+          tot = targetPayUsd;
+          p = Number((tot - pIntr).toFixed(2));
+          curP = Number((curP - p).toFixed(2));
+        }
+
+        schedules.push({
+          installmentNumber: step,
+          dueDate: d.toISOString().split("T")[0],
+          principalAmountUsd: p,
+          interestAmountUsd: pIntr,
+          totalDueUsd: tot,
+          principalAmountKhr: Math.round(p * rate),
+          interestAmountKhr: Math.round(pIntr * rate),
+          totalDueKhr: Math.round(tot * rate),
+        });
+        step++;
+      }
+
+      totalInstallments = schedules.length;
+      durationDays = schedules.length * interval;
+      durationMonths = Math.max(1, Math.round(durationDays / 30));
+      installmentAmountUsd = targetPayUsd;
+      installmentAmountKhr = Math.round(targetPayUsd * rate);
+      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+
+    } else {
+      // MONTHLY
+      const months = Math.max(1, parseInt(form.durationMonths) || 6);
+      totalInstallments = months;
+      durationMonths = months;
+      durationDays = months * 30;
+
+      const monthlyInterest = Number((principalRemainingUsd * (ratePercent / 100)).toFixed(2));
+      const monthlyPrincipal = Number((principalRemainingUsd / months).toFixed(2));
+      const monthlyTotal = Number((monthlyPrincipal + monthlyInterest).toFixed(2));
+      totalInterestUsd = Number((monthlyInterest * months).toFixed(2));
+
+      installmentAmountUsd = monthlyTotal;
+      installmentAmountKhr = Math.round(monthlyTotal * rate);
+
+      for (let i = 1; i <= months; i++) {
+        const d = new Date(start);
+        d.setMonth(d.getMonth() + i);
+
+        const isLast = i === months;
+        const p = isLast ? Number((principalRemainingUsd - (monthlyPrincipal * (months - 1))).toFixed(2)) : monthlyPrincipal;
+        const intr = monthlyInterest;
+        const tot = Number((p + intr).toFixed(2));
+
+        schedules.push({
+          installmentNumber: i,
+          dueDate: d.toISOString().split("T")[0],
+          principalAmountUsd: p,
+          interestAmountUsd: intr,
+          totalDueUsd: tot,
+          principalAmountKhr: Math.round(p * rate),
+          interestAmountKhr: Math.round(intr * rate),
+          totalDueKhr: Math.round(tot * rate),
+        });
+      }
+      totalRepaymentUsd = Number((downUsd + schedules.reduce((s, item) => s + item.totalDueUsd, 0)).toFixed(2));
+    }
+
+    const totalRepaymentKhr = Math.round(totalRepaymentUsd * rate);
+    const totalInterestKhr = Math.round(totalInterestUsd * rate);
+    const completionDate = schedules.length > 0 ? schedules[schedules.length - 1].dueDate : "";
+
+    return {
+      rate,
+      isKhr,
+      totalUsd,
+      totalKhr,
+      downUsd,
+      downKhr,
+      principalRemainingUsd,
+      principalRemainingKhr,
+      totalInterestUsd,
+      totalInterestKhr,
+      totalRepaymentUsd,
+      totalRepaymentKhr,
+      installmentAmountUsd,
+      installmentAmountKhr,
+      totalInstallments,
+      durationDays,
+      durationMonths,
+      completionDate,
+      schedules,
+    };
+  };
 
   // New Pawn Form Data
   const [newPawnForm, setNewPawnForm] = useState({
@@ -301,12 +549,16 @@ export default function InstallmentsAndPawnPage() {
   // Handle Product Select in New Installment Modal
   const handleSelectProduct = (prodId: string) => {
     const p = productList.find((item) => item.id === prodId);
+    const rate = newContractForm.exchangeRate || exchangeRateKhr || 4100;
     if (p) {
+      const usdVal = p.salePriceUsd ? String(p.salePriceUsd) : "";
+      const khrVal = p.salePriceKhr ? String(p.salePriceKhr) : usdVal ? String(Math.round(parseFloat(usdVal) * rate)) : "";
       setNewContractForm((prev) => ({
         ...prev,
         productId: p.id,
         productName: p.nameKh || p.nameEn,
-        totalPriceUsd: p.salePriceUsd ? String(p.salePriceUsd) : "",
+        totalPriceUsd: usdVal,
+        totalPriceKhr: khrVal,
         productImeiOrSerial: p.imeiList && p.imeiList.length > 0 ? p.imeiList[0] : "",
       }));
     } else {
@@ -321,8 +573,12 @@ export default function InstallmentsAndPawnPage() {
   // Submit New Installment Contract
   const handleCreateContract = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newContractForm.customerId || !newContractForm.productName || !newContractForm.totalPriceUsd) {
-      alert("សូមបំពេញព័ត៌មានចាំបាច់ (អតិថិជន, ឈ្មោះទំនិញ, តម្លៃ)");
+    const hasPrice = newContractForm.currency === "KHR" 
+      ? (parseFloat(newContractForm.totalPriceKhr) > 0 || parseFloat(newContractForm.totalPriceUsd) > 0)
+      : parseFloat(newContractForm.totalPriceUsd) > 0;
+
+    if (!newContractForm.customerId || !newContractForm.productName || !hasPrice) {
+      alert("សូមបំពេញព័ត៌មានចាំបាច់ (អតិថិជន, ឈ្មោះទំនិញ, និងតម្លៃទំនិញ)");
       return;
     }
 
@@ -390,10 +646,22 @@ export default function InstallmentsAndPawnPage() {
   // Open Pay Modal for an installment schedule item
   const openPayScheduleModal = (schedule: any) => {
     setPayModalSchedule(schedule);
-    const remaining = Math.max(0, schedule.totalDueUsd - schedule.paidAmountUsd);
-    setPayAmount(String(remaining));
-    setPayPenalty(String(schedule.penaltyAmountUsd || 0));
-    setPayMethod("CASH_USD");
+    const contractCurr = selectedContract?.currency || "USD";
+    setPayCurrency(contractCurr as "USD" | "KHR");
+    const rate = selectedContract?.exchangeRate || exchangeRateKhr || 4100;
+
+    const remainingUsd = Math.max(0, schedule.totalDueUsd - schedule.paidAmountUsd);
+    const remainingKhr = Math.max(0, (schedule.totalDueKhr || Math.round(schedule.totalDueUsd * rate)) - (schedule.paidAmountKhr || Math.round(schedule.paidAmountUsd * rate)));
+
+    if (contractCurr === "KHR") {
+      setPayAmount(String(remainingKhr));
+      setPayPenalty(String(schedule.penaltyAmountKhr || Math.round((schedule.penaltyAmountUsd || 0) * rate)));
+      setPayMethod("CASH_KHR");
+    } else {
+      setPayAmount(String(Number(remainingUsd.toFixed(2))));
+      setPayPenalty(String(schedule.penaltyAmountUsd || 0));
+      setPayMethod("CASH_USD");
+    }
     setPayNotes("");
   };
 
@@ -404,16 +672,33 @@ export default function InstallmentsAndPawnPage() {
 
     try {
       setIsSubmittingPayment(true);
+      const rate = selectedContract?.exchangeRate || exchangeRateKhr || 4100;
+      const numVal = parseFloat(payAmount) || 0;
+      const penaltyVal = parseFloat(payPenalty) || 0;
+
+      const payload: any = {
+        scheduleId: payModalSchedule.id,
+        paymentCurrency: payCurrency,
+        paymentMethod: payMethod,
+        notes: payNotes,
+      };
+
+      if (payCurrency === "KHR") {
+        payload.amountPaidKhr = numVal;
+        payload.amountPaidUsd = Number((numVal / rate).toFixed(2));
+        payload.penaltyPaidKhr = penaltyVal;
+        payload.penaltyPaidUsd = Number((penaltyVal / rate).toFixed(2));
+      } else {
+        payload.amountPaidUsd = numVal;
+        payload.amountPaidKhr = Math.round(numVal * rate);
+        payload.penaltyPaidUsd = penaltyVal;
+        payload.penaltyPaidKhr = Math.round(penaltyVal * rate);
+      }
+
       const res = await fetch("/api/installments/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scheduleId: payModalSchedule.id,
-          amountPaidUsd: parseFloat(payAmount),
-          penaltyPaidUsd: parseFloat(payPenalty) || 0,
-          paymentMethod: payMethod,
-          notes: payNotes,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
@@ -706,9 +991,10 @@ export default function InstallmentsAndPawnPage() {
                     <th className="p-3">លេខកិច្ចសន្យា</th>
                     <th className="p-3">អតិថិជន</th>
                     <th className="p-3">ទំនិញ & IMEI</th>
-                    <th className="p-3 text-right">តម្លៃសរុប</th>
+                    <th className="p-3">រូបបែបបង់ & រូបិយប័ណ្ណ</th>
+                    <th className="p-3 text-right">តម្លៃទំនិញ</th>
                     <th className="p-3 text-right">ប្រាក់កក់</th>
-                    <th className="p-3 text-right">បង់ប្រចាំខែ</th>
+                    <th className="p-3 text-right">បង់ក្នុងមួយលើក</th>
                     <th className="p-3 text-center">វឌ្ឍនភាពបង់</th>
                     <th className="p-3 text-center">ស្ថានភាព</th>
                     <th className="p-3 text-center">សកម្មភាព</th>
@@ -717,13 +1003,15 @@ export default function InstallmentsAndPawnPage() {
                 <tbody className="divide-y divide-slate-100">
                   {contracts.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400">
+                      <td colSpan={10} className="p-8 text-center text-slate-400">
                         {installmentLoading ? "កំពុងទាញទិន្នន័យ..." : "មិនមានទិន្នន័យកិច្ចសន្យាបង់រំលោះទេ"}
                       </td>
                     </tr>
                   ) : (
                     contracts.map((c) => {
                       const paidPercent = Math.min(100, Math.round((c.totalPaidUsd / c.totalRepaymentUsd) * 100));
+                      const rate = c.exchangeRate || exchangeRateKhr || 4100;
+                      const isKhr = c.currency === "KHR";
 
                       return (
                         <tr key={c.id} className="hover:bg-slate-50/70 transition">
@@ -742,17 +1030,66 @@ export default function InstallmentsAndPawnPage() {
                               </p>
                             )}
                           </td>
+                          <td className="p-3">
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                isKhr ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                              }`}>
+                                {isKhr ? "៛ ប្រាក់រៀល" : "$ ប្រាក់ដុល្លារ"}
+                              </span>
+                              <span className="text-[11px] font-bold text-slate-700">
+                                {c.repaymentPlanType === "INSTALLMENT_COUNT"
+                                  ? `បង់ ${c.totalInstallments || c.schedules?.length} ដង (${c.intervalDays || 30} ថ្ងៃ/ដង)`
+                                  : c.repaymentPlanType === "DAYS"
+                                  ? `បង់ ${c.durationDays || 30} ថ្ងៃ (រៀងរាល់ ${c.intervalDays || 1} ថ្ងៃ)`
+                                  : c.repaymentPlanType === "FIXED_AMOUNT"
+                                  ? `បង់កំណត់ / លើក`
+                                  : `បង់ ${c.durationMonths} ខែ`}
+                              </span>
+                            </div>
+                          </td>
                           <td className="p-3 text-right font-mono font-bold text-slate-900">
-                            {formatUSD(c.totalPriceUsd)}
+                            {isKhr ? (
+                              <>
+                                <span>{(c.totalPriceKhr || Math.round(c.totalPriceUsd * rate)).toLocaleString()} ៛</span>
+                                <span className="text-[10px] text-slate-400 font-normal block">${c.totalPriceUsd}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>{formatUSD(c.totalPriceUsd)}</span>
+                                <span className="text-[10px] text-slate-400 font-normal block">{(c.totalPriceKhr || Math.round(c.totalPriceUsd * rate)).toLocaleString()} ៛</span>
+                              </>
+                            )}
                           </td>
                           <td className="p-3 text-right font-mono text-emerald-700 font-bold">
-                            {formatUSD(c.downPaymentUsd)}
+                            {isKhr ? (
+                              <>
+                                <span>{(c.downPaymentKhr || Math.round(c.downPaymentUsd * rate)).toLocaleString()} ៛</span>
+                                <span className="text-[10px] text-slate-400 font-normal block">${c.downPaymentUsd}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>{formatUSD(c.downPaymentUsd)}</span>
+                                <span className="text-[10px] text-slate-400 font-normal block">{(c.downPaymentKhr || Math.round(c.downPaymentUsd * rate)).toLocaleString()} ៛</span>
+                              </>
+                            )}
                           </td>
                           <td className="p-3 text-right font-mono font-black text-rose-700">
-                            {formatUSD(c.monthlyAmountUsd)}
-                            <span className="text-[10px] font-normal text-slate-400 block">
-                              {c.durationMonths} ខែ
-                            </span>
+                            {isKhr ? (
+                              <>
+                                <span>{(c.installmentAmountKhr || c.monthlyAmountKhr || Math.round((c.installmentAmountUsd || c.monthlyAmountUsd) * rate)).toLocaleString()} ៛</span>
+                                <span className="text-[10px] font-normal text-slate-400 block">
+                                  ${c.installmentAmountUsd || c.monthlyAmountUsd} / លើក
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span>{formatUSD(c.installmentAmountUsd || c.monthlyAmountUsd)}</span>
+                                <span className="text-[10px] font-normal text-slate-400 block">
+                                  {(c.installmentAmountKhr || c.monthlyAmountKhr || Math.round((c.installmentAmountUsd || c.monthlyAmountUsd) * rate)).toLocaleString()} ៛ / លើក
+                                </span>
+                              </>
+                            )}
                           </td>
                           <td className="p-3 text-center w-36">
                             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden mb-1">
@@ -764,7 +1101,9 @@ export default function InstallmentsAndPawnPage() {
                               />
                             </div>
                             <span className="text-[10px] font-mono text-slate-500">
-                              {formatUSD(c.totalPaidUsd)} / {formatUSD(c.totalRepaymentUsd)} ({paidPercent}%)
+                              {isKhr 
+                                ? `${(c.totalPaidKhr || Math.round(c.totalPaidUsd * rate)).toLocaleString()} ៛ / ${(c.totalRepaymentKhr || Math.round(c.totalRepaymentUsd * rate)).toLocaleString()} ៛ (${paidPercent}%)`
+                                : `${formatUSD(c.totalPaidUsd)} / ${formatUSD(c.totalRepaymentUsd)} (${paidPercent}%)`}
                             </span>
                           </td>
                           <td className="p-3 text-center">
@@ -1413,22 +1752,65 @@ export default function InstallmentsAndPawnPage() {
             </div>
 
             {/* Summary details */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 my-4 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 my-4 text-xs">
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">ផែនការបង់ & រូបិយប័ណ្ណ</span>
+                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-black ${
+                    selectedContract.currency === "KHR" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
+                  }`}>
+                    {selectedContract.currency === "KHR" ? "៛ ប្រាក់រៀល" : "$ ដុល្លារ"}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-teal-100 text-teal-800">
+                    {selectedContract.repaymentPlanType === "INSTALLMENT_COUNT"
+                      ? `បង់ ${selectedContract.totalInstallments || selectedContract.schedules?.length} ដង`
+                      : selectedContract.repaymentPlanType === "DAYS"
+                      ? `បង់ ${selectedContract.durationDays || 30} ថ្ងៃ`
+                      : selectedContract.repaymentPlanType === "FIXED_AMOUNT"
+                      ? "បង់ទឹកប្រាក់កំណត់"
+                      : `បង់ ${selectedContract.durationMonths || selectedContract.schedules?.length} ខែ`}
+                  </span>
+                </div>
+              </div>
               <div>
                 <span className="text-slate-400 text-[10px] uppercase font-bold block">តម្លៃទំនិញសរុប</span>
                 <span className="font-bold text-slate-900 font-mono text-sm">{formatUSD(selectedContract.totalPriceUsd)}</span>
+                {selectedContract.totalPriceKhr && (
+                  <span className="block text-[11px] text-slate-500 font-mono font-medium">({formatKHR(selectedContract.totalPriceKhr)})</span>
+                )}
               </div>
               <div>
                 <span className="text-slate-400 text-[10px] uppercase font-bold block">ប្រាក់កក់បង់មុន</span>
                 <span className="font-bold text-emerald-700 font-mono text-sm">{formatUSD(selectedContract.downPaymentUsd)}</span>
+                {selectedContract.downPaymentKhr !== undefined && (
+                  <span className="block text-[11px] text-emerald-600 font-mono font-medium">({formatKHR(selectedContract.downPaymentKhr)})</span>
+                )}
               </div>
               <div>
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">បង់ប្រចាំខែ</span>
-                <span className="font-black text-rose-700 font-mono text-sm">{formatUSD(selectedContract.monthlyAmountUsd)} / ខែ</span>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">បង់ក្នុងមួយលើក</span>
+                <span className="font-black text-rose-700 font-mono text-sm">
+                  {selectedContract.currency === "KHR" 
+                    ? formatKHR(selectedContract.monthlyAmountKhr || Math.round(selectedContract.monthlyAmountUsd * (selectedContract.exchangeRate || 4100)))
+                    : formatUSD(selectedContract.monthlyAmountUsd)}
+                </span>
+                <span className="block text-[11px] text-slate-500 font-mono">
+                  {selectedContract.currency === "KHR"
+                    ? `(${formatUSD(selectedContract.monthlyAmountUsd)})`
+                    : `(${formatKHR(selectedContract.monthlyAmountKhr || Math.round(selectedContract.monthlyAmountUsd * (selectedContract.exchangeRate || 4100)))})`}
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 text-[10px] uppercase font-bold block">បានបង់រួចសរុប</span>
-                <span className="font-black text-teal-700 font-mono text-sm">{formatUSD(selectedContract.totalPaidUsd)} / {formatUSD(selectedContract.totalRepaymentUsd)}</span>
+                <span className="font-black text-teal-700 font-mono text-sm">
+                  {selectedContract.currency === "KHR"
+                    ? `${formatKHR(selectedContract.totalPaidKhr || 0)} / ${formatKHR(selectedContract.totalRepaymentKhr || 0)}`
+                    : `${formatUSD(selectedContract.totalPaidUsd)} / ${formatUSD(selectedContract.totalRepaymentUsd)}`}
+                </span>
+                <span className="block text-[10px] text-slate-400 font-mono">
+                  {selectedContract.currency === "KHR"
+                    ? `(${formatUSD(selectedContract.totalPaidUsd)} / ${formatUSD(selectedContract.totalRepaymentUsd)})`
+                    : `(${formatKHR(selectedContract.totalPaidKhr || 0)})`}
+                </span>
               </div>
             </div>
 
@@ -1437,7 +1819,7 @@ export default function InstallmentsAndPawnPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-100 border-b border-slate-200 font-bold text-slate-700 sticky top-0">
                   <tr>
-                    <th className="p-2.5 text-center">ខែទី</th>
+                    <th className="p-2.5 text-center">លើកទី</th>
                     <th className="p-2.5">ថ្ងៃត្រូវបង់</th>
                     <th className="p-2.5 text-right">ទឹកប្រាក់ត្រូវបង់</th>
                     <th className="p-2.5 text-right">បានបង់</th>
@@ -1450,14 +1832,34 @@ export default function InstallmentsAndPawnPage() {
                   {selectedContract.schedules?.map((s: any) => {
                     const isPaid = s.status === "PAID";
                     const isOverdue = s.daysOverdue > 0 && !isPaid;
+                    const rate = selectedContract.exchangeRate || 4100;
+                    const isKhr = selectedContract.currency === "KHR";
 
                     return (
                       <tr key={s.id} className={isOverdue ? "bg-rose-50/50" : "hover:bg-slate-50"}>
                         <td className="p-2.5 text-center font-bold">{s.installmentNumber}</td>
                         <td className="p-2.5 font-mono">{s.dueDate}</td>
-                        <td className="p-2.5 text-right font-mono font-bold text-slate-900">{formatUSD(s.totalDueUsd)}</td>
-                        <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
-                          {s.paidAmountUsd > 0 ? formatUSD(s.paidAmountUsd) : "-"}
+                        <td className="p-2.5 text-right font-mono">
+                          <span className="font-bold text-slate-900 block">
+                            {isKhr ? formatKHR(s.totalDueKhr || Math.round(s.totalDueUsd * rate)) : formatUSD(s.totalDueUsd)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            {isKhr ? formatUSD(s.totalDueUsd) : formatKHR(s.totalDueKhr || Math.round(s.totalDueUsd * rate))}
+                          </span>
+                        </td>
+                        <td className="p-2.5 text-right font-mono">
+                          {s.paidAmountUsd > 0 ? (
+                            <>
+                              <span className="font-bold text-emerald-700 block">
+                                {isKhr ? formatKHR(s.paidAmountKhr || Math.round(s.paidAmountUsd * rate)) : formatUSD(s.paidAmountUsd)}
+                              </span>
+                              <span className="text-[10px] text-slate-500 block">
+                                {isKhr ? formatUSD(s.paidAmountUsd) : formatKHR(s.paidAmountKhr || Math.round(s.paidAmountUsd * rate))}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-slate-400 font-bold">-</span>
+                          )}
                         </td>
                         <td className="p-2.5 text-center font-mono text-slate-500">{s.paidDate || "-"}</td>
                         <td className="p-2.5 text-center">
@@ -1467,7 +1869,7 @@ export default function InstallmentsAndPawnPage() {
                             </span>
                           ) : isOverdue ? (
                             <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">
-                              យឺត {s.daysOverdue} ថ្ងៃ (+${s.penaltyAmountUsd} ពិន័យ)
+                              យឺត {s.daysOverdue} ថ្ងៃ (+{isKhr ? formatKHR(s.penaltyAmountKhr || Math.round(s.penaltyAmountUsd * rate)) : formatUSD(s.penaltyAmountUsd)} ពិន័យ)
                             </span>
                           ) : (
                             <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
@@ -1479,7 +1881,7 @@ export default function InstallmentsAndPawnPage() {
                           {!isPaid && (
                             <button
                               onClick={() => openPayScheduleModal(s)}
-                              className="rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-bold text-white hover:bg-teal-800 transition cursor-pointer"
+                              className="rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-xs"
                             >
                               ទទួលប្រាក់
                             </button>
@@ -1642,58 +2044,631 @@ export default function InstallmentsAndPawnPage() {
                 </div>
               </div>
 
-              {/* Financial Calculation Fields */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">តម្លៃទំនិញ ($) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newContractForm.totalPriceUsd}
-                    onChange={(e) => setNewContractForm({ ...newContractForm, totalPriceUsd: e.target.value })}
-                    required
-                    placeholder="1200.00"
-                    className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white"
-                  />
+              {/* ======================================================= */}
+              {/* CURRENCY & REPAYMENT PLAN SELECTORS                     */}
+              {/* ======================================================= */}
+              <div className="space-y-3 rounded-2xl bg-gradient-to-br from-slate-50 to-teal-50/30 p-3.5 border border-teal-200/80 shadow-xs">
+                {/* Currency Switcher */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-teal-100">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                      <CreditCard className="h-4 w-4 text-teal-700" />
+                      រូបិយប័ណ្ណកិច្ចសន្យា (Currency)៖
+                    </span>
+                    <div className="inline-flex rounded-xl bg-slate-200/70 p-0.5 border border-slate-300">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rate = newContractForm.exchangeRate || exchangeRateKhr || 4100;
+                          setNewContractForm((prev) => ({
+                            ...prev,
+                            currency: "USD",
+                            totalPriceUsd: prev.totalPriceUsd || (prev.totalPriceKhr ? String(Number((parseFloat(prev.totalPriceKhr) / rate).toFixed(2))) : ""),
+                            downPaymentUsd: prev.downPaymentUsd !== "0" ? prev.downPaymentUsd : (prev.downPaymentKhr && prev.downPaymentKhr !== "0" ? String(Number((parseFloat(prev.downPaymentKhr) / rate).toFixed(2))) : "0"),
+                          }));
+                        }}
+                        className={`rounded-lg px-3 py-1 text-xs font-black transition cursor-pointer ${
+                          newContractForm.currency === "USD"
+                            ? "bg-white text-blue-700 shadow-xs border border-blue-200"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        💵 ប្រាក់ដុល្លារ ($ USD)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rate = newContractForm.exchangeRate || exchangeRateKhr || 4100;
+                          setNewContractForm((prev) => ({
+                            ...prev,
+                            currency: "KHR",
+                            totalPriceKhr: prev.totalPriceKhr || (prev.totalPriceUsd ? String(Math.round(parseFloat(prev.totalPriceUsd) * rate)) : ""),
+                            downPaymentKhr: prev.downPaymentKhr !== "0" ? prev.downPaymentKhr : (prev.downPaymentUsd && prev.downPaymentUsd !== "0" ? String(Math.round(parseFloat(prev.downPaymentUsd) * rate)) : "0"),
+                          }));
+                        }}
+                        className={`rounded-lg px-3 py-1 text-xs font-black transition cursor-pointer ${
+                          newContractForm.currency === "KHR"
+                            ? "bg-white text-purple-700 shadow-xs border border-purple-200"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        ៛ ប្រាក់រៀល (៛ KHR)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Exchange rate info */}
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 bg-white/80 px-2.5 py-1 rounded-lg border border-teal-100">
+                    <span className="font-semibold text-slate-600">អត្រាប្តូរប្រាក់៖</span>
+                    <span className="font-mono font-bold text-teal-800">$1 = </span>
+                    <input
+                      type="number"
+                      value={newContractForm.exchangeRate}
+                      onChange={(e) => {
+                        const r = parseInt(e.target.value) || 4100;
+                        setNewContractForm((prev) => ({ ...prev, exchangeRate: r }));
+                      }}
+                      className="w-16 rounded border border-slate-300 px-1 py-0.5 font-mono font-bold text-[11px] text-slate-800 text-center"
+                    />
+                    <span className="font-mono font-bold text-teal-800">៛</span>
+                  </div>
                 </div>
 
+                {/* 4 Repayment Plan Tabs (ចំនួនខែ, ចំនួនដង, ចំនួនថ្ងៃ, ចំនួនទឹកប្រាក់) */}
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">ប្រាក់កក់ ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newContractForm.downPaymentUsd}
-                    onChange={(e) => setNewContractForm({ ...newContractForm, downPaymentUsd: e.target.value })}
-                    placeholder="200.00"
-                    className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-emerald-700"
-                  />
+                  <label className="font-extrabold text-slate-800 block mb-1 text-xs">
+                    វិធីសាស្រ្តគណនាការបង់រំលោះ (Repayment Plan Type) *
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-200/60 p-1 rounded-xl border border-slate-300/80">
+                    <button
+                      type="button"
+                      onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "MONTHLY" })}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
+                        newContractForm.repaymentPlanType === "MONTHLY"
+                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                      }`}
+                    >
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>គិតជាខែ (Months)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "INSTALLMENT_COUNT" })}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
+                        newContractForm.repaymentPlanType === "INSTALLMENT_COUNT"
+                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                      }`}
+                    >
+                      <BadgePercent className="h-3.5 w-3.5" />
+                      <span>គិតជាចំនួនដង (Times)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "DAYS" })}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
+                        newContractForm.repaymentPlanType === "DAYS"
+                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                      }`}
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>គិតជាចំនួនថ្ងៃ (Days)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "FIXED_AMOUNT" })}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
+                        newContractForm.repaymentPlanType === "FIXED_AMOUNT"
+                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                      }`}
+                    >
+                      <DollarSign className="h-3.5 w-3.5" />
+                      <span>ទឹកប្រាក់កំណត់ (Fixed)</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">ការប្រាក់ (%/ខែ)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={newContractForm.interestRatePercent}
-                    onChange={(e) => setNewContractForm({ ...newContractForm, interestRatePercent: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-blue-700"
-                  />
+                {/* Pricing & Common Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
+                  {/* Total Price */}
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      តម្លៃទំនិញ ({newContractForm.currency === "KHR" ? "៛ រៀល" : "$ USD"}) *
+                    </label>
+                    {newContractForm.currency === "KHR" ? (
+                      <div>
+                        <input
+                          type="number"
+                          value={newContractForm.totalPriceKhr}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const rate = newContractForm.exchangeRate || 4100;
+                            const usd = val ? (parseFloat(val) / rate).toFixed(2) : "";
+                            setNewContractForm({ ...newContractForm, totalPriceKhr: val, totalPriceUsd: usd });
+                          }}
+                          required
+                          placeholder="4,920,000"
+                          className="w-full rounded-xl border border-purple-300 p-2 font-mono font-bold text-xs bg-white text-purple-900"
+                        />
+                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                          ≈ ${newContractForm.totalPriceUsd || "0.00"}
+                        </span>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newContractForm.totalPriceUsd}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const rate = newContractForm.exchangeRate || 4100;
+                            const khr = val ? String(Math.round(parseFloat(val) * rate)) : "";
+                            setNewContractForm({ ...newContractForm, totalPriceUsd: val, totalPriceKhr: khr });
+                          }}
+                          required
+                          placeholder="1200.00"
+                          className="w-full rounded-xl border border-blue-300 p-2 font-mono font-bold text-xs bg-white text-blue-900"
+                        />
+                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                          ≈ {formatKHR(parseFloat(newContractForm.totalPriceKhr) || 0)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Down Payment */}
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      ប្រាក់កក់បង់មុន ({newContractForm.currency === "KHR" ? "៛" : "$"})
+                    </label>
+                    {newContractForm.currency === "KHR" ? (
+                      <div>
+                        <input
+                          type="number"
+                          value={newContractForm.downPaymentKhr}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const rate = newContractForm.exchangeRate || 4100;
+                            const usd = val ? (parseFloat(val) / rate).toFixed(2) : "0";
+                            setNewContractForm({ ...newContractForm, downPaymentKhr: val, downPaymentUsd: usd });
+                          }}
+                          placeholder="820,000"
+                          className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-emerald-700"
+                        />
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {[0, 10, 20, 30].map((pct) => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() => {
+                                const tot = parseFloat(newContractForm.totalPriceKhr) || 0;
+                                const rate = newContractForm.exchangeRate || 4100;
+                                const amt = Math.round(tot * (pct / 100));
+                                setNewContractForm({
+                                  ...newContractForm,
+                                  downPaymentKhr: String(amt),
+                                  downPaymentUsd: String(Number((amt / rate).toFixed(2))),
+                                });
+                              }}
+                              className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newContractForm.downPaymentUsd}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const rate = newContractForm.exchangeRate || 4100;
+                            const khr = val ? String(Math.round(parseFloat(val) * rate)) : "0";
+                            setNewContractForm({ ...newContractForm, downPaymentUsd: val, downPaymentKhr: khr });
+                          }}
+                          placeholder="200.00"
+                          className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-emerald-700"
+                        />
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {[0, 10, 20, 30].map((pct) => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() => {
+                                const tot = parseFloat(newContractForm.totalPriceUsd) || 0;
+                                const rate = newContractForm.exchangeRate || 4100;
+                                const amt = Number((tot * (pct / 100)).toFixed(2));
+                                setNewContractForm({
+                                  ...newContractForm,
+                                  downPaymentUsd: String(amt),
+                                  downPaymentKhr: String(Math.round(amt * rate)),
+                                });
+                              }}
+                              className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Interest Rate */}
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">ការប្រាក់ (% ក្នុងមួយខែ)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newContractForm.interestRatePercent}
+                      onChange={(e) => setNewContractForm({ ...newContractForm, interestRatePercent: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-blue-700"
+                    />
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {[0, 1, 1.5, 2, 2.5].map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setNewContractForm({ ...newContractForm, interestRatePercent: String(r) })}
+                          className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
+                        >
+                          {r}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Start Date */}
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">កាលបរិច្ឆេទចាប់ផ្តើម</label>
+                    <input
+                      type="date"
+                      value={newContractForm.startDate}
+                      onChange={(e) => setNewContractForm({ ...newContractForm, startDate: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 p-2 font-mono text-xs bg-white"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">រយៈពេល (ខែ)</label>
-                  <select
-                    value={newContractForm.durationMonths}
-                    onChange={(e) => setNewContractForm({ ...newContractForm, durationMonths: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 p-2 font-bold text-xs bg-white"
-                  >
-                    <option value="3">3 ខែ</option>
-                    <option value="6">6 ខែ</option>
-                    <option value="12">12 ខែ (1 ឆ្នាំ)</option>
-                    <option value="18">18 ខែ</option>
-                    <option value="24">24 ខែ (2 ឆ្នាំ)</option>
-                  </select>
+                {/* Specific Fields for Chosen Mode */}
+                <div className="bg-white p-3 rounded-xl border border-teal-200/60 mt-2 space-y-2">
+                  {newContractForm.repaymentPlanType === "MONTHLY" && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-teal-900 block text-xs">
+                          រយៈពេលបង់រំលោះគិតជាខែ (Duration in Months) *
+                        </label>
+                        <span className="text-[11px] text-slate-500">គិតជាប្រតិទិនប្រចាំខែ (រៀងរាល់ 30 ថ្ងៃ)</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={newContractForm.durationMonths}
+                          onChange={(e) => setNewContractForm({ ...newContractForm, durationMonths: e.target.value })}
+                          className="rounded-xl border border-teal-300 p-2 font-bold text-xs bg-white w-32"
+                        >
+                          {[1, 2, 3, 4, 6, 9, 12, 18, 24, 36].map((m) => (
+                            <option key={m} value={m}>
+                              {m} ខែ
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {[3, 6, 12, 18, 24].map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setNewContractForm({ ...newContractForm, durationMonths: String(m) })}
+                              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                                newContractForm.durationMonths === String(m)
+                                  ? "bg-teal-700 text-white shadow-xs"
+                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              }`}
+                            >
+                              {m} ខែ
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {newContractForm.repaymentPlanType === "INSTALLMENT_COUNT" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                          ចំនួនដងត្រូវបង់ (Total Installments / Times) *
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="120"
+                            value={newContractForm.totalInstallments}
+                            onChange={(e) => setNewContractForm({ ...newContractForm, totalInstallments: e.target.value })}
+                            className="w-24 rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white"
+                          />
+                          <div className="flex flex-wrap gap-1">
+                            {[2, 4, 6, 8, 10, 12].map((cnt) => (
+                              <button
+                                key={cnt}
+                                type="button"
+                                onClick={() => setNewContractForm({ ...newContractForm, totalInstallments: String(cnt) })}
+                                className={`rounded-lg px-2 py-1 text-[11px] font-bold transition cursor-pointer ${
+                                  newContractForm.totalInstallments === String(cnt)
+                                    ? "bg-teal-700 text-white shadow-xs"
+                                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                }`}
+                              >
+                                {cnt} ដង
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                          ចន្លោះពេលបង់ម្តងៗ (Interval Days) *
+                        </label>
+                        <select
+                          value={newContractForm.intervalDays}
+                          onChange={(e) => setNewContractForm({ ...newContractForm, intervalDays: e.target.value })}
+                          className="w-full rounded-xl border border-teal-300 p-2 text-xs font-bold bg-white"
+                        >
+                          <option value="7">រៀងរាល់ 7 ថ្ងៃ (១ សប្តាហ៍ម្តង - Weekly)</option>
+                          <option value="10">រៀងរាល់ 10 ថ្ងៃម្តង</option>
+                          <option value="14">រៀងរាល់ 14 ថ្ងៃ (កន្លះខែម្តង - Bi-Weekly)</option>
+                          <option value="15">រៀងរាល់ 15 ថ្ងៃម្តង</option>
+                          <option value="30">រៀងរាល់ 30 ថ្ងៃ (១ ខែម្តង - Monthly)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {newContractForm.repaymentPlanType === "DAYS" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                          រយៈពេលសរុបគិតជាចំនួនថ្ងៃ (Duration in Days) *
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="720"
+                            value={newContractForm.durationDays}
+                            onChange={(e) => setNewContractForm({ ...newContractForm, durationDays: e.target.value })}
+                            className="w-24 rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white"
+                          />
+                          <div className="flex flex-wrap gap-1">
+                            {[15, 30, 45, 60, 90, 180].map((d) => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => setNewContractForm({ ...newContractForm, durationDays: String(d) })}
+                                className={`rounded-lg px-2 py-1 text-[11px] font-bold transition cursor-pointer ${
+                                  newContractForm.durationDays === String(d)
+                                    ? "bg-teal-700 text-white shadow-xs"
+                                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                }`}
+                              >
+                                {d} ថ្ងៃ
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                          ចន្លោះពេលត្រូវបង់ម្តងៗ (Interval Days) *
+                        </label>
+                        <select
+                          value={newContractForm.intervalDays}
+                          onChange={(e) => setNewContractForm({ ...newContractForm, intervalDays: e.target.value })}
+                          className="w-full rounded-xl border border-teal-300 p-2 text-xs font-bold bg-white"
+                        >
+                          <option value="1">រៀងរាល់ 1 ថ្ងៃ (បង់រាល់ថ្ងៃ - Daily)</option>
+                          <option value="5">រៀងរាល់ 5 ថ្ងៃម្តង</option>
+                          <option value="7">រៀងរាល់ 7 ថ្ងៃ (១ សប្តាហ៍ម្តង)</option>
+                          <option value="10">រៀងរាល់ 10 ថ្ងៃម្តង</option>
+                          <option value="15">រៀងរាល់ 15 ថ្ងៃម្តង</option>
+                          <option value="30">រៀងរាល់ 30 ថ្ងៃម្តង</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {newContractForm.repaymentPlanType === "FIXED_AMOUNT" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                          ទឹកប្រាក់កំណត់បង់ក្នុងមួយលើក ({newContractForm.currency === "KHR" ? "៛ រៀល" : "$ USD"}) *
+                        </label>
+                        {newContractForm.currency === "KHR" ? (
+                          <div>
+                            <input
+                              type="number"
+                              value={newContractForm.installmentAmountKhr}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rate = newContractForm.exchangeRate || 4100;
+                                const usd = val ? (parseFloat(val) / rate).toFixed(2) : "";
+                                setNewContractForm({ ...newContractForm, installmentAmountKhr: val, installmentAmountUsd: usd });
+                              }}
+                              placeholder="200,000"
+                              className="w-full rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white text-purple-900"
+                            />
+                            <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                              ≈ ${newContractForm.installmentAmountUsd || "0.00"}
+                            </span>
+                          </div>
+                        ) : (
+                          <div>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={newContractForm.installmentAmountUsd}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rate = newContractForm.exchangeRate || 4100;
+                                const khr = val ? String(Math.round(parseFloat(val) * rate)) : "";
+                                setNewContractForm({ ...newContractForm, installmentAmountUsd: val, installmentAmountKhr: khr });
+                              }}
+                              placeholder="50.00"
+                              className="w-full rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white text-blue-900"
+                            />
+                            <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                              ≈ {formatKHR(parseFloat(newContractForm.installmentAmountKhr) || 0)}
+                            </span>
+                          </div>
+                        )}
+                        <span className="text-[10px] text-slate-500 block mt-0.5">
+                          * ប្រព័ន្ធនឹងរំលស់ប្រាក់ដើមរហូតដល់សូន្យស្វ័យប្រវត្តិតាមទឹកប្រាក់នេះ
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                          ចន្លោះពេលត្រូវបង់ម្តងៗ (Interval Days) *
+                        </label>
+                        <select
+                          value={newContractForm.intervalDays}
+                          onChange={(e) => setNewContractForm({ ...newContractForm, intervalDays: e.target.value })}
+                          className="w-full rounded-xl border border-teal-300 p-2 text-xs font-bold bg-white"
+                        >
+                          <option value="7">រៀងរាល់ 7 ថ្ងៃ (១ សប្តាហ៍ម្តង)</option>
+                          <option value="14">រៀងរាល់ 14 ថ្ងៃ (កន្លះខែម្តង)</option>
+                          <option value="30">រៀងរាល់ 30 ថ្ងៃ (១ ខែម្តង)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* ======================================================= */}
+                {/* LIVE FINANCIAL CALCULATION & AMORTIZATION PREVIEW CARD    */}
+                {/* ======================================================= */}
+                {(() => {
+                  const preview = getContractPreview(newContractForm, exchangeRateKhr || 4100);
+                  const isKhr = newContractForm.currency === "KHR";
+
+                  return (
+                    <div className="space-y-2 pt-1">
+                      <div className="rounded-xl bg-white p-3 border border-teal-300/80 shadow-xs">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                            <Sparkles className="h-4 w-4 text-amber-500" />
+                            លទ្ធផលគណនាស្វ័យប្រវត្តិ (Live Calculation)
+                          </span>
+                          <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                            {preview.totalInstallments} លើក • {preview.durationDays} ថ្ងៃ (≈{preview.durationMonths} ខែ)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 text-xs">
+                          <div>
+                            <span className="text-slate-400 text-[10px] uppercase font-bold block">ប្រាក់ដើមត្រូវរំលស់</span>
+                            <span className="font-bold text-slate-800 font-mono text-xs block">
+                              {isKhr ? formatKHR(preview.principalRemainingKhr) : formatUSD(preview.principalRemainingUsd)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {isKhr ? `(${formatUSD(preview.principalRemainingUsd)})` : `(${formatKHR(preview.principalRemainingKhr)})`}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 text-[10px] uppercase font-bold block">ការប្រាក់សរុប</span>
+                            <span className="font-bold text-blue-700 font-mono text-xs block">
+                              {isKhr ? formatKHR(preview.totalInterestKhr) : formatUSD(preview.totalInterestUsd)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {isKhr ? `(${formatUSD(preview.totalInterestUsd)})` : `(${formatKHR(preview.totalInterestKhr)})`}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 text-[10px] uppercase font-bold block">សរុបត្រូវបង់</span>
+                            <span className="font-bold text-slate-900 font-mono text-xs block">
+                              {isKhr ? formatKHR(preview.totalRepaymentKhr) : formatUSD(preview.totalRepaymentUsd)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {isKhr ? `(${formatUSD(preview.totalRepaymentUsd)})` : `(${formatKHR(preview.totalRepaymentKhr)})`}
+                            </span>
+                          </div>
+
+                          <div className="bg-teal-50/80 p-1.5 rounded-lg border border-teal-200">
+                            <span className="text-teal-800 text-[10px] uppercase font-black block">ត្រូវបង់ក្នុងមួយលើក</span>
+                            <span className="font-black text-rose-700 font-mono text-sm block">
+                              {isKhr ? formatKHR(preview.installmentAmountKhr) : formatUSD(preview.installmentAmountUsd)}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono block">
+                              {isKhr ? `(${formatUSD(preview.installmentAmountUsd)})` : `(${formatKHR(preview.installmentAmountKhr)})`}
+                            </span>
+                          </div>
+                        </div>
+
+                        {preview.completionDate && (
+                          <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                            <span>ថ្ងៃបញ្ចប់ការបង់រំលោះ៖ <strong className="text-slate-800 font-mono">{preview.completionDate}</strong></span>
+                            <button
+                              type="button"
+                              onClick={() => setShowPreviewSchedule(!showPreviewSchedule)}
+                              className="inline-flex items-center gap-1 font-bold text-teal-700 hover:text-teal-900 transition cursor-pointer"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>{showPreviewSchedule ? "លាក់តារាងបង់" : `មើលតារាងបង់ (${preview.schedules.length} លើក)`}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Collapsible Preview Amortization Table */}
+                      {showPreviewSchedule && preview.schedules.length > 0 && (
+                        <div className="max-h-48 overflow-y-auto border border-teal-200 rounded-xl bg-white shadow-inner">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-teal-50 border-b border-teal-200 sticky top-0 font-bold text-teal-950 text-[11px]">
+                              <tr>
+                                <th className="p-1.5 text-center">លើកទី</th>
+                                <th className="p-1.5">ថ្ងៃត្រូវបង់</th>
+                                <th className="p-1.5 text-right">ប្រាក់ដើម</th>
+                                <th className="p-1.5 text-right">ការប្រាក់</th>
+                                <th className="p-1.5 text-right">ទឹកប្រាក់ត្រូវបង់ ({isKhr ? "៛" : "$"})</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-[11px]">
+                              {preview.schedules.map((item: any) => (
+                                <tr key={item.installmentNumber} className="hover:bg-slate-50">
+                                  <td className="p-1.5 text-center font-bold">{item.installmentNumber}</td>
+                                  <td className="p-1.5 font-mono">{item.dueDate}</td>
+                                  <td className="p-1.5 text-right font-mono text-slate-600">
+                                    {isKhr ? formatKHR(item.principalAmountKhr) : formatUSD(item.principalAmountUsd)}
+                                  </td>
+                                  <td className="p-1.5 text-right font-mono text-blue-700">
+                                    {isKhr ? formatKHR(item.interestAmountKhr) : formatUSD(item.interestAmountUsd)}
+                                  </td>
+                                  <td className="p-1.5 text-right font-mono font-bold text-teal-800">
+                                    {isKhr ? formatKHR(item.totalDueKhr) : formatUSD(item.totalDueUsd)}
+                                    <span className="text-[9px] text-slate-400 block">
+                                      {isKhr ? formatUSD(item.totalDueUsd) : formatKHR(item.totalDueKhr)}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Guarantor Details */}
@@ -2032,84 +3007,180 @@ export default function InstallmentsAndPawnPage() {
       {payModalSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl text-slate-800">
-            <h3 className="font-black text-slate-900 text-base mb-1">
-              ទទួលការបង់ប្រាក់រំលស់ (Installment Payment)
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              ខែទី {payModalSchedule.installmentNumber} - កាលកំណត់ {payModalSchedule.dueDate}
-            </p>
-
-            <form onSubmit={handleProcessInstallmentPayment} className="space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
               <div>
-                <label className="font-bold text-slate-700 block mb-1">ទឹកប្រាក់បង់រំលស់ ($) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-300 p-2.5 font-mono font-bold text-base text-teal-800"
-                />
+                <h3 className="font-black text-slate-900 text-base">
+                  ទទួលការបង់ប្រាក់រំលស់ (Installment Payment)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  លើកទី {payModalSchedule.installmentNumber} - កាលកំណត់ {payModalSchedule.dueDate}
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setPayModalSchedule(null)}
+                className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-              {payModalSchedule.daysOverdue > 0 && (
-                <div>
-                  <label className="font-bold text-rose-700 block mb-1">
-                    ប្រាក់ពិន័យបង់យឺត ({payModalSchedule.daysOverdue} ថ្ងៃយឺត) ($)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={payPenalty}
-                    onChange={(e) => setPayPenalty(e.target.value)}
-                    className="w-full rounded-xl border border-rose-300 p-2 font-mono font-bold text-xs text-rose-700 bg-rose-50/50"
-                  />
-                  <span className="text-[10px] text-slate-400">អាចកែប្រែ ឬលើកលែងប្រាក់ពិន័យបាន</span>
-                </div>
-              )}
+            {/* Currency Switcher */}
+            {(() => {
+              const rate = selectedContract?.exchangeRate || exchangeRateKhr || 4100;
+              const remainingUsd = Math.max(0, payModalSchedule.totalDueUsd - (payModalSchedule.paidAmountUsd || 0));
+              const remainingKhr = Math.max(0, (payModalSchedule.totalDueKhr || Math.round(payModalSchedule.totalDueUsd * rate)) - (payModalSchedule.paidAmountKhr || Math.round((payModalSchedule.paidAmountUsd || 0) * rate)));
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">វិធីសាស្រ្តបង់ប្រាក់ (Payment Method)</label>
-                <select
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold"
-                >
-                  <option value="CASH_USD">សាច់ប្រាក់ដុល្លារ (Cash USD)</option>
-                  <option value="CASH_KHR">សាច់ប្រាក់រៀល (Cash KHR)</option>
-                  <option value="KHQR_ABA">KHQR / ABA Bank</option>
-                  <option value="KHQR_BAKONG">KHQR Bakong</option>
-                </select>
-              </div>
+              return (
+                <form onSubmit={handleProcessInstallmentPayment} className="space-y-3.5 text-xs mt-3">
+                  <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <span className="font-bold text-slate-700">រូបិយប័ណ្ណទទួលប្រាក់៖</span>
+                    <div className="inline-flex rounded-lg bg-slate-200 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayCurrency("USD");
+                          setPayMethod("CASH_USD");
+                          setPayAmount(String(Number(remainingUsd.toFixed(2))));
+                          setPayPenalty(String(payModalSchedule.penaltyAmountUsd || 0));
+                        }}
+                        className={`rounded-md px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                          payCurrency === "USD"
+                            ? "bg-white text-blue-700 shadow-xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        💵 ដុល្លារ ($ USD)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayCurrency("KHR");
+                          setPayMethod("CASH_KHR");
+                          setPayAmount(String(remainingKhr));
+                          setPayPenalty(String(payModalSchedule.penaltyAmountKhr || Math.round((payModalSchedule.penaltyAmountUsd || 0) * rate)));
+                        }}
+                        className={`rounded-md px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                          payCurrency === "KHR"
+                            ? "bg-white text-purple-700 shadow-xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        ៛ រៀល (៛ KHR)
+                      </button>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">កំណត់ចំណាំ (Notes)</label>
-                <input
-                  type="text"
-                  value={payNotes}
-                  onChange={(e) => setPayNotes(e.target.value)}
-                  placeholder="e.g. បង់តាម ABA Trans ID 123456"
-                  className="w-full rounded-xl border border-slate-200 p-2 text-xs"
-                />
-              </div>
+                  {/* Summary of due amounts */}
+                  <div className="rounded-xl bg-teal-50/60 p-3 border border-teal-200 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-slate-500 block text-[11px]">ទឹកប្រាក់ត្រូវបង់លើកនេះ៖</span>
+                      <span className="font-extrabold text-slate-900 font-mono text-sm block">
+                        {payCurrency === "KHR" ? formatKHR(remainingKhr) : formatUSD(remainingUsd)}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {payCurrency === "KHR" ? `≈ ${formatUSD(remainingUsd)}` : `≈ ${formatKHR(remainingKhr)}`} (អត្រា $1 = {rate}៛)
+                      </span>
+                    </div>
 
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPayModalSchedule(null)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  បោះបង់
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingPayment}
-                  className="rounded-xl bg-teal-700 px-5 py-2 font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  {isSubmittingPayment ? "កំពុងកត់ត្រា..." : "បញ្ជាក់ការទទួលប្រាក់"}
-                </button>
-              </div>
-            </form>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (payCurrency === "KHR") {
+                          setPayAmount(String(remainingKhr));
+                        } else {
+                          setPayAmount(String(Number(remainingUsd.toFixed(2))));
+                        }
+                      }}
+                      className="rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-xs"
+                    >
+                      បង់គ្រប់ចំនួន
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      ទឹកប្រាក់ទទួលជាក់ស្តែង ({payCurrency === "KHR" ? "៛ រៀល" : "$ USD"}) *
+                    </label>
+                    <input
+                      type="number"
+                      step={payCurrency === "KHR" ? "100" : "0.01"}
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-slate-300 p-2.5 font-mono font-bold text-base text-teal-800"
+                    />
+                    {payAmount && (
+                      <span className="text-[11px] text-slate-500 font-mono block mt-1">
+                        {payCurrency === "KHR"
+                          ? `≈ $${(parseFloat(payAmount) / rate).toFixed(2)} USD`
+                          : `≈ ${formatKHR(Math.round(parseFloat(payAmount) * rate))} KHR`}
+                      </span>
+                    )}
+                  </div>
+
+                  {payModalSchedule.daysOverdue > 0 && (
+                    <div>
+                      <label className="font-bold text-rose-700 block mb-1">
+                        ប្រាក់ពិន័យបង់យឺត ({payModalSchedule.daysOverdue} ថ្ងៃ) ({payCurrency === "KHR" ? "៛" : "$"})
+                      </label>
+                      <input
+                        type="number"
+                        step={payCurrency === "KHR" ? "100" : "0.01"}
+                        value={payPenalty}
+                        onChange={(e) => setPayPenalty(e.target.value)}
+                        className="w-full rounded-xl border border-rose-300 p-2 font-mono font-bold text-xs text-rose-700 bg-rose-50/50"
+                      />
+                      <span className="text-[10px] text-slate-400">អាចកែប្រែ ឬលើកលែងប្រាក់ពិន័យបាន</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">វិធីសាស្រ្តបង់ប្រាក់ (Payment Method)</label>
+                    <select
+                      value={payMethod}
+                      onChange={(e) => setPayMethod(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold"
+                    >
+                      <option value="CASH_USD">សាច់ប្រាក់ដុល្លារ (Cash USD)</option>
+                      <option value="CASH_KHR">សាច់ប្រាក់រៀល (Cash KHR)</option>
+                      <option value="KHQR_ABA">KHQR / ABA Bank</option>
+                      <option value="KHQR_BAKONG">KHQR Bakong</option>
+                      <option value="BANK_TRANSFER">ផ្ទេរតាមធនាគារ (Bank Transfer)</option>
+                      <option value="OTHER">ផ្សេងៗ (Other)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">កំណត់ចំណាំ (Notes)</label>
+                    <input
+                      type="text"
+                      value={payNotes}
+                      onChange={(e) => setPayNotes(e.target.value)}
+                      placeholder="e.g. បង់តាម ABA Trans ID 123456"
+                      className="w-full rounded-xl border border-slate-200 p-2 text-xs"
+                    />
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPayModalSchedule(null)}
+                      className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      បោះបង់
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingPayment}
+                      className="rounded-xl bg-teal-700 px-5 py-2 font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-md disabled:opacity-50"
+                    >
+                      {isSubmittingPayment ? "កំពុងកត់ត្រា..." : "បញ្ជាក់ការទទួលប្រាក់"}
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}
