@@ -2082,16 +2082,16 @@ export default function InstallmentsAndPawnPage() {
       {/* MODAL: NEW INSTALLMENT CONTRACT FORM                                      */}
       {/* ========================================================================= */}
       {showNewContractModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto backdrop-blur-sm">
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl text-slate-800 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                <BadgePercent className="h-5 w-5 text-teal-700" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-black text-slate-900 dark:text-white text-base flex items-center gap-2">
+                <BadgePercent className="h-5 w-5 text-teal-700 dark:text-teal-400" />
                 បង្កើតកិច្ចសន្យាទិញ-លក់បង់រំលោះថ្មី (New Installment)
               </h3>
               <button
                 onClick={() => setShowNewContractModal(false)}
-                className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+                className="rounded-xl border border-slate-200 dark:border-slate-700 p-1.5 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2100,14 +2100,14 @@ export default function InstallmentsAndPawnPage() {
             <form onSubmit={handleCreateContract} className="mt-4 space-y-4 text-xs">
               {/* Customer Selector */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                   ជ្រើសរើសអតិថិជន (Customer) *
                 </label>
                 <select
                   value={newContractForm.customerId}
                   onChange={(e) => setNewContractForm({ ...newContractForm, customerId: e.target.value })}
                   required
-                  className="w-full rounded-xl border border-slate-200 p-2.5 bg-white text-xs font-medium focus:ring-2 focus:ring-teal-500"
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="">-- សូមជ្រើសរើសអតិថិជន --</option>
                   {customerList.map((c) => (
@@ -2121,13 +2121,13 @@ export default function InstallmentsAndPawnPage() {
               {/* Product Selector / Custom Input */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                     ជ្រើសរើសពីស្តុកទំនិញ (Product from Stock)
                   </label>
                   <select
                     value={newContractForm.productId}
                     onChange={(e) => handleSelectProduct(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 bg-white text-xs font-medium focus:ring-2 focus:ring-teal-500"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="">-- ជ្រើសរើសទំនិញក្នុងស្តុក ឬវាយបញ្ចូលដោយដៃ --</option>
                     {productList.map((p) => {
@@ -2145,7 +2145,7 @@ export default function InstallmentsAndPawnPage() {
                     const isOut = sel.type !== "SERVICE_LABOR" && sel.stockQty <= 0;
                     return (
                       <div className="mt-1 flex items-center gap-1.5 text-[10px]">
-                        <span className={`px-2 py-0.5 rounded-md font-bold ${isOut ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-800"}`}>
+                        <span className={`px-2 py-0.5 rounded-md font-bold ${isOut ? "bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"}`}>
                           {isOut ? "✕ ទំនិញនេះអស់ពីស្តុកហើយ" : `✓ ស្តុកនៅសល់ ${sel.stockQty} គ្រឿង (នឹងត្រូវកាត់ 1 គ្រឿងពេលបង្កើត)`}
                         </span>
                       </div>
@@ -2153,7 +2153,7 @@ export default function InstallmentsAndPawnPage() {
                   })()}
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                     ឈ្មោះទំនិញជាក់ស្តែង (Product Name) *
                   </label>
                   <input
@@ -2162,7 +2162,7 @@ export default function InstallmentsAndPawnPage() {
                     onChange={(e) => setNewContractForm({ ...newContractForm, productName: e.target.value })}
                     required
                     placeholder="e.g. iPhone 15 Pro Max 256GB"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-medium focus:ring-2 focus:ring-teal-500"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs font-medium focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -2170,7 +2170,7 @@ export default function InstallmentsAndPawnPage() {
               {/* Serial / IMEI & National ID */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                     លេខសម្គាល់ Serial / IMEI (បើមាន)
                   </label>
                   {(() => {
@@ -2181,7 +2181,7 @@ export default function InstallmentsAndPawnPage() {
                           <select
                             value={newContractForm.productImeiOrSerial}
                             onChange={(e) => setNewContractForm({ ...newContractForm, productImeiOrSerial: e.target.value })}
-                            className="w-full rounded-xl border border-teal-300 bg-teal-50/30 p-2.5 font-mono text-xs font-semibold focus:ring-2 focus:ring-teal-500"
+                            className="w-full rounded-xl border border-teal-300 dark:border-teal-700 bg-teal-50/30 dark:bg-slate-800 p-2.5 font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500"
                           >
                             <option value="">-- ជ្រើសរើស IMEI ក្នុងស្តុក ({sel.imeiList.length} គ្រឿង) --</option>
                             {sel.imeiList.map((imei: string) => (
@@ -2195,7 +2195,7 @@ export default function InstallmentsAndPawnPage() {
                             value={newContractForm.productImeiOrSerial}
                             onChange={(e) => setNewContractForm({ ...newContractForm, productImeiOrSerial: e.target.value })}
                             placeholder="ឬវាយបញ្ចូលលេខ IMEI ដោយដៃ..."
-                            className="w-full rounded-xl border border-slate-200 p-2 font-mono text-[11px] focus:ring-2 focus:ring-teal-500"
+                            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 p-2 font-mono text-[11px] focus:ring-2 focus:ring-teal-500"
                           />
                         </div>
                       );
@@ -2206,13 +2206,13 @@ export default function InstallmentsAndPawnPage() {
                         value={newContractForm.productImeiOrSerial}
                         onChange={(e) => setNewContractForm({ ...newContractForm, productImeiOrSerial: e.target.value })}
                         placeholder="352817291827182"
-                        className="w-full rounded-xl border border-slate-200 p-2.5 font-mono text-xs focus:ring-2 focus:ring-teal-500"
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 p-2.5 font-mono text-xs focus:ring-2 focus:ring-teal-500"
                       />
                     );
                   })()}
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                     អត្តសញ្ញាណប័ណ្ណអតិថិជន (National ID)
                   </label>
                   <input
@@ -2220,7 +2220,7 @@ export default function InstallmentsAndPawnPage() {
                     value={newContractForm.customerNationalId}
                     onChange={(e) => setNewContractForm({ ...newContractForm, customerNationalId: e.target.value })}
                     placeholder="010928172"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:ring-2 focus:ring-teal-500"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 p-2.5 text-xs focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -2228,15 +2228,15 @@ export default function InstallmentsAndPawnPage() {
               {/* ======================================================= */}
               {/* CURRENCY & REPAYMENT PLAN SELECTORS                     */}
               {/* ======================================================= */}
-              <div className="space-y-3 rounded-2xl bg-gradient-to-br from-slate-50 to-teal-50/30 p-3.5 border border-teal-200/80 shadow-xs">
+              <div className="space-y-3 rounded-2xl bg-gradient-to-br from-slate-50 to-teal-50/30 dark:from-slate-800/90 dark:to-teal-950/40 p-3.5 border border-teal-200/80 dark:border-teal-800/60 shadow-xs">
                 {/* Currency Switcher */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-teal-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-teal-100 dark:border-slate-700">
                   <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
-                      <CreditCard className="h-4 w-4 text-teal-700" />
+                    <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                      <CreditCard className="h-4 w-4 text-teal-700 dark:text-teal-400" />
                       រូបិយប័ណ្ណកិច្ចសន្យា (Currency)៖
                     </span>
-                    <div className="inline-flex rounded-xl bg-slate-200/70 p-0.5 border border-slate-300">
+                    <div className="inline-flex rounded-xl bg-slate-200/70 dark:bg-slate-900/80 p-0.5 border border-slate-300 dark:border-slate-700">
                       <button
                         type="button"
                         onClick={() => {
@@ -2250,8 +2250,8 @@ export default function InstallmentsAndPawnPage() {
                         }}
                         className={`rounded-lg px-3 py-1 text-xs font-black transition cursor-pointer ${
                           newContractForm.currency === "USD"
-                            ? "bg-white text-blue-700 shadow-xs border border-blue-200"
-                            : "text-slate-600 hover:text-slate-900"
+                            ? "bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-xs border border-blue-200 dark:border-blue-700"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                         }`}
                       >
                         💵 ប្រាក់ដុល្លារ ($ USD)
@@ -2269,8 +2269,8 @@ export default function InstallmentsAndPawnPage() {
                         }}
                         className={`rounded-lg px-3 py-1 text-xs font-black transition cursor-pointer ${
                           newContractForm.currency === "KHR"
-                            ? "bg-white text-purple-700 shadow-xs border border-purple-200"
-                            : "text-slate-600 hover:text-slate-900"
+                            ? "bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 shadow-xs border border-purple-200 dark:border-purple-700"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                         }`}
                       >
                         ៛ ប្រាក់រៀល (៛ KHR)
@@ -2279,9 +2279,9 @@ export default function InstallmentsAndPawnPage() {
                   </div>
 
                   {/* Exchange rate info */}
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 bg-white/80 px-2.5 py-1 rounded-lg border border-teal-100">
-                    <span className="font-semibold text-slate-600">អត្រាប្តូរប្រាក់៖</span>
-                    <span className="font-mono font-bold text-teal-800">$1 = </span>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-slate-900/80 px-2.5 py-1 rounded-lg border border-teal-100 dark:border-slate-700">
+                    <span className="font-semibold text-slate-600 dark:text-slate-300">អត្រាប្តូរប្រាក់៖</span>
+                    <span className="font-mono font-bold text-teal-800 dark:text-teal-300">$1 = </span>
                     <input
                       type="number"
                       value={newContractForm.exchangeRate}
@@ -2289,25 +2289,25 @@ export default function InstallmentsAndPawnPage() {
                         const r = parseInt(e.target.value) || 4100;
                         setNewContractForm((prev) => ({ ...prev, exchangeRate: r }));
                       }}
-                      className="w-16 rounded border border-slate-300 px-1 py-0.5 font-mono font-bold text-[11px] text-slate-800 text-center"
+                      className="w-16 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-1 py-0.5 font-mono font-bold text-[11px] text-slate-800 dark:text-slate-100 text-center"
                     />
-                    <span className="font-mono font-bold text-teal-800">៛</span>
+                    <span className="font-mono font-bold text-teal-800 dark:text-teal-300">៛</span>
                   </div>
                 </div>
 
                 {/* 4 Repayment Plan Tabs (ចំនួនខែ, ចំនួនដង, ចំនួនថ្ងៃ, ចំនួនទឹកប្រាក់) */}
                 <div>
-                  <label className="font-extrabold text-slate-800 block mb-1 text-xs">
+                  <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1 text-xs">
                     វិធីសាស្រ្តគណនាការបង់រំលោះ (Repayment Plan Type) *
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-200/60 p-1 rounded-xl border border-slate-300/80">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-200/60 dark:bg-slate-900/80 p-1 rounded-xl border border-slate-300/80 dark:border-slate-700">
                     <button
                       type="button"
                       onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "MONTHLY" })}
                       className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
                         newContractForm.repaymentPlanType === "MONTHLY"
-                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                          ? "bg-white dark:bg-slate-800 text-teal-800 dark:text-teal-300 shadow-sm border border-teal-300 dark:border-teal-600"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
                       }`}
                     >
                       <Calendar className="h-3.5 w-3.5" />
@@ -2318,8 +2318,8 @@ export default function InstallmentsAndPawnPage() {
                       onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "INSTALLMENT_COUNT" })}
                       className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
                         newContractForm.repaymentPlanType === "INSTALLMENT_COUNT"
-                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                          ? "bg-white dark:bg-slate-800 text-teal-800 dark:text-teal-300 shadow-sm border border-teal-300 dark:border-teal-600"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
                       }`}
                     >
                       <BadgePercent className="h-3.5 w-3.5" />
@@ -2330,8 +2330,8 @@ export default function InstallmentsAndPawnPage() {
                       onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "DAYS" })}
                       className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
                         newContractForm.repaymentPlanType === "DAYS"
-                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                          ? "bg-white dark:bg-slate-800 text-teal-800 dark:text-teal-300 shadow-sm border border-teal-300 dark:border-teal-600"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
                       }`}
                     >
                       <Clock className="h-3.5 w-3.5" />
@@ -2342,8 +2342,8 @@ export default function InstallmentsAndPawnPage() {
                       onClick={() => setNewContractForm({ ...newContractForm, repaymentPlanType: "FIXED_AMOUNT" })}
                       className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition cursor-pointer ${
                         newContractForm.repaymentPlanType === "FIXED_AMOUNT"
-                          ? "bg-white text-teal-800 shadow-sm border border-teal-300"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                          ? "bg-white dark:bg-slate-800 text-teal-800 dark:text-teal-300 shadow-sm border border-teal-300 dark:border-teal-600"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
                       }`}
                     >
                       <DollarSign className="h-3.5 w-3.5" />
@@ -2356,7 +2356,7 @@ export default function InstallmentsAndPawnPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
                   {/* Total Price */}
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                       តម្លៃទំនិញ ({newContractForm.currency === "KHR" ? "៛ រៀល" : "$ USD"}) *
                     </label>
                     {newContractForm.currency === "KHR" ? (
@@ -2372,9 +2372,9 @@ export default function InstallmentsAndPawnPage() {
                           }}
                           required
                           placeholder="4,920,000"
-                          className="w-full rounded-xl border border-purple-300 p-2 font-mono font-bold text-xs bg-white text-purple-900"
+                          className="w-full rounded-xl border border-purple-300 dark:border-purple-600 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-purple-900 dark:text-purple-300"
                         />
-                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block mt-0.5">
                           ≈ ${newContractForm.totalPriceUsd || "0.00"}
                         </span>
                       </div>
@@ -2392,9 +2392,9 @@ export default function InstallmentsAndPawnPage() {
                           }}
                           required
                           placeholder="1200.00"
-                          className="w-full rounded-xl border border-blue-300 p-2 font-mono font-bold text-xs bg-white text-blue-900"
+                          className="w-full rounded-xl border border-blue-300 dark:border-blue-600 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-blue-900 dark:text-blue-300"
                         />
-                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block mt-0.5">
                           ≈ {formatKHR(parseFloat(newContractForm.totalPriceKhr) || 0)}
                         </span>
                       </div>
@@ -2403,7 +2403,7 @@ export default function InstallmentsAndPawnPage() {
 
                   {/* Down Payment */}
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                       ប្រាក់កក់បង់មុន ({newContractForm.currency === "KHR" ? "៛" : "$"})
                     </label>
                     {newContractForm.currency === "KHR" ? (
@@ -2418,7 +2418,7 @@ export default function InstallmentsAndPawnPage() {
                             setNewContractForm({ ...newContractForm, downPaymentKhr: val, downPaymentUsd: usd });
                           }}
                           placeholder="820,000"
-                          className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-emerald-700"
+                          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400"
                         />
                         <div className="flex items-center gap-1 mt-0.5">
                           {[0, 10, 20, 30].map((pct) => (
@@ -2435,13 +2435,13 @@ export default function InstallmentsAndPawnPage() {
                                   downPaymentUsd: String(Number((amt / rate).toFixed(2))),
                                 });
                               }}
-                              className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
+                              className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
                             >
                               {pct}%
                             </button>
                           ))}
                         </div>
-                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block mt-0.5">
                           ≈ ${newContractForm.downPaymentUsd || "0.00"}
                         </span>
                       </div>
@@ -2458,7 +2458,7 @@ export default function InstallmentsAndPawnPage() {
                             setNewContractForm({ ...newContractForm, downPaymentUsd: val, downPaymentKhr: khr });
                           }}
                           placeholder="200.00"
-                          className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-emerald-700"
+                          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400"
                         />
                         <div className="flex items-center gap-1 mt-0.5">
                           {[0, 10, 20, 30].map((pct) => (
@@ -2475,13 +2475,13 @@ export default function InstallmentsAndPawnPage() {
                                   downPaymentKhr: String(Math.round(amt * rate)),
                                 });
                               }}
-                              className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
+                              className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
                             >
                               {pct}%
                             </button>
                           ))}
                         </div>
-                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block mt-0.5">
                           ≈ {formatKHR(parseFloat(newContractForm.downPaymentKhr) || 0)}
                         </span>
                       </div>
@@ -2490,13 +2490,13 @@ export default function InstallmentsAndPawnPage() {
 
                   {/* Interest Rate */}
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">ការប្រាក់ (% ក្នុងមួយខែ)</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">ការប្រាក់ (% ក្នុងមួយខែ)</label>
                     <input
                       type="number"
                       step="0.1"
                       value={newContractForm.interestRatePercent}
                       onChange={(e) => setNewContractForm({ ...newContractForm, interestRatePercent: e.target.value })}
-                      className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold text-xs bg-white text-blue-700"
+                      className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300"
                     />
                     <div className="flex items-center gap-1 mt-0.5">
                       {[0, 1, 1.5, 2, 2.5].map((r) => (
@@ -2504,7 +2504,7 @@ export default function InstallmentsAndPawnPage() {
                           key={r}
                           type="button"
                           onClick={() => setNewContractForm({ ...newContractForm, interestRatePercent: String(r) })}
-                          className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
+                          className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
                         >
                           {r}%
                         </button>
@@ -2514,31 +2514,31 @@ export default function InstallmentsAndPawnPage() {
 
                   {/* Start Date */}
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">កាលបរិច្ឆេទចាប់ផ្តើម</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">កាលបរិច្ឆេទចាប់ផ្តើម</label>
                     <input
                       type="date"
                       value={newContractForm.startDate}
                       onChange={(e) => setNewContractForm({ ...newContractForm, startDate: e.target.value })}
-                      className="w-full rounded-xl border border-slate-300 p-2 font-mono text-xs bg-white"
+                      className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-2 font-mono text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 </div>
 
                 {/* Specific Fields for Chosen Mode */}
-                <div className="bg-white p-3 rounded-xl border border-teal-200/60 mt-2 space-y-2">
+                <div className="bg-white dark:bg-slate-900/90 p-3 rounded-xl border border-teal-200/60 dark:border-teal-800/60 mt-2 space-y-2">
                   {newContractForm.repaymentPlanType === "MONTHLY" && (
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="font-bold text-teal-900 block text-xs">
+                        <label className="font-bold text-teal-900 dark:text-teal-300 block text-xs">
                           រយៈពេលបង់រំលោះគិតជាខែ (Duration in Months) *
                         </label>
-                        <span className="text-[11px] text-slate-500">គិតជាប្រតិទិនប្រចាំខែ (រៀងរាល់ 30 ថ្ងៃ)</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">គិតជាប្រតិទិនប្រចាំខែ (រៀងរាល់ 30 ថ្ងៃ)</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <select
                           value={newContractForm.durationMonths}
                           onChange={(e) => setNewContractForm({ ...newContractForm, durationMonths: e.target.value })}
-                          className="rounded-xl border border-teal-300 p-2 font-bold text-xs bg-white w-32"
+                          className="rounded-xl border border-teal-300 dark:border-teal-700 p-2 font-bold text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 w-32"
                         >
                           {[1, 2, 3, 4, 6, 9, 12, 18, 24, 36].map((m) => (
                             <option key={m} value={m}>
@@ -2555,7 +2555,7 @@ export default function InstallmentsAndPawnPage() {
                               className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
                                 newContractForm.durationMonths === String(m)
                                   ? "bg-teal-700 text-white shadow-xs"
-                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                               }`}
                             >
                               {m} ខែ
@@ -2569,7 +2569,7 @@ export default function InstallmentsAndPawnPage() {
                   {newContractForm.repaymentPlanType === "INSTALLMENT_COUNT" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                        <label className="font-bold text-teal-900 dark:text-teal-300 block mb-1 text-xs">
                           ចំនួនដងត្រូវបង់ (Total Installments / Times) *
                         </label>
                         <div className="flex items-center gap-2">
@@ -2579,7 +2579,7 @@ export default function InstallmentsAndPawnPage() {
                             max="120"
                             value={newContractForm.totalInstallments}
                             onChange={(e) => setNewContractForm({ ...newContractForm, totalInstallments: e.target.value })}
-                            className="w-24 rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white"
+                            className="w-24 rounded-xl border border-teal-300 dark:border-teal-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                           />
                           <div className="flex flex-wrap gap-1">
                             {[2, 4, 6, 8, 10, 12].map((cnt) => (
@@ -2590,7 +2590,7 @@ export default function InstallmentsAndPawnPage() {
                                 className={`rounded-lg px-2 py-1 text-[11px] font-bold transition cursor-pointer ${
                                   newContractForm.totalInstallments === String(cnt)
                                     ? "bg-teal-700 text-white shadow-xs"
-                                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                                 }`}
                               >
                                 {cnt} ដង
@@ -2601,13 +2601,13 @@ export default function InstallmentsAndPawnPage() {
                       </div>
 
                       <div>
-                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                        <label className="font-bold text-teal-900 dark:text-teal-300 block mb-1 text-xs">
                           ចន្លោះពេលបង់ម្តងៗ (Interval Days) *
                         </label>
                         <select
                           value={newContractForm.intervalDays}
                           onChange={(e) => setNewContractForm({ ...newContractForm, intervalDays: e.target.value })}
-                          className="w-full rounded-xl border border-teal-300 p-2 text-xs font-bold bg-white"
+                          className="w-full rounded-xl border border-teal-300 dark:border-teal-700 p-2 text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                         >
                           <option value="7">រៀងរាល់ 7 ថ្ងៃ (១ សប្តាហ៍ម្តង - Weekly)</option>
                           <option value="10">រៀងរាល់ 10 ថ្ងៃម្តង</option>
@@ -2622,7 +2622,7 @@ export default function InstallmentsAndPawnPage() {
                   {newContractForm.repaymentPlanType === "DAYS" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                        <label className="font-bold text-teal-900 dark:text-teal-300 block mb-1 text-xs">
                           រយៈពេលសរុបគិតជាចំនួនថ្ងៃ (Duration in Days) *
                         </label>
                         <div className="flex items-center gap-2">
@@ -2632,7 +2632,7 @@ export default function InstallmentsAndPawnPage() {
                             max="720"
                             value={newContractForm.durationDays}
                             onChange={(e) => setNewContractForm({ ...newContractForm, durationDays: e.target.value })}
-                            className="w-24 rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white"
+                            className="w-24 rounded-xl border border-teal-300 dark:border-teal-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                           />
                           <div className="flex flex-wrap gap-1">
                             {[15, 30, 45, 60, 90, 180].map((d) => (
@@ -2643,7 +2643,7 @@ export default function InstallmentsAndPawnPage() {
                                 className={`rounded-lg px-2 py-1 text-[11px] font-bold transition cursor-pointer ${
                                   newContractForm.durationDays === String(d)
                                     ? "bg-teal-700 text-white shadow-xs"
-                                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                                 }`}
                               >
                                 {d} ថ្ងៃ
@@ -2654,13 +2654,13 @@ export default function InstallmentsAndPawnPage() {
                       </div>
 
                       <div>
-                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                        <label className="font-bold text-teal-900 dark:text-teal-300 block mb-1 text-xs">
                           ចន្លោះពេលត្រូវបង់ម្តងៗ (Interval Days) *
                         </label>
                         <select
                           value={newContractForm.intervalDays}
                           onChange={(e) => setNewContractForm({ ...newContractForm, intervalDays: e.target.value })}
-                          className="w-full rounded-xl border border-teal-300 p-2 text-xs font-bold bg-white"
+                          className="w-full rounded-xl border border-teal-300 dark:border-teal-700 p-2 text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                         >
                           <option value="1">រៀងរាល់ 1 ថ្ងៃ (បង់រាល់ថ្ងៃ - Daily)</option>
                           <option value="5">រៀងរាល់ 5 ថ្ងៃម្តង</option>
@@ -2676,7 +2676,7 @@ export default function InstallmentsAndPawnPage() {
                   {newContractForm.repaymentPlanType === "FIXED_AMOUNT" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                        <label className="font-bold text-teal-900 dark:text-teal-300 block mb-1 text-xs">
                           ទឹកប្រាក់កំណត់បង់ក្នុងមួយលើក ({newContractForm.currency === "KHR" ? "៛ រៀល" : "$ USD"}) *
                         </label>
                         {newContractForm.currency === "KHR" ? (
@@ -2691,9 +2691,9 @@ export default function InstallmentsAndPawnPage() {
                                 setNewContractForm({ ...newContractForm, installmentAmountKhr: val, installmentAmountUsd: usd });
                               }}
                               placeholder="200,000"
-                              className="w-full rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white text-purple-900"
+                              className="w-full rounded-xl border border-teal-300 dark:border-teal-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-purple-900 dark:text-purple-300"
                             />
-                            <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block mt-0.5">
                               ≈ ${newContractForm.installmentAmountUsd || "0.00"}
                             </span>
                           </div>
@@ -2710,26 +2710,26 @@ export default function InstallmentsAndPawnPage() {
                                 setNewContractForm({ ...newContractForm, installmentAmountUsd: val, installmentAmountKhr: khr });
                               }}
                               placeholder="50.00"
-                              className="w-full rounded-xl border border-teal-300 p-2 font-mono font-bold text-xs bg-white text-blue-900"
+                              className="w-full rounded-xl border border-teal-300 dark:border-teal-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-blue-900 dark:text-blue-300"
                             />
-                            <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block mt-0.5">
                               ≈ {formatKHR(parseFloat(newContractForm.installmentAmountKhr) || 0)}
                             </span>
                           </div>
                         )}
-                        <span className="text-[10px] text-slate-500 block mt-0.5">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
                           * ប្រព័ន្ធនឹងរំលស់ប្រាក់ដើមរហូតដល់សូន្យស្វ័យប្រវត្តិតាមទឹកប្រាក់នេះ
                         </span>
                       </div>
 
                       <div>
-                        <label className="font-bold text-teal-900 block mb-1 text-xs">
+                        <label className="font-bold text-teal-900 dark:text-teal-300 block mb-1 text-xs">
                           ចន្លោះពេលត្រូវបង់ម្តងៗ (Interval Days) *
                         </label>
                         <select
                           value={newContractForm.intervalDays}
                           onChange={(e) => setNewContractForm({ ...newContractForm, intervalDays: e.target.value })}
-                          className="w-full rounded-xl border border-teal-300 p-2 text-xs font-bold bg-white"
+                          className="w-full rounded-xl border border-teal-300 dark:border-teal-700 p-2 text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                         >
                           <option value="7">រៀងរាល់ 7 ថ្ងៃ (១ សប្តាហ៍ម្តង)</option>
                           <option value="14">រៀងរាល់ 14 ថ្ងៃ (កន្លះខែម្តង)</option>
@@ -2749,66 +2749,66 @@ export default function InstallmentsAndPawnPage() {
 
                   return (
                     <div className="space-y-2 pt-1">
-                      <div className="rounded-xl bg-white p-3 border border-teal-300/80 shadow-xs">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                          <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                      <div className="rounded-xl bg-white dark:bg-slate-900/95 p-3.5 border border-teal-300/80 dark:border-teal-700/80 shadow-xs">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                          <span className="font-extrabold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
                             <Sparkles className="h-4 w-4 text-amber-500" />
                             លទ្ធផលគណនាស្វ័យប្រវត្តិ (Live Calculation)
                           </span>
-                          <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                          <span className="text-[11px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/80 px-2 py-0.5 rounded-md border border-teal-200 dark:border-teal-800">
                             {preview.totalInstallments} លើក • {preview.durationDays} ថ្ងៃ (≈{preview.durationMonths} ខែ)
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 text-xs">
                           <div>
-                            <span className="text-slate-400 text-[10px] uppercase font-bold block">ប្រាក់ដើមត្រូវរំលស់</span>
-                            <span className="font-bold text-slate-800 font-mono text-xs block">
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase font-bold block">ប្រាក់ដើមត្រូវរំលស់</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100 font-mono text-xs block">
                               {isKhr ? formatKHR(preview.principalRemainingKhr) : formatUSD(preview.principalRemainingUsd)}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-[10px] text-slate-400 dark:text-slate-400 font-mono">
                               {isKhr ? `(${formatUSD(preview.principalRemainingUsd)})` : `(${formatKHR(preview.principalRemainingKhr)})`}
                             </span>
                           </div>
 
                           <div>
-                            <span className="text-slate-400 text-[10px] uppercase font-bold block">ការប្រាក់សរុប</span>
-                            <span className="font-bold text-blue-700 font-mono text-xs block">
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase font-bold block">ការប្រាក់សរុប</span>
+                            <span className="font-bold text-blue-700 dark:text-blue-400 font-mono text-xs block">
                               {isKhr ? formatKHR(preview.totalInterestKhr) : formatUSD(preview.totalInterestUsd)}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-[10px] text-slate-400 dark:text-slate-400 font-mono">
                               {isKhr ? `(${formatUSD(preview.totalInterestUsd)})` : `(${formatKHR(preview.totalInterestKhr)})`}
                             </span>
                           </div>
 
                           <div>
-                            <span className="text-slate-400 text-[10px] uppercase font-bold block">សរុបត្រូវបង់</span>
-                            <span className="font-bold text-slate-900 font-mono text-xs block">
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase font-bold block">សរុបត្រូវបង់</span>
+                            <span className="font-bold text-slate-900 dark:text-white font-mono text-xs block">
                               {isKhr ? formatKHR(preview.totalRepaymentKhr) : formatUSD(preview.totalRepaymentUsd)}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-[10px] text-slate-400 dark:text-slate-400 font-mono">
                               {isKhr ? `(${formatUSD(preview.totalRepaymentUsd)})` : `(${formatKHR(preview.totalRepaymentKhr)})`}
                             </span>
                           </div>
 
-                          <div className="bg-teal-50/80 p-1.5 rounded-lg border border-teal-200">
-                            <span className="text-teal-800 text-[10px] uppercase font-black block">ត្រូវបង់ក្នុងមួយលើក</span>
-                            <span className="font-black text-rose-700 font-mono text-sm block">
+                          <div className="bg-teal-50/80 dark:bg-teal-950/70 p-2 rounded-lg border border-teal-200 dark:border-teal-700/80">
+                            <span className="text-teal-800 dark:text-teal-300 text-[10px] uppercase font-black block">ត្រូវបង់ក្នុងមួយលើក</span>
+                            <span className="font-black text-rose-700 dark:text-rose-400 font-mono text-sm block">
                               {isKhr ? formatKHR(preview.installmentAmountKhr) : formatUSD(preview.installmentAmountUsd)}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-mono block">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block">
                               {isKhr ? `(${formatUSD(preview.installmentAmountUsd)})` : `(${formatKHR(preview.installmentAmountKhr)})`}
                             </span>
                           </div>
                         </div>
 
                         {preview.completionDate && (
-                          <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 text-[11px] text-slate-500">
-                            <span>ថ្ងៃបញ្ចប់ការបង់រំលោះ៖ <strong className="text-slate-800 font-mono">{preview.completionDate}</strong></span>
+                          <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                            <span>ថ្ងៃបញ្ចប់ការបង់រំលោះ៖ <strong className="text-slate-800 dark:text-slate-200 font-mono">{preview.completionDate}</strong></span>
                             <button
                               type="button"
                               onClick={() => setShowPreviewSchedule(!showPreviewSchedule)}
-                              className="inline-flex items-center gap-1 font-bold text-teal-700 hover:text-teal-900 transition cursor-pointer"
+                              className="inline-flex items-center gap-1 font-bold text-teal-700 hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-300 transition cursor-pointer"
                             >
                               <Eye className="h-3.5 w-3.5" />
                               <span>{showPreviewSchedule ? "លាក់តារាងបង់" : `មើលតារាងបង់ (${preview.schedules.length} លើក)`}</span>
@@ -2819,9 +2819,9 @@ export default function InstallmentsAndPawnPage() {
 
                       {/* Collapsible Preview Amortization Table */}
                       {showPreviewSchedule && preview.schedules.length > 0 && (
-                        <div className="max-h-48 overflow-y-auto border border-teal-200 rounded-xl bg-white shadow-inner">
+                        <div className="max-h-48 overflow-y-auto border border-teal-200 dark:border-teal-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-inner">
                           <table className="w-full text-left text-xs">
-                            <thead className="bg-teal-50 border-b border-teal-200 sticky top-0 font-bold text-teal-950 text-[11px]">
+                            <thead className="bg-teal-50 dark:bg-teal-950/90 border-b border-teal-200 dark:border-teal-800 sticky top-0 font-bold text-teal-950 dark:text-teal-200 text-[11px]">
                               <tr>
                                 <th className="p-1.5 text-center">លើកទី</th>
                                 <th className="p-1.5">ថ្ងៃត្រូវបង់</th>
@@ -2830,20 +2830,20 @@ export default function InstallmentsAndPawnPage() {
                                 <th className="p-1.5 text-right">ទឹកប្រាក់ត្រូវបង់ ({isKhr ? "៛" : "$"})</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100 text-[11px]">
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[11px]">
                               {preview.schedules.map((item: any) => (
-                                <tr key={item.installmentNumber} className="hover:bg-slate-50">
-                                  <td className="p-1.5 text-center font-bold">{item.installmentNumber}</td>
-                                  <td className="p-1.5 font-mono">{item.dueDate}</td>
-                                  <td className="p-1.5 text-right font-mono text-slate-600">
+                                <tr key={item.installmentNumber} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                                  <td className="p-1.5 text-center font-bold text-slate-800 dark:text-slate-200">{item.installmentNumber}</td>
+                                  <td className="p-1.5 font-mono text-slate-700 dark:text-slate-300">{item.dueDate}</td>
+                                  <td className="p-1.5 text-right font-mono text-slate-600 dark:text-slate-300">
                                     {isKhr ? formatKHR(item.principalAmountKhr) : formatUSD(item.principalAmountUsd)}
                                   </td>
-                                  <td className="p-1.5 text-right font-mono text-blue-700">
+                                  <td className="p-1.5 text-right font-mono text-blue-700 dark:text-blue-400">
                                     {isKhr ? formatKHR(item.interestAmountKhr) : formatUSD(item.interestAmountUsd)}
                                   </td>
-                                  <td className="p-1.5 text-right font-mono font-bold text-teal-800">
+                                  <td className="p-1.5 text-right font-mono font-bold text-teal-800 dark:text-teal-300">
                                     {isKhr ? formatKHR(item.totalDueKhr) : formatUSD(item.totalDueUsd)}
-                                    <span className="text-[9px] text-slate-400 block">
+                                    <span className="text-[9px] text-slate-400 dark:text-slate-400 block">
                                       {isKhr ? formatUSD(item.totalDueUsd) : formatKHR(item.totalDueKhr)}
                                     </span>
                                   </td>
@@ -2859,45 +2859,45 @@ export default function InstallmentsAndPawnPage() {
               </div>
 
               {/* Guarantor Details */}
-              <div className="border border-slate-200 rounded-xl p-3 space-y-2 bg-slate-50/50">
-                <span className="font-bold text-slate-900 block">ព័ត៌មានអ្នកធានា (Guarantor Info - Optional)</span>
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-2 bg-slate-50/50 dark:bg-slate-800/50">
+                <span className="font-bold text-slate-900 dark:text-slate-100 block">ព័ត៌មានអ្នកធានា (Guarantor Info - Optional)</span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input
                     type="text"
                     value={newContractForm.guarantorName}
                     onChange={(e) => setNewContractForm({ ...newContractForm, guarantorName: e.target.value })}
                     placeholder="ឈ្មោះអ្នកធានា"
-                    className="rounded-lg border border-slate-200 p-2 text-xs bg-white"
+                    className="rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                   <input
                     type="text"
                     value={newContractForm.guarantorPhone}
                     onChange={(e) => setNewContractForm({ ...newContractForm, guarantorPhone: e.target.value })}
                     placeholder="លេខទូរស័ព្ទអ្នកធានា"
-                    className="rounded-lg border border-slate-200 p-2 text-xs bg-white"
+                    className="rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                   <input
                     type="text"
                     value={newContractForm.guarantorNationalId}
                     onChange={(e) => setNewContractForm({ ...newContractForm, guarantorNationalId: e.target.value })}
                     placeholder="អត្តសញ្ញាណប័ណ្ណអ្នកធានា"
-                    className="rounded-lg border border-slate-200 p-2 text-xs bg-white"
+                    className="rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
               </div>
 
               {/* Submit Buttons */}
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowNewContractModal(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
                   បោះបង់
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-teal-700 px-5 py-2 font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-md"
+                  className="rounded-xl bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 px-5 py-2 font-bold text-white transition cursor-pointer shadow-md"
                 >
                   រក្សាទុក & បង្កើតតារាងបង់រំលស់
                 </button>
@@ -2912,15 +2912,15 @@ export default function InstallmentsAndPawnPage() {
       {/* ========================================================================= */}
       {showNewPawnModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto backdrop-blur-sm">
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl text-slate-800 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                <Coins className="h-5 w-5 text-amber-700" />
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-black text-slate-900 dark:text-white text-base flex items-center gap-2">
+                <Coins className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                 បង្កើតប័ណ្ណបញ្ចាំទ្រព្យថ្មី (New Pawn Ticket)
               </h3>
               <button
                 onClick={() => setShowNewPawnModal(false)}
-                className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+                className="rounded-xl border border-slate-200 dark:border-slate-700 p-1.5 text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2929,14 +2929,14 @@ export default function InstallmentsAndPawnPage() {
             <form onSubmit={handleCreatePawn} className="mt-4 space-y-4 text-xs">
               {/* Customer Selector */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                   ជ្រើសរើសអតិថិជនអ្នកបញ្ចាំ (Customer) *
                 </label>
                 <select
                   value={newPawnForm.customerId}
                   onChange={(e) => setNewPawnForm({ ...newPawnForm, customerId: e.target.value })}
                   required
-                  className="w-full rounded-xl border border-slate-200 p-2.5 bg-white text-xs font-medium focus:ring-2 focus:ring-amber-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="">-- សូមជ្រើសរើសអតិថិជន --</option>
                   {customerList.map((c) => (
@@ -2950,11 +2950,11 @@ export default function InstallmentsAndPawnPage() {
               {/* Item Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">ប្រភេទទ្រព្យ (Category) *</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">ប្រភេទទ្រព្យ (Category) *</label>
                   <select
                     value={newPawnForm.itemCategory}
                     onChange={(e) => setNewPawnForm({ ...newPawnForm, itemCategory: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 bg-white text-xs font-medium"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-100"
                   >
                     <option value="Phone">ទូរស័ព្ទ / ថេប្លេត (Smartphone/iPad)</option>
                     <option value="Laptop">កុំព្យូទ័រ / Laptop / Mac</option>
@@ -2966,14 +2966,14 @@ export default function InstallmentsAndPawnPage() {
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="font-bold text-slate-700 block mb-1">ឈ្មោះទ្រព្យបញ្ចាំជាក់ស្តែង (Item Name) *</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">ឈ្មោះទ្រព្យបញ្ចាំជាក់ស្តែង (Item Name) *</label>
                   <input
                     type="text"
                     value={newPawnForm.itemName}
                     onChange={(e) => setNewPawnForm({ ...newPawnForm, itemName: e.target.value })}
                     required
                     placeholder="e.g. Honda Dream 2024 (ស្លាកលេខ 1KM-9999) ឬ iPhone 14 Pro Max"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-medium focus:ring-2 focus:ring-amber-500"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 text-xs font-medium focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
               </div>
@@ -2981,43 +2981,43 @@ export default function InstallmentsAndPawnPage() {
               {/* IMEI/Serial & Safe Box */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">លេខសម្គាល់ Serial / IMEI / ផ្លាកលេខ</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">លេខសម្គាល់ Serial / IMEI / ផ្លាកលេខ</label>
                   <input
                     type="text"
                     value={newPawnForm.imeiOrSerial}
                     onChange={(e) => setNewPawnForm({ ...newPawnForm, imeiOrSerial: e.target.value })}
                     placeholder="Serial / IMEI"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 font-mono text-xs"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 font-mono text-xs"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">ទូ ឬកន្លែងទុកដាក់ (Storage Location)</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">ទូ ឬកន្លែងទុកដាក់ (Storage Location)</label>
                   <input
                     type="text"
                     value={newPawnForm.storageLocation}
                     onChange={(e) => setNewPawnForm({ ...newPawnForm, storageLocation: e.target.value })}
                     placeholder="Safe Box A-01"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 text-xs font-mono"
                   />
                 </div>
               </div>
 
               {/* Duration Type & Loan & Interest Calculation */}
-              <div className="space-y-3 bg-amber-50/60 p-4 rounded-xl border border-amber-200">
-                <div className="flex items-center justify-between pb-2 border-b border-amber-200/60">
-                  <span className="font-extrabold text-amber-950 text-xs flex items-center gap-1.5">
-                    <Coins className="h-4 w-4 text-amber-700" />
+              <div className="space-y-3 bg-amber-50/60 dark:bg-amber-950/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800/60">
+                <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-amber-800/60">
+                  <span className="font-extrabold text-amber-950 dark:text-amber-300 text-xs flex items-center gap-1.5">
+                    <Coins className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                     ព័ត៌មានប្រាក់កម្ចី & រយៈពេលបញ្ចាំ (Loan & Duration)
                   </span>
                   {/* Duration Type selector */}
-                  <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-amber-300">
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-amber-300 dark:border-amber-700">
                     <button
                       type="button"
                       onClick={() => setNewPawnForm({ ...newPawnForm, durationType: "DAYS" })}
                       className={`px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer ${
                         newPawnForm.durationType === "DAYS"
                           ? "bg-amber-600 text-white shadow-xs"
-                          : "text-slate-600 hover:text-slate-900"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
                       គិតជាថ្ងៃ (Days)
@@ -3028,7 +3028,7 @@ export default function InstallmentsAndPawnPage() {
                       className={`px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer ${
                         newPawnForm.durationType === "MONTHS"
                           ? "bg-amber-600 text-white shadow-xs"
-                          : "text-slate-600 hover:text-slate-900"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
                       គិតជាខែ (Months)
@@ -3038,7 +3038,7 @@ export default function InstallmentsAndPawnPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">ទឹកប្រាក់កម្ចី ($) *</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">ទឹកប្រាក់កម្ចី ($) *</label>
                     <input
                       type="number"
                       step="0.01"
@@ -3046,36 +3046,36 @@ export default function InstallmentsAndPawnPage() {
                       onChange={(e) => setNewPawnForm({ ...newPawnForm, loanAmountUsd: e.target.value })}
                       required
                       placeholder="500.00"
-                      className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white text-rose-700"
+                      className="w-full rounded-xl border border-amber-300 dark:border-amber-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400"
                     />
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">តម្លៃវាយតម្លៃ ($)</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">តម្លៃវាយតម្លៃ ($)</label>
                     <input
                       type="number"
                       step="0.01"
                       value={newPawnForm.estimatedValueUsd}
                       onChange={(e) => setNewPawnForm({ ...newPawnForm, estimatedValueUsd: e.target.value })}
                       placeholder="800.00"
-                      className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white"
+                      className="w-full rounded-xl border border-amber-300 dark:border-amber-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                     />
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">ការប្រាក់ (%/ខែ)</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">ការប្រាក់ (%/ខែ)</label>
                     <input
                       type="number"
                       step="0.1"
                       value={newPawnForm.monthlyInterestRate}
                       onChange={(e) => setNewPawnForm({ ...newPawnForm, monthlyInterestRate: e.target.value })}
-                      className="w-full rounded-xl border border-amber-300 p-2 font-mono font-bold text-xs bg-white text-blue-700"
+                      className="w-full rounded-xl border border-amber-300 dark:border-amber-700 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400"
                     />
                   </div>
 
                   {newPawnForm.durationType === "DAYS" ? (
                     <div>
-                      <label className="font-bold text-amber-900 block mb-1">
+                      <label className="font-bold text-amber-900 dark:text-amber-300 block mb-1">
                         ចំនួនថ្ងៃបញ្ចាំ (Days) *
                       </label>
                       <input
@@ -3083,17 +3083,17 @@ export default function InstallmentsAndPawnPage() {
                         min="1"
                         value={newPawnForm.durationDays}
                         onChange={(e) => setNewPawnForm({ ...newPawnForm, durationDays: e.target.value })}
-                        className="w-full rounded-xl border-2 border-amber-400 p-2 font-mono font-bold text-xs bg-white text-slate-900"
+                        className="w-full rounded-xl border-2 border-amber-400 dark:border-amber-600 p-2 font-mono font-bold text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                         placeholder="30"
                       />
                     </div>
                   ) : (
                     <div>
-                      <label className="font-bold text-slate-700 block mb-1">រយៈពេល (ខែ)</label>
+                      <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">រយៈពេល (ខែ)</label>
                       <select
                         value={newPawnForm.durationMonths}
                         onChange={(e) => setNewPawnForm({ ...newPawnForm, durationMonths: e.target.value })}
-                        className="w-full rounded-xl border border-amber-300 p-2 font-bold text-xs bg-white"
+                        className="w-full rounded-xl border border-amber-300 dark:border-amber-700 p-2 font-bold text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                       >
                         <option value="1">1 ខែ</option>
                         <option value="2">2 ខែ</option>
@@ -3108,7 +3108,7 @@ export default function InstallmentsAndPawnPage() {
                 {/* Quick Chips for Days */}
                 {newPawnForm.durationType === "DAYS" && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[11px] text-slate-500 font-medium">ជ្រើសរើសរហ័ស៖</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">ជ្រើសរើសរហ័ស៖</span>
                     {[7, 10, 15, 20, 30, 45, 60, 90].map((d) => (
                       <button
                         key={d}
@@ -3117,7 +3117,7 @@ export default function InstallmentsAndPawnPage() {
                         className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
                           newPawnForm.durationDays === String(d)
                             ? "bg-amber-600 text-white shadow-xs"
-                            : "bg-white border border-amber-300 text-amber-900 hover:bg-amber-100"
+                            : "bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-slate-700"
                         }`}
                       >
                         {d} ថ្ងៃ
@@ -3127,10 +3127,10 @@ export default function InstallmentsAndPawnPage() {
                 )}
 
                 {/* Live Maturity Date & Estimated Interest Display */}
-                <div className="rounded-xl bg-white/95 p-3 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="rounded-xl bg-white/95 dark:bg-slate-900/90 p-3 border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div>
-                    <span className="text-slate-500 block text-[11px]">កាលបរិច្ឆេទផុតកំណត់ (Maturity Date)៖</span>
-                    <span className="font-bold text-rose-700 font-mono text-sm">
+                    <span className="text-slate-500 dark:text-slate-400 block text-[11px]">កាលបរិច្ឆេទផុតកំណត់ (Maturity Date)៖</span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400 font-mono text-sm">
                       {(() => {
                         const s = new Date(newPawnForm.startDate || new Date());
                         if (newPawnForm.durationType === "DAYS") {
@@ -3143,14 +3143,14 @@ export default function InstallmentsAndPawnPage() {
                         return s.toISOString().split("T")[0];
                       })()}
                     </span>
-                    <span className="text-[10px] text-slate-500 ml-2">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 ml-2">
                       ({newPawnForm.durationType === "DAYS" ? `${newPawnForm.durationDays || 30} ថ្ងៃ` : `${newPawnForm.durationMonths} ខែ`})
                     </span>
                   </div>
 
                   <div className="text-left sm:text-right">
-                    <span className="text-slate-500 block text-[11px]">ការប្រាក់ប៉ាន់ស្មាន៖</span>
-                    <span className="font-mono font-black text-blue-700 text-sm">
+                    <span className="text-slate-500 dark:text-slate-400 block text-[11px]">ការប្រាក់ប៉ាន់ស្មាន៖</span>
+                    <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-sm">
                       {(() => {
                         const loan = parseFloat(newPawnForm.loanAmountUsd) || 0;
                         const rate = parseFloat(newPawnForm.monthlyInterestRate) || 2.5;
@@ -3168,17 +3168,17 @@ export default function InstallmentsAndPawnPage() {
               </div>
 
               {/* Submit Buttons */}
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowNewPawnModal(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
                   បោះបង់
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-amber-700 px-5 py-2 font-bold text-white hover:bg-amber-800 transition cursor-pointer shadow-md"
+                  className="rounded-xl bg-amber-700 dark:bg-amber-600 px-5 py-2 font-bold text-white hover:bg-amber-800 dark:hover:bg-amber-700 transition cursor-pointer shadow-md"
                 >
                   រក្សាទុក & បង្កើតប័ណ្ណបញ្ចាំ
                 </button>
@@ -3193,20 +3193,20 @@ export default function InstallmentsAndPawnPage() {
       {/* ========================================================================= */}
       {payModalSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl text-slate-800">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
               <div>
-                <h3 className="font-black text-slate-900 text-base">
+                <h3 className="font-black text-slate-900 dark:text-white text-base">
                   ទទួលការបង់ប្រាក់រំលស់ (Installment Payment)
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   លើកទី {payModalSchedule.installmentNumber} - កាលកំណត់ {payModalSchedule.dueDate}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setPayModalSchedule(null)}
-                className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+                className="rounded-xl border border-slate-200 dark:border-slate-700 p-1.5 text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -3220,9 +3220,9 @@ export default function InstallmentsAndPawnPage() {
 
               return (
                 <form onSubmit={handleProcessInstallmentPayment} className="space-y-3.5 text-xs mt-3">
-                  <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                    <span className="font-bold text-slate-700">រូបិយប័ណ្ណទទួលប្រាក់៖</span>
-                    <div className="inline-flex rounded-lg bg-slate-200 p-0.5">
+                  <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-700 dark:text-slate-200">រូបិយប័ណ្ណទទួលប្រាក់៖</span>
+                    <div className="inline-flex rounded-lg bg-slate-200 dark:bg-slate-700 p-0.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -3233,8 +3233,8 @@ export default function InstallmentsAndPawnPage() {
                         }}
                         className={`rounded-md px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
                           payCurrency === "USD"
-                            ? "bg-white text-blue-700 shadow-xs"
-                            : "text-slate-600 hover:text-slate-900"
+                            ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs"
+                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                         }`}
                       >
                         💵 ដុល្លារ ($ USD)
@@ -3249,8 +3249,8 @@ export default function InstallmentsAndPawnPage() {
                         }}
                         className={`rounded-md px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
                           payCurrency === "KHR"
-                            ? "bg-white text-purple-700 shadow-xs"
-                            : "text-slate-600 hover:text-slate-900"
+                            ? "bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-400 shadow-xs"
+                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                         }`}
                       >
                         ៛ រៀល (៛ KHR)
@@ -3259,13 +3259,13 @@ export default function InstallmentsAndPawnPage() {
                   </div>
 
                   {/* Summary of due amounts */}
-                  <div className="rounded-xl bg-teal-50/60 p-3 border border-teal-200 flex items-center justify-between text-xs">
+                  <div className="rounded-xl bg-teal-50/60 dark:bg-teal-950/30 p-3 border border-teal-200 dark:border-teal-800/60 flex items-center justify-between text-xs">
                     <div>
-                      <span className="text-slate-500 block text-[11px]">ទឹកប្រាក់ត្រូវបង់លើកនេះ៖</span>
-                      <span className="font-extrabold text-slate-900 font-mono text-sm block">
+                      <span className="text-slate-500 dark:text-slate-400 block text-[11px]">ទឹកប្រាក់ត្រូវបង់លើកនេះ៖</span>
+                      <span className="font-extrabold text-slate-900 dark:text-white font-mono text-sm block">
                         {payCurrency === "KHR" ? formatKHR(remainingKhr) : formatUSD(remainingUsd)}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-slate-400 dark:text-slate-400 font-mono">
                         {payCurrency === "KHR" ? `≈ ${formatUSD(remainingUsd)}` : `≈ ${formatKHR(remainingKhr)}`} (អត្រា $1 = {rate}៛)
                       </span>
                     </div>
@@ -3279,14 +3279,14 @@ export default function InstallmentsAndPawnPage() {
                           setPayAmount(String(Number(remainingUsd.toFixed(2))));
                         }
                       }}
-                      className="rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-xs"
+                      className="rounded-lg bg-teal-700 dark:bg-teal-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-teal-800 dark:hover:bg-teal-700 transition cursor-pointer shadow-xs"
                     >
                       បង់គ្រប់ចំនួន
                     </button>
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
                       ទឹកប្រាក់ទទួលជាក់ស្តែង ({payCurrency === "KHR" ? "៛ រៀល" : "$ USD"}) *
                     </label>
                     <input
@@ -3295,10 +3295,10 @@ export default function InstallmentsAndPawnPage() {
                       value={payAmount}
                       onChange={(e) => setPayAmount(e.target.value)}
                       required
-                      className="w-full rounded-xl border border-slate-300 p-2.5 font-mono font-bold text-base text-teal-800"
+                      className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 font-mono font-bold text-base text-teal-800 dark:text-teal-300"
                     />
                     {payAmount && (
-                      <span className="text-[11px] text-slate-500 font-mono block mt-1">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono block mt-1">
                         {payCurrency === "KHR"
                           ? `≈ $${(parseFloat(payAmount) / rate).toFixed(2)} USD`
                           : `≈ ${formatKHR(Math.round(parseFloat(payAmount) * rate))}`}
@@ -3308,7 +3308,7 @@ export default function InstallmentsAndPawnPage() {
 
                   {payModalSchedule.daysOverdue > 0 && (
                     <div>
-                      <label className="font-bold text-rose-700 block mb-1">
+                      <label className="font-bold text-rose-700 dark:text-rose-400 block mb-1">
                         ប្រាក់ពិន័យបង់យឺត ({payModalSchedule.daysOverdue} ថ្ងៃ) ({payCurrency === "KHR" ? "៛" : "$"})
                       </label>
                       <input
@@ -3316,18 +3316,18 @@ export default function InstallmentsAndPawnPage() {
                         step={payCurrency === "KHR" ? "100" : "0.01"}
                         value={payPenalty}
                         onChange={(e) => setPayPenalty(e.target.value)}
-                        className="w-full rounded-xl border border-rose-300 p-2 font-mono font-bold text-xs text-rose-700 bg-rose-50/50"
+                        className="w-full rounded-xl border border-rose-300 dark:border-rose-700 p-2 font-mono font-bold text-xs text-rose-700 dark:text-rose-300 bg-rose-50/50 dark:bg-rose-950/20"
                       />
                       <span className="text-[10px] text-slate-400">អាចកែប្រែ ឬលើកលែងប្រាក់ពិន័យបាន</span>
                     </div>
                   )}
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">វិធីសាស្រ្តបង់ប្រាក់ (Payment Method)</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">វិធីសាស្រ្តបង់ប្រាក់ (Payment Method)</label>
                     <select
                       value={payMethod}
                       onChange={(e) => setPayMethod(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 text-xs font-bold"
                     >
                       <option value="CASH_USD">សាច់ប្រាក់ដុល្លារ (Cash USD)</option>
                       <option value="CASH_KHR">សាច់ប្រាក់រៀល (Cash KHR)</option>
@@ -3339,28 +3339,28 @@ export default function InstallmentsAndPawnPage() {
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">កំណត់ចំណាំ (Notes)</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">កំណត់ចំណាំ (Notes)</label>
                     <input
                       type="text"
                       value={payNotes}
                       onChange={(e) => setPayNotes(e.target.value)}
                       placeholder="e.g. បង់តាម ABA Trans ID 123456"
-                      className="w-full rounded-xl border border-slate-200 p-2 text-xs"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2 text-xs"
                     />
                   </div>
 
-                  <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+                  <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setPayModalSchedule(null)}
-                      className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
                     >
                       បោះបង់
                     </button>
                     <button
                       type="submit"
                       disabled={isSubmittingPayment}
-                      className="rounded-xl bg-teal-700 px-5 py-2 font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-md disabled:opacity-50"
+                      className="rounded-xl bg-teal-700 dark:bg-teal-600 px-5 py-2 font-bold text-white hover:bg-teal-800 dark:hover:bg-teal-700 transition cursor-pointer shadow-md disabled:opacity-50"
                     >
                       {isSubmittingPayment ? "កំពុងកត់ត្រា..." : "បញ្ជាក់ការទទួលប្រាក់"}
                     </button>
