@@ -20,11 +20,21 @@ export function formatUSD(amount: number | string | undefined): string {
 
 /**
  * Format amounts into standard Cambodian Riel (៛ KHR)
+ * - If exchangeRate is provided, converts USD amount to KHR (amount * exchangeRate) and formats.
+ * - If exchangeRate is NOT provided (or undefined), treats amount as already in KHR and formats directly.
  */
-export function formatKHR(amount: number | string | undefined, exchangeRate: number = 4100): string {
+export function formatKHR(amount: number | string | undefined, exchangeRate?: number): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount || 0;
-  const khr = Math.round(num * exchangeRate);
+  const khr = Math.round(exchangeRate !== undefined ? num * exchangeRate : num);
   return `${new Intl.NumberFormat("km-KH").format(khr)} ៛`;
+}
+
+/**
+ * Explicit helper to format a value that is already in Cambodian Riel (KHR)
+ */
+export function formatRiel(amount: number | string | undefined): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : amount || 0;
+  return `${new Intl.NumberFormat("km-KH").format(Math.round(num))} ៛`;
 }
 
 /**

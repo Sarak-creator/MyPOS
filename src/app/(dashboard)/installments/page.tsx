@@ -2441,6 +2441,9 @@ export default function InstallmentsAndPawnPage() {
                             </button>
                           ))}
                         </div>
+                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                          ≈ ${newContractForm.downPaymentUsd || "0.00"}
+                        </span>
                       </div>
                     ) : (
                       <div>
@@ -2478,6 +2481,9 @@ export default function InstallmentsAndPawnPage() {
                             </button>
                           ))}
                         </div>
+                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                          ≈ {formatKHR(parseFloat(newContractForm.downPaymentKhr) || 0)}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -3295,7 +3301,7 @@ export default function InstallmentsAndPawnPage() {
                       <span className="text-[11px] text-slate-500 font-mono block mt-1">
                         {payCurrency === "KHR"
                           ? `≈ $${(parseFloat(payAmount) / rate).toFixed(2)} USD`
-                          : `≈ ${formatKHR(Math.round(parseFloat(payAmount) * rate))} KHR`}
+                          : `≈ ${formatKHR(Math.round(parseFloat(payAmount) * rate))}`}
                       </span>
                     )}
                   </div>
