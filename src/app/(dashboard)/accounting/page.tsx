@@ -37,11 +37,14 @@ export default function AccountingPage() {
 
   // Add Expense Modal
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [expenseError, setExpenseError] = useState("");
   const [expenseForm, setExpenseForm] = useState({
-    category: "Rent & Utilities",
+    accountId: "",
+    category: "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
     amountUsd: "",
     paidTo: "",
     notes: "",
+    date: new Date().toISOString().split("T")[0],
   });
 
   const fetchAccountingData = async () => {
@@ -50,9 +53,19 @@ export default function AccountingPage() {
       const res = await fetch("/api/accounting");
       const data = await res.json();
       if (data.success) {
-        setAccounts(data.accounts || []);
+        const accs = data.accounts || [];
+        setAccounts(accs);
         setExpenses(data.expenses || []);
         if (data.pnl) setPnlData(data.pnl);
+
+        // Auto-select first expense account if not yet selected
+        const firstExp = accs.find((a: any) => a.type === "EXPENSE") || accs[0];
+        if (firstExp) {
+          setExpenseForm((prev) => ({
+            ...prev,
+            accountId: prev.accountId || firstExp.id,
+          }));
+        }
       }
     } catch (err) {
       console.error("Failed to load accounting data:", err);
@@ -67,7 +80,12 @@ export default function AccountingPage() {
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expenseForm.amountUsd) return;
+    setExpenseError("");
+    const parsedAmount = parseFloat(expenseForm.amountUsd);
+    if (!parsedAmount || parsedAmount <= 0) {
+      setExpenseError("សូមបញ្ចូលទឹកប្រាក់ចំណាយឲ្យបានត្រឹមត្រូវ (> 0)!");
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -76,25 +94,32 @@ export default function AccountingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "ADD_EXPENSE",
+          accountId: expenseForm.accountId || undefined,
           category: expenseForm.category,
-          amountUsd: parseFloat(expenseForm.amountUsd) || 0,
+          amountUsd: parsedAmount,
           paidTo: expenseForm.paidTo,
           notes: expenseForm.notes,
+          date: expenseForm.date,
         }),
       });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error);
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "បរាជ័យក្នុងការកត់ត្រាចំណាយ");
+      }
 
       setIsExpenseModalOpen(false);
+      const firstExp = accounts.find((a: any) => a.type === "EXPENSE") || accounts[0];
       setExpenseForm({
-        category: "Rent & Utilities",
+        accountId: firstExp?.id || "",
+        category: "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
         amountUsd: "",
         paidTo: "",
         notes: "",
+        date: new Date().toISOString().split("T")[0],
       });
       await fetchAccountingData();
     } catch (err: any) {
-      alert("បរាជ័យ: " + err.message);
+      setExpenseError(err.message || "មានបញ្ហាក្នុងការរក្សាទុកចំណាយ");
     } finally {
       setSubmitting(false);
     }
@@ -311,32 +336,55 @@ export default function AccountingPage() {
             <div className="p-12 text-center text-slate-400">
               <Receipt className="h-8 w-8 mx-auto text-slate-300 mb-2" />
               <p className="text-xs font-bold text-slate-600">មិនទាន់មានកំណត់ត្រាចំណាយនៅឡើយទេ</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setExpenseError("");
+                  setIsExpenseModalOpen(true);
+                }}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-teal-700 hover:underline"
+              >
+                <Plus className="h-4 w-4" /> កត់ត្រាចំណាយដំបូង
+              </button>
             </div>
           ) : (
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
-                <tr>
-                  <th className="py-3 px-4">កាលបរិច្ឆេទ</th>
-                  <th className="py-3 px-4">ប្រភេទចំណាយ</th>
-                  <th className="py-3 px-4">ចំណាយទៅកាន់</th>
-                  <th className="py-3 px-4">កំណត់ចំណាំ</th>
-                  <th className="py-3 px-4 text-right">ទឹកប្រាក់ ($)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {expenses.map((exp) => (
-                  <tr key={exp.id} className="hover:bg-slate-50/70 transition">
-                    <td className="py-3 px-4 font-mono text-slate-500">{exp.date}</td>
-                    <td className="py-3 px-4 font-bold text-slate-800">{exp.category}</td>
-                    <td className="py-3 px-4 text-slate-600">{exp.paidTo}</td>
-                    <td className="py-3 px-4 text-slate-400">{exp.notes || "-"}</td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-rose-600">
-                      {formatUSD(Number(exp.amountUsd || 0))}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+                  <tr>
+                    <th className="py-3 px-4">កាលបរិច្ឆេទ</th>
+                    <th className="py-3 px-4">គណនី (Account)</th>
+                    <th className="py-3 px-4">ប្រភេទចំណាយ</th>
+                    <th className="py-3 px-4">ចំណាយទៅកាន់</th>
+                    <th className="py-3 px-4">កំណត់ចំណាំ</th>
+                    <th className="py-3 px-4 text-right">ទឹកប្រាក់ ($)</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  {expenses.map((exp) => (
+                    <tr key={exp.id} className="hover:bg-slate-50/70 transition">
+                      <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">
+                        {exp.date ? new Date(exp.date).toISOString().split("T")[0] : "-"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-mono text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/60">
+                          {exp.account?.code || "5010"} - {exp.account?.nameKh || "ចំណាយ"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{exp.category}</td>
+                      <td className="py-3 px-4 text-slate-600">{exp.paidTo || "-"}</td>
+                      <td className="py-3 px-4 text-slate-400">{exp.notes || "-"}</td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-rose-600 whitespace-nowrap">
+                        {formatUSD(Number(exp.amountUsd || 0))}
+                        <span className="block text-[10px] text-slate-400 font-normal">
+                          {formatKHR(Number(exp.amountUsd || 0), exchangeRateKhr)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -344,40 +392,90 @@ export default function AccountingPage() {
       {/* Add Expense Modal */}
       {isExpenseModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
               <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-teal-700" />
                 កត់ត្រាចំណាយថ្មី (Add Expense)
               </h3>
-              <button onClick={() => setIsExpenseModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => {
+                  setExpenseError("");
+                  setIsExpenseModalOpen(false);
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
+            {expenseError && (
+              <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {expenseError}
+              </div>
+            )}
+
             <form onSubmit={handleAddExpense} className="p-6 space-y-4 text-xs">
+              {accounts.length > 0 && (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">គណនីចំណាយ (Account)</label>
+                  <select
+                    value={expenseForm.accountId}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, accountId: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
+                  >
+                    {accounts.map((acc: any) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.code} - {acc.nameKh} ({acc.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
-                <label className="block font-bold text-slate-700 mb-1">ប្រភេទចំណាយ *</label>
+                <label className="block font-bold text-slate-700 mb-1">កាលបរិច្ឆេទ (Date)</label>
+                <input
+                  type="date"
+                  value={expenseForm.date}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono focus:border-teal-700 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">ប្រភេទចំណាយ (Category) *</label>
                 <select
                   value={expenseForm.category}
                   onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
                 >
                   <option value="ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)">ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)</option>
                   <option value="ចំណាយអ៊ីនធឺណិត & ទឹកភ្លើង (Internet & Water)">ចំណាយអ៊ីនធឺណិត & ទឹកភ្លើង (Internet & Water)</option>
                   <option value="សម្ភារៈការិយាល័យ & បោះពុម្ព (Office & Printing)">សម្ភារៈការិយាល័យ & បោះពុម្ព (Office & Printing)</option>
                   <option value="ទីផ្សារ & ការផ្សាយពាណិជ្ជកម្ម (Marketing)">ទីផ្សារ & ការផ្សាយពាណិជ្ជកម្ម (Marketing)</option>
+                  <option value="ចំណាយដឹកជញ្ជូន (Logistics & Shipping)">ចំណាយដឹកជញ្ជូន (Logistics & Shipping)</option>
+                  <option value="ប្រាក់បៀវត្ស & ប្រាក់ឧបត្ថម្ភ (Salary & Allowances)">ប្រាក់បៀវត្ស & ប្រាក់ឧបត្ថម្ភ (Salary & Allowances)</option>
                   <option value="ចំណាយផ្សេងៗ (Miscellaneous)">ចំណាយផ្សេងៗ (Miscellaneous)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">ទឹកប្រាក់ចំណាយ ($) *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">ទឹកប្រាក់ចំណាយ ($) *</label>
+                  {parseFloat(expenseForm.amountUsd) > 0 && (
+                    <span className="text-[11px] font-bold text-slate-400 font-mono">
+                      ~ {formatKHR(parseFloat(expenseForm.amountUsd) || 0, exchangeRateKhr)}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   step="0.01"
                   min="0.01"
                   required
+                  placeholder="0.00"
                   value={expenseForm.amountUsd}
                   onChange={(e) => setExpenseForm({ ...expenseForm, amountUsd: e.target.value })}
                   className="w-full rounded-xl border border-slate-200 p-2.5 text-base font-bold font-mono text-rose-700 focus:border-rose-600 focus:outline-hidden"
@@ -390,34 +488,37 @@ export default function AccountingPage() {
                   type="text"
                   value={expenseForm.paidTo}
                   onChange={(e) => setExpenseForm({ ...expenseForm, paidTo: e.target.value })}
-                  placeholder="ឧ. ម្ចាស់ផ្ទះជួល / ក្រុមហ៊ុន EDC"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden"
+                  placeholder="ឧ. ម្ចាស់ផ្ទះជួល / ក្រុមហ៊ុន EDC / Smart"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">កំណត់ចំណាំ</label>
+                <label className="block font-bold text-slate-700 mb-1">កំណត់ចំណាំ (Notes)</label>
                 <input
                   type="text"
                   value={expenseForm.notes}
                   onChange={(e) => setExpenseForm({ ...expenseForm, notes: e.target.value })}
-                  placeholder="វិក្កយបត្រខែសីហា..."
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:outline-hidden"
+                  placeholder="វិក្កយបត្រខែ... / ចំណាយលើ..."
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
                 />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsExpenseModalOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50"
+                  onClick={() => {
+                    setExpenseError("");
+                    setIsExpenseModalOpen(false);
+                  }}
+                  className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50 transition"
                 >
                   បោះបង់
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2 font-bold text-white hover:bg-teal-800 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2 font-bold text-white hover:bg-teal-800 disabled:opacity-50 transition active:scale-95"
                 >
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   រក្សាទុកចំណាយ

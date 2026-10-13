@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { AccountType } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
+import { CacheManager } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -133,17 +134,23 @@ export async function POST(request: Request) {
     const {
       accountId,
       amountUsd,
+      amount,
       amountKhr,
       category = "GENERAL_EXPENSE",
       description,
+      notes,
       vendorName,
+      paidTo,
       receiptUrl,
+      date,
       branchId: customBranchId,
     } = body;
 
-    if (!accountId || !amountUsd) {
+    const finalAmountUsd = Number(amountUsd ?? amount ?? 0);
+
+    if (finalAmountUsd <= 0) {
       return NextResponse.json(
-        { success: false, error: "Account and Amount (USD) are required." },
+        { success: false, error: "ចំនួនទឹកប្រាក់ត្រូវតែធំជាង 0 (Amount must be greater than 0)." },
         { status: 400 }
       );
     }
@@ -164,33 +171,100 @@ export async function POST(request: Request) {
     }
 
     if (!tenant || tenant.branches.length === 0) {
-      return NextResponse.json({ success: false, error: "No branch configured." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "មិនមានសាខាដែលបានកំណត់រចនាសម្ព័ន្ធឡើយ (No branch configured)." },
+        { status: 400 }
+      );
     }
 
     const targetBranch = customBranchId
-      ? tenant.branches.find((b: any) => b.id === customBranchId) || tenant.branches[0]
-      : (session?.branchId ? tenant.branches.find((b: any) => b.id === session.branchId) : tenant.branches[0]);
+      ? tenant.branches.find((b: any) => b.id === customBranchId || b.code === customBranchId) || tenant.branches[0]
+      : (session?.branchId ? tenant.branches.find((b: any) => b.id === session.branchId || b.code === session.branchId) : tenant.branches[0]);
+
+    // Resolve or Auto-create Account
+    let targetAccountId = accountId;
+    if (!targetAccountId) {
+      // 1. Look for existing EXPENSE account for this tenant
+      let expAccount = await prisma.account.findFirst({
+        where: {
+          tenantId,
+          type: AccountType.EXPENSE,
+          isActive: true,
+        },
+      });
+
+      // 2. Fallback to any account of this tenant
+      if (!expAccount) {
+        expAccount = await prisma.account.findFirst({
+          where: { tenantId },
+        });
+      }
+
+      // 3. If no accounts exist at all, create a default Operating Expense account
+      if (!expAccount) {
+        expAccount = await prisma.account.create({
+          data: {
+            tenantId: tenant.id,
+            code: "5010",
+            nameKh: "ចំណាយប្រតិបត្តិការទូទៅ",
+            nameEn: "Operating Expenses",
+            type: AccountType.EXPENSE,
+            balanceUsd: 0,
+            isActive: true,
+          },
+        });
+      }
+
+      targetAccountId = expAccount.id;
+    } else {
+      // Verify provided account exists
+      const existing = await prisma.account.findUnique({
+        where: { id: targetAccountId },
+      });
+      if (!existing) {
+        // Fallback to tenant's first expense account
+        const fallback = await prisma.account.findFirst({
+          where: { tenantId, type: AccountType.EXPENSE },
+        });
+        targetAccountId = fallback ? fallback.id : targetAccountId;
+      }
+    }
+
+    const finalNotes = notes || description || undefined;
+    const finalPaidTo = paidTo || vendorName || undefined;
+    const finalDate = date ? new Date(date) : new Date();
+    const finalAmountKhr = Number(amountKhr) || finalAmountUsd * (tenant.exchangeRate || 4100);
 
     const expense = await prisma.expense.create({
       data: {
-        accountId,
+        accountId: targetAccountId,
         branchId: targetBranch.id,
-        category,
-        amountUsd: Number(amountUsd),
-        amountKhr: Number(amountKhr) || Number(amountUsd) * 4100,
-        notes: description || undefined,
-        paidTo: vendorName || undefined,
+        category: category || "GENERAL_EXPENSE",
+        amountUsd: finalAmountUsd,
+        amountKhr: finalAmountKhr,
+        notes: finalNotes,
+        paidTo: finalPaidTo,
         receiptUrl: receiptUrl || undefined,
-        date: new Date(),
+        date: finalDate,
       },
       include: { account: true, branch: true },
     });
 
     // Update account balance
-    await prisma.account.update({
-      where: { id: accountId },
-      data: { balanceUsd: { increment: Number(amountUsd) } },
-    });
+    try {
+      await prisma.account.update({
+        where: { id: targetAccountId },
+        data: { balanceUsd: { increment: finalAmountUsd } },
+      });
+    } catch (accErr) {
+      console.warn("Could not update account balance:", accErr);
+    }
+
+    // Invalidate dashboard & accounting cache
+    if (tenantId) {
+      CacheManager.invalidatePrefix(`dashboard:${tenantId}`);
+      CacheManager.invalidatePrefix("dashboard:");
+    }
 
     return NextResponse.json({
       success: true,
