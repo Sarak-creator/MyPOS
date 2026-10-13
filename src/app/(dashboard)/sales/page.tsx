@@ -57,8 +57,10 @@ export default function SalesPage() {
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
   const [refundMessage, setRefundMessage] = useState("");
 
-  const fetchSales = async () => {
-    setLoading(true);
+  const fetchSales = async (isSilent = false) => {
+    if (!isSilent) {
+      setLoading(true);
+    }
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.set("q", searchQuery);
@@ -67,8 +69,9 @@ export default function SalesPage() {
       if (dateRange) params.set("dateRange", dateRange);
       params.set("page", page.toString());
       params.set("limit", "20");
+      params.set("_t", Date.now().toString());
 
-      const res = await fetch(`/api/sales?${params.toString()}`);
+      const res = await fetch(`/api/sales?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
 
       if (data.success) {
@@ -84,12 +87,14 @@ export default function SalesPage() {
     } catch (err) {
       console.error("Failed to fetch sales:", err);
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchSales();
+    fetchSales(false);
   }, [searchQuery, selectedStatus, selectedPaymentMethod, dateRange, page]);
 
   // Handle Refund / Void
@@ -114,13 +119,21 @@ export default function SalesPage() {
         setShowRefundModal(false);
         setRefundReason("");
 
-        // Broadcast real-time stock restoration
+        // Broadcast real-time stock restoration with exact product quantities
+        const quantities: Record<string, number> = {};
+        const productIds = (selectedOrder.items || []).map((it: any) => {
+          quantities[it.productId] = (quantities[it.productId] || 0) + Number(it.quantity || 1);
+          return it.productId;
+        });
+
         broadcastStockChange({
           type: "REFUND",
+          productIds,
+          quantities,
           timestamp: Date.now(),
         });
 
-        fetchSales();
+        fetchSales(true);
       } else {
         setRefundMessage(data.error || "Failed to process refund");
       }

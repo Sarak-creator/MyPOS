@@ -87,8 +87,10 @@ export default function PurchasesPage() {
   const [supplierFormError, setSupplierFormError] = useState("");
 
   // Fetch Data
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isSilent = false) => {
+    if (!isSilent) {
+      setLoading(true);
+    }
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.set("q", searchQuery);
@@ -96,11 +98,12 @@ export default function PurchasesPage() {
       if (selectedSupplierId) params.set("supplierId", selectedSupplierId);
       params.set("page", page.toString());
       params.set("limit", "20");
+      params.set("_t", Date.now().toString());
 
       const [resPO, resSuppliers, resProducts] = await Promise.all([
-        fetch(`/api/purchases?${params.toString()}`).then((r) => r.json()),
-        fetch("/api/suppliers").then((r) => r.json()),
-        fetch("/api/inventory").then((r) => r.json()).catch(() => ({ products: [] })),
+        fetch(`/api/purchases?${params.toString()}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/suppliers?_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/inventory?_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ products: [] })),
       ]);
 
       if (resPO.success) {
@@ -119,32 +122,41 @@ export default function PurchasesPage() {
     } catch (err) {
       console.error("Failed to fetch purchases data:", err);
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
 
-    // 1. Subscribe to real-time stock sync events
+    // 1. Subscribe to real-time stock sync events (silent)
     const unsubscribe = subscribeToStockSync(() => {
-      fetchData();
+      fetchData(true);
     });
 
-    // 2. Focus and visibility listener
-    const handleFocus = () => fetchData();
+    // 2. Focus and visibility listener (silent)
+    const handleFocus = () => fetchData(true);
     window.addEventListener("focus", handleFocus);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchData(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
-    // 3. Periodic pulse poll every 15s
+    // 3. Periodic pulse poll every 12s (silent)
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") {
-        fetchData();
+        fetchData(true);
       }
-    }, 15000);
+    }, 12000);
 
     return () => {
       unsubscribe();
       window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
       clearInterval(timer);
     };
   }, [searchQuery, selectedStatus, selectedSupplierId, page]);
@@ -229,18 +241,27 @@ export default function PurchasesPage() {
       const data = await res.json();
       if (data.success) {
         setShowCreatePOModal(false);
-        setPoItems([]);
-        setPoNotes("");
-        setPoSupplierId("");
 
         if (poStatus === "RECEIVED") {
+          const quantities: Record<string, number> = {};
+          const productIds = poItems.map((item) => {
+            quantities[item.productId] = (quantities[item.productId] || 0) + item.quantity;
+            return item.productId;
+          });
+
           broadcastStockChange({
             type: "RESTOCK",
+            productIds,
+            quantities,
             timestamp: Date.now(),
           });
         }
 
-        fetchData();
+        setPoItems([]);
+        setPoNotes("");
+        setPoSupplierId("");
+
+        fetchData(true);
       } else {
         setPoFormError(data.error || "Failed to create PO");
       }
@@ -270,13 +291,23 @@ export default function PurchasesPage() {
           setSelectedPO(data.purchaseOrder);
         }
 
+        // Collect quantities and productIds for instant optimistic restock across all open screens
+        const quantities: Record<string, number> = {};
+        const itemsToRestock = data.purchaseOrder?.items || selectedPO?.items || [];
+        const productIds = itemsToRestock.map((it: any) => {
+          quantities[it.productId] = (quantities[it.productId] || 0) + Number(it.quantity || 1);
+          return it.productId;
+        });
+
         // Broadcast real-time ReStock event across POS and inventory screens
         broadcastStockChange({
           type: "RESTOCK",
+          productIds,
+          quantities,
           timestamp: Date.now(),
         });
 
-        fetchData();
+        fetchData(true);
       }
     } catch (err) {
       console.error("Failed to receive PO:", err);

@@ -1,6 +1,8 @@
 // Real-time Stock Sync Manager for Anachak POS
-// Handles cross-tab, cross-window, and inter-component live synchronization
-// for stock cuts (sales, installments, repairs, transfers) and ReStock (purchases, adjustments, voids).
+// Handles cross-device, cross-tab, cross-window, and inter-component live synchronization
+// for stock cuts (sales, installments, repairs, transfers) and ReStock (purchases, adjustments, voids, refunds).
+
+import { supabase } from "@/lib/supabase";
 
 export type StockEventType =
   | "SALE"
@@ -17,6 +19,7 @@ export interface StockSyncEvent {
   productIds?: string[];
   quantities?: Record<string, number>;
   timestamp: number;
+  source?: "local" | "broadcast" | "supabase" | "storage";
 }
 
 const CHANNEL_NAME = "anachak_stock_sync_channel";
@@ -39,6 +42,75 @@ function getBroadcastChannel(): BroadcastChannel | null {
   return broadcastChannel;
 }
 
+// Active subscribers set
+const activeSubscribers = new Set<(event: StockSyncEvent) => void>();
+let supabaseChannel: any = null;
+let supabaseSubscriptionCount = 0;
+
+function setupSupabaseRealtime() {
+  if (typeof window === "undefined" || !supabase) return;
+  if (supabaseChannel) return;
+
+  try {
+    supabaseChannel = supabase
+      .channel("public-stock-sync-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "StockItem" },
+        (payload: any) => {
+          const productId = payload.new?.productId || payload.old?.productId;
+          const syncEvent: StockSyncEvent = {
+            type: "ADJUST",
+            productIds: productId ? [productId] : undefined,
+            timestamp: Date.now(),
+            source: "supabase",
+          };
+          activeSubscribers.forEach((cb) => {
+            try {
+              cb(syncEvent);
+            } catch (err) {
+              console.error("StockSync subscriber error:", err);
+            }
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Order" },
+        () => {
+          const syncEvent: StockSyncEvent = {
+            type: "SALE",
+            timestamp: Date.now(),
+            source: "supabase",
+          };
+          activeSubscribers.forEach((cb) => {
+            try {
+              cb(syncEvent);
+            } catch (err) {
+              console.error("StockSync subscriber error:", err);
+            }
+          });
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === "SUBSCRIBED") {
+          // Connected to Supabase real-time
+        }
+      });
+  } catch (err) {
+    console.warn("Supabase Realtime setup error:", err);
+  }
+}
+
+function teardownSupabaseRealtime() {
+  if (supabaseChannel) {
+    try {
+      supabase.removeChannel(supabaseChannel);
+    } catch {}
+    supabaseChannel = null;
+  }
+}
+
 /**
  * Broadcast a stock change event to all components, tabs, and windows in real-time
  */
@@ -50,6 +122,7 @@ export function broadcastStockChange(
   const payload: StockSyncEvent = {
     ...event,
     timestamp: event.timestamp || Date.now(),
+    source: "local",
   };
 
   // 1. Dispatch DOM event for current window/components
@@ -63,7 +136,7 @@ export function broadcastStockChange(
   const ch = getBroadcastChannel();
   if (ch) {
     try {
-      ch.postMessage(payload);
+      ch.postMessage({ ...payload, source: "broadcast" });
     } catch (e) {
       console.warn("BroadcastChannel postMessage failed:", e);
     }
@@ -71,19 +144,25 @@ export function broadcastStockChange(
 
   // 3. Fallback for cross-tab sync via localStorage storage event
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...payload, source: "storage" }));
   } catch (e) {
     // Ignore quota or storage errors
   }
 }
 
 /**
- * Subscribe to real-time stock sync events across tabs and local events
+ * Subscribe to real-time stock sync events across tabs, local events, and Supabase websocket
  */
 export function subscribeToStockSync(
   callback: (event: StockSyncEvent) => void
 ): () => void {
   if (typeof window === "undefined") return () => {};
+
+  activeSubscribers.add(callback);
+  supabaseSubscriptionCount++;
+  if (supabaseSubscriptionCount === 1) {
+    setupSupabaseRealtime();
+  }
 
   // Handler for local window CustomEvent
   const handleCustomEvent = (e: Event) => {
@@ -118,6 +197,12 @@ export function subscribeToStockSync(
   window.addEventListener("storage", handleStorageEvent);
 
   return () => {
+    activeSubscribers.delete(callback);
+    supabaseSubscriptionCount = Math.max(0, supabaseSubscriptionCount - 1);
+    if (supabaseSubscriptionCount === 0) {
+      teardownSupabaseRealtime();
+    }
+
     window.removeEventListener(EVENT_NAME, handleCustomEvent);
     ch?.removeEventListener("message", handleBroadcastMessage);
     window.removeEventListener("storage", handleStorageEvent);

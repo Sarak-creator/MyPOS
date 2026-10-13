@@ -68,10 +68,12 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
   const [scanFeedback, setScanFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchLiveProducts = async () => {
+  const fetchLiveProducts = async (isSilent = false) => {
     try {
-      setLoading(true);
-      const res = await fetch("/api/products");
+      if (!isSilent) {
+        setLoading(true);
+      }
+      const res = await fetch(`/api/products?_t=${Date.now()}`, { cache: "no-store" });
       const data = await res.json();
       if (data.success && Array.isArray(data.products)) {
         const mapped = data.products.map((p: any) => ({
@@ -94,14 +96,16 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
     } catch (err) {
       console.error("Failed to load POS products:", err);
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchLiveProducts();
+    fetchLiveProducts(false);
 
-    // 1. Subscribe to real-time stock sync events (Sales, ReStock, Voids, Transfers)
+    // 1. Subscribe to real-time stock sync events (Sales, ReStock, Adjustments, Voids, Transfers)
     const unsubscribe = subscribeToStockSync((event: StockSyncEvent) => {
       // Optimistically decrement local stock immediately on sale
       if (event.type === "SALE" && event.quantities) {
@@ -119,31 +123,49 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
         );
       }
 
-      // Re-fetch live products from server to ensure exact sync
-      fetchLiveProducts();
+      // Optimistically increment local stock immediately on ReStock or Refund
+      if ((event.type === "RESTOCK" || event.type === "REFUND") && event.quantities) {
+        setProducts((prev) =>
+          prev.map((p) => {
+            const added = event.quantities?.[p.id] || event.quantities?.[p.productId];
+            if (added && added > 0) {
+              return {
+                ...p,
+                stockQty: p.stockQty + added,
+              };
+            }
+            return p;
+          })
+        );
+      }
+
+      // Re-fetch live products from server in silent background mode (zero spinner, zero flicker)
+      fetchLiveProducts(true);
     });
 
-    // 2. Re-sync whenever the user focuses the POS tab/window
+    // 2. Re-sync silently whenever the user focuses the POS tab/window
     const handleFocus = () => {
-      fetchLiveProducts();
+      fetchLiveProducts(true);
     };
     window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", () => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        fetchLiveProducts();
+        fetchLiveProducts(true);
       }
-    });
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // 3. Background pulse poll every 12 seconds for multi-device/multi-cashier real-time sync
+    // 3. Background pulse poll every 8 seconds for multi-device/multi-cashier real-time sync (silent mode)
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        fetchLiveProducts();
+        fetchLiveProducts(true);
       }
-    }, 12000);
+    }, 8000);
 
     return () => {
       unsubscribe();
       window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(interval);
     };
   }, []);
