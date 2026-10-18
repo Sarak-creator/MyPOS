@@ -122,6 +122,19 @@ export const DEFAULT_PAWN_TERMS = `មាត្រា ១៖ ភាគី "ខ" 
 មាត្រា ៣ (លក្ខខណ្ឌដាច់បញ្ចាំ)៖ ប្រសិនបើហួសកាលបរិច្ឆេទផុតកំណត់លើសពី ០៧ (ប្រាំពីរ) ថ្ងៃ ដោយភាគី "ខ" មិនបានមកបង់ការប្រាក់ដើម្បីបន្តកិច្ចសន្យា ឬមិនបានមកលោះយកទ្រព្យវិញទេនោះ ទ្រព្យបញ្ចាំខាងលើនេះនឹងត្រូវចាត់ទុកថា "ដាច់បញ្ចាំជាស្ថាពរ" ហើយក្លាយជាកម្មសិទ្ធិស្របច្បាប់របស់អ្នកទទួលបញ្ចាំ (ភាគី ក) ដោយស្វ័យប្រវត្តិ។ ភាគី "ក" មានសិទ្ធិលក់ឡៃឡុង ឬចាត់ចែងតាមការគួរ ដោយភាគី "ខ" គ្មានសិទ្ធិតវ៉ា ឬទាមទារសំណងអ្វីទាំងអស់។
 មាត្រា ៤៖ កិច្ចសន្យានេះត្រូវបានធ្វើឡើងជា ០២ ច្បាប់ដែលមានតម្លៃច្បាប់ស្មើគ្នា ដោយភាគីនីមួយៗរក្សាទុកម្នាក់មួយច្បាប់ជាភស្តុតាង។`;
 
+export const DEFAULT_EXPENSE_CATEGORIES: string[] = [
+  "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
+  "ចំណាយអ៊ីនធឺណិត & ទឹកភ្លើង (Internet & Water)",
+  "សម្ភារៈការិយាល័យ & បោះពុម្ព (Office & Printing)",
+  "ទីផ្សារ & ការផ្សាយពាណិជ្ជកម្ម (Marketing)",
+  "ចំណាយដឹកជញ្ជូន (Logistics & Shipping)",
+  "ប្រាក់បៀវត្ស & ប្រាក់ឧបត្ថម្ភ (Salary & Allowances)",
+  "ចំណាយជួសជុល & ថែទាំ (Repairs & Maintenance)",
+  "ថ្លៃសាំង & មធ្យោបាយធ្វើដំណើរ (Gasoline & Travel)",
+  "ថ្លៃអាហារ & បដិសណ្ឋារកិច្ច (Food & Beverage)",
+  "ចំណាយផ្សេងៗ (Miscellaneous)",
+];
+
 // In-Memory Hot Cache
 const cache = new Map<string, { value: any; expiresAt: number }>();
 const CACHE_TTL_MS = 10000; // 10 seconds TTL for fast responses while ensuring quick propagation across devices
@@ -635,5 +648,52 @@ export class ConfigManager {
       ...config,
     };
     return this.set("LOAN_CONTRACT_SETTINGS", merged, "LOANS", "Installment, Pawn contract terms and interest rate settings");
+  }
+
+  /**
+   * Get Expense Categories from Supabase Database
+   */
+  static async getExpenseCategories(forceRefresh = false): Promise<string[]> {
+    const saved = await this.get<string[]>("EXPENSE_CATEGORIES", DEFAULT_EXPENSE_CATEGORIES, forceRefresh);
+    if (Array.isArray(saved) && saved.length > 0) {
+      const combined = Array.from(new Set([...saved, ...DEFAULT_EXPENSE_CATEGORIES]));
+      return combined.filter(Boolean);
+    }
+    return DEFAULT_EXPENSE_CATEGORIES;
+  }
+
+  /**
+   * Add a new Expense Category to Supabase Database
+   */
+  static async addExpenseCategory(categoryName: string): Promise<string[]> {
+    const trimmed = categoryName?.trim();
+    if (!trimmed) return await this.getExpenseCategories();
+    const current = await this.getExpenseCategories(true);
+    if (!current.includes(trimmed)) {
+      const updated = [...current, trimmed];
+      await this.set("EXPENSE_CATEGORIES", updated, "ACCOUNTING", "Business expense categories list");
+      return updated;
+    }
+    return current;
+  }
+
+  /**
+   * Delete an Expense Category from Supabase Database
+   */
+  static async deleteExpenseCategory(categoryName: string): Promise<string[]> {
+    const trimmed = categoryName?.trim();
+    const current = await this.getExpenseCategories(true);
+    const updated = current.filter((c) => c !== trimmed);
+    await this.set("EXPENSE_CATEGORIES", updated, "ACCOUNTING", "Business expense categories list");
+    return updated;
+  }
+
+  /**
+   * Set entire Expense Categories list in Supabase Database
+   */
+  static async setExpenseCategories(categories: string[]): Promise<string[]> {
+    const cleaned = Array.from(new Set(categories.map((c) => c.trim()).filter(Boolean)));
+    await this.set("EXPENSE_CATEGORIES", cleaned, "ACCOUNTING", "Business expense categories list");
+    return cleaned;
   }
 }

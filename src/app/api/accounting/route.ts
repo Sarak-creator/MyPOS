@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { AccountType } from "@prisma/client";
 import { getAuthSession } from "@/lib/auth";
 import { CacheManager } from "@/lib/cache";
+import { ConfigManager } from "@/lib/config-manager";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/accounting - Fetch Chart of Accounts, P&L, and Expenses scoped to tenant
+// GET /api/accounting - Fetch Chart of Accounts, P&L, Expenses, and Categories scoped to tenant
 export async function GET(request: Request) {
   try {
     const session = await getAuthSession(request);
@@ -18,10 +19,10 @@ export async function GET(request: Request) {
     }
 
     if (!tenantId) {
-      return NextResponse.json({ success: true, accounts: [], expenses: [], pnl: {} });
+      return NextResponse.json({ success: true, accounts: [], expenses: [], categories: [], pnl: {} });
     }
 
-    const [accounts, expenses, orders, repairs, orderItems, repairParts] = await Promise.all([
+    const [accounts, expenses, orders, repairs, orderItems, repairParts, configuredCategories] = await Promise.all([
       prisma.account.findMany({
         where: { tenantId },
         orderBy: { code: "asc" },
@@ -57,7 +58,12 @@ export async function GET(request: Request) {
         },
         select: { costPriceUsd: true, quantity: true },
       }),
+      ConfigManager.getExpenseCategories().catch(() => []),
     ]);
+
+    // Merge categories from config and distinct categories recorded in expenses
+    const recordedCategories = expenses.map((e) => e.category).filter(Boolean);
+    const allCategories = Array.from(new Set([...configuredCategories, ...recordedCategories]));
 
     // Calculate P&L values from live Supabase tables
     const posRevenue = orders.reduce((sum, o) => sum + Number(o.totalUsd), 0);
@@ -86,6 +92,7 @@ export async function GET(request: Request) {
       success: true,
       accounts,
       expenses,
+      categories: allCategories,
       pnl: {
         summary: {
           totalRevenue,
@@ -126,17 +133,70 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/accounting - Record an Expense scoped to tenant
+// POST /api/accounting - Record an Expense or manage expense categories scoped to tenant
 export async function POST(request: Request) {
   try {
     const session = await getAuthSession(request);
     const body = await request.json();
+
+    // 1. Action: Add Expense Category
+    if (body.action === "ADD_EXPENSE_CATEGORY") {
+      const categoryName = (body.category || body.name || "").trim();
+      if (!categoryName) {
+        return NextResponse.json(
+          { success: false, error: "ឈ្មោះប្រភេទចំណាយមិនអាចទទេបានទេ (Category name cannot be empty)." },
+          { status: 400 }
+        );
+      }
+      const updatedCategories = await ConfigManager.addExpenseCategory(categoryName);
+      return NextResponse.json({
+        success: true,
+        categories: updatedCategories,
+        message: "ប្រភេទចំណាយត្រូវបានបន្ថែមទៅ Supabase ដោយជោគជ័យ",
+      });
+    }
+
+    // 2. Action: Delete Expense Category
+    if (body.action === "DELETE_EXPENSE_CATEGORY") {
+      const categoryName = (body.category || body.name || "").trim();
+      if (!categoryName) {
+        return NextResponse.json(
+          { success: false, error: "Category name is required." },
+          { status: 400 }
+        );
+      }
+      const updatedCategories = await ConfigManager.deleteExpenseCategory(categoryName);
+      return NextResponse.json({
+        success: true,
+        categories: updatedCategories,
+        message: "ប្រភេទចំណាយត្រូវបានលុបចេញពី Supabase ដោយជោគជ័យ",
+      });
+    }
+
+    // 3. Action: Set Expense Categories
+    if (body.action === "SET_EXPENSE_CATEGORIES") {
+      const rawList = body.categories;
+      if (!Array.isArray(rawList)) {
+        return NextResponse.json(
+          { success: false, error: "Categories must be an array of strings." },
+          { status: 400 }
+        );
+      }
+      const updatedCategories = await ConfigManager.setExpenseCategories(rawList);
+      return NextResponse.json({
+        success: true,
+        categories: updatedCategories,
+        message: "បញ្ជីប្រភេទចំណាយត្រូវបានរក្សាទុកដោយជោគជ័យ",
+      });
+    }
+
+    // 4. Action: Add Expense
     const {
       accountId,
       amountUsd,
       amount,
       amountKhr,
-      category = "GENERAL_EXPENSE",
+      category = "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
       description,
       notes,
       vendorName,
@@ -239,7 +299,7 @@ export async function POST(request: Request) {
       data: {
         accountId: targetAccountId,
         branchId: targetBranch.id,
-        category: category || "GENERAL_EXPENSE",
+        category: category || "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
         amountUsd: finalAmountUsd,
         amountKhr: finalAmountKhr,
         notes: finalNotes,
@@ -249,6 +309,10 @@ export async function POST(request: Request) {
       },
       include: { account: true, branch: true },
     });
+
+    if (category) {
+      ConfigManager.addExpenseCategory(category).catch(() => {});
+    }
 
     // Update account balance
     try {

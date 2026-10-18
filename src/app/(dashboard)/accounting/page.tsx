@@ -14,10 +14,28 @@ import {
   Loader2,
   RefreshCw,
   X,
+  Tags,
+  Tag,
+  Trash2,
+  CheckCircle2,
+  Filter,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import { formatUSD, formatKHR } from "@/lib/utils";
+
+const DEFAULT_CATEGORIES: string[] = [
+  "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
+  "ចំណាយអ៊ីនធឺណិត & ទឹកភ្លើង (Internet & Water)",
+  "សម្ភារៈការិយាល័យ & បោះពុម្ព (Office & Printing)",
+  "ទីផ្សារ & ការផ្សាយពាណិជ្ជកម្ម (Marketing)",
+  "ចំណាយដឹកជញ្ជូន (Logistics & Shipping)",
+  "ប្រាក់បៀវត្ស & ប្រាក់ឧបត្ថម្ភ (Salary & Allowances)",
+  "ចំណាយជួសជុល & ថែទាំ (Repairs & Maintenance)",
+  "ថ្លៃសាំង & មធ្យោបាយធ្វើដំណើរ (Gasoline & Travel)",
+  "ថ្លៃអាហារ & បដិសណ្ឋារកិច្ច (Food & Beverage)",
+  "ចំណាយផ្សេងៗ (Miscellaneous)",
+];
 
 export default function AccountingPage() {
   const { language, exchangeRateKhr } = usePOSStore();
@@ -28,12 +46,23 @@ export default function AccountingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("ALL");
+
   const [pnlData, setPnlData] = useState<any>({
     revenue: [],
     cogs: [],
     expenses: [],
     summary: { totalRevenue: 0, totalCogs: 0, grossProfit: 0, totalExpenses: 0, netProfit: 0 },
   });
+
+  // Expense Category Management State
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [isAddingCategoryInline, setIsAddingCategoryInline] = useState(false);
+  const [inlineCategoryInput, setInlineCategoryInput] = useState("");
+  const [categoryActionLoading, setCategoryActionLoading] = useState(false);
+  const [categoryMessage, setCategoryMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Add Expense Modal
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -58,6 +87,11 @@ export default function AccountingPage() {
         setExpenses(data.expenses || []);
         if (data.pnl) setPnlData(data.pnl);
 
+        // Load dynamic categories from Supabase
+        if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
+          setCategories(data.categories);
+        }
+
         // Auto-select first expense account if not yet selected
         const firstExp = accs.find((a: any) => a.type === "EXPENSE") || accs[0];
         if (firstExp) {
@@ -77,6 +111,72 @@ export default function AccountingPage() {
   useEffect(() => {
     fetchAccountingData();
   }, []);
+
+  const handleAddCategory = async (catName: string, selectImmediately = false) => {
+    const trimmed = catName.trim();
+    if (!trimmed) {
+      setCategoryMessage({ text: "សូមបញ្ចូលឈ្មោះប្រភេទចំណាយ!", type: "error" });
+      return;
+    }
+    try {
+      setCategoryActionLoading(true);
+      setCategoryMessage(null);
+      const res = await fetch("/api/accounting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ADD_EXPENSE_CATEGORY", category: trimmed }),
+      });
+      const data = await res.json();
+      if (data.success && data.categories) {
+        setCategories(data.categories);
+        setNewCategoryName("");
+        setInlineCategoryInput("");
+        setIsAddingCategoryInline(false);
+        if (selectImmediately) {
+          setExpenseForm((prev) => ({ ...prev, category: trimmed }));
+        }
+        setCategoryMessage({ text: `✓ បានបន្ថែម «${trimmed}» ដោយជោគជ័យ!`, type: "success" });
+        setTimeout(() => setCategoryMessage(null), 3500);
+      } else {
+        throw new Error(data.error || "បរាជ័យក្នុងការបន្ថែមប្រភេទចំណាយ");
+      }
+    } catch (err: any) {
+      setCategoryMessage({ text: err.message, type: "error" });
+    } finally {
+      setCategoryActionLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (catName: string) => {
+    if (!confirm(`តើអ្នកពិតជាចង់លុបប្រភេទចំណាយ «${catName}» នេះចេញពីប្រព័ន្ធមែនទេ?`)) return;
+    try {
+      setCategoryActionLoading(true);
+      setCategoryMessage(null);
+      const res = await fetch("/api/accounting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "DELETE_EXPENSE_CATEGORY", category: catName }),
+      });
+      const data = await res.json();
+      if (data.success && data.categories) {
+        setCategories(data.categories);
+        if (expenseForm.category === catName) {
+          setExpenseForm((prev) => ({ ...prev, category: data.categories[0] || "ចំណាយផ្សេងៗ (Miscellaneous)" }));
+        }
+        if (selectedCategoryFilter === catName) {
+          setSelectedCategoryFilter("ALL");
+        }
+        setCategoryMessage({ text: `✓ បានលុបប្រភេទចំណាយដោយជោគជ័យ!`, type: "success" });
+        setTimeout(() => setCategoryMessage(null), 3000);
+      } else {
+        throw new Error(data.error || "បរាជ័យក្នុងការលុប");
+      }
+    } catch (err: any) {
+      setCategoryMessage({ text: err.message, type: "error" });
+    } finally {
+      setCategoryActionLoading(false);
+    }
+  };
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +211,7 @@ export default function AccountingPage() {
       const firstExp = accounts.find((a: any) => a.type === "EXPENSE") || accounts[0];
       setExpenseForm({
         accountId: firstExp?.id || "",
-        category: "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
+        category: categories[0] || "ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)",
         amountUsd: "",
         paidTo: "",
         notes: "",
@@ -140,6 +240,14 @@ export default function AccountingPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsManageCategoriesOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+            title="គ្រប់គ្រងប្រភេទចំណាយ (Manage Categories)"
+          >
+            <Tags className="h-3.5 w-3.5 text-teal-700" />
+            ប្រភេទចំណាយ
+          </button>
           <button
             onClick={fetchAccountingData}
             className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
@@ -330,64 +438,148 @@ export default function AccountingPage() {
       )}
 
       {/* Expenses View */}
-      {!loading && activeTab === "EXPENSES" && (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-          {expenses.length === 0 ? (
-            <div className="p-12 text-center text-slate-400">
-              <Receipt className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-              <p className="text-xs font-bold text-slate-600">មិនទាន់មានកំណត់ត្រាចំណាយនៅឡើយទេ</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setExpenseError("");
-                  setIsExpenseModalOpen(true);
-                }}
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-teal-700 hover:underline"
-              >
-                <Plus className="h-4 w-4" /> កត់ត្រាចំណាយដំបូង
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
-                  <tr>
-                    <th className="py-3 px-4">កាលបរិច្ឆេទ</th>
-                    <th className="py-3 px-4">គណនី (Account)</th>
-                    <th className="py-3 px-4">ប្រភេទចំណាយ</th>
-                    <th className="py-3 px-4">ចំណាយទៅកាន់</th>
-                    <th className="py-3 px-4">កំណត់ចំណាំ</th>
-                    <th className="py-3 px-4 text-right">ទឹកប្រាក់ ($)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {expenses.map((exp) => (
-                    <tr key={exp.id} className="hover:bg-slate-50/70 transition">
-                      <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">
-                        {exp.date ? new Date(exp.date).toISOString().split("T")[0] : "-"}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/60">
-                          {exp.account?.code || "5010"} - {exp.account?.nameKh || "ចំណាយ"}
+      {!loading && activeTab === "EXPENSES" && (() => {
+        const filteredExpenses = selectedCategoryFilter === "ALL"
+          ? expenses
+          : expenses.filter((e) => e.category === selectedCategoryFilter);
+        const totalFilteredUsd = filteredExpenses.reduce((sum, e) => sum + Number(e.amountUsd || 0), 0);
+
+        return (
+          <div className="space-y-3">
+            {/* Category filter toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1 mr-1">
+                  <Filter className="h-3 w-3" /> តម្រង:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategoryFilter("ALL")}
+                  className={`rounded-xl px-2.5 py-1 text-xs font-bold transition ${
+                    selectedCategoryFilter === "ALL"
+                      ? "bg-teal-700 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  ទាំងអស់ ({expenses.length})
+                </button>
+                {categories.map((cat) => {
+                  const count = expenses.filter((e) => e.category === cat).length;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategoryFilter(cat)}
+                      className={`rounded-xl px-2.5 py-1 text-xs font-bold transition flex items-center gap-1 ${
+                        selectedCategoryFilter === cat
+                          ? "bg-teal-700 text-white shadow-xs"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      <span>{cat}</span>
+                      {count > 0 && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                            selectedCategoryFilter === cat
+                              ? "bg-teal-800 text-teal-100"
+                              : "bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {count}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{exp.category}</td>
-                      <td className="py-3 px-4 text-slate-600">{exp.paidTo || "-"}</td>
-                      <td className="py-3 px-4 text-slate-400">{exp.notes || "-"}</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-rose-600 whitespace-nowrap">
-                        {formatUSD(Number(exp.amountUsd || 0))}
-                        <span className="block text-[10px] text-slate-400 font-normal">
-                          {formatKHR(Number(exp.amountUsd || 0), exchangeRateKhr)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600">
+                  សរុប: <span className="font-mono text-rose-600 font-extrabold">{formatUSD(totalFilteredUsd)}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsManageCategoriesOpen(true)}
+                  className="rounded-xl border border-slate-200 hover:border-teal-300 bg-slate-50 hover:bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-800 transition flex items-center gap-1"
+                >
+                  <Tags className="h-3 w-3 text-teal-700" />
+                  គ្រប់គ្រងប្រភេទ
+                </button>
+              </div>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Expenses Table */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+              {filteredExpenses.length === 0 ? (
+                <div className="p-12 text-center text-slate-400">
+                  <Receipt className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                  <p className="text-xs font-bold text-slate-600">
+                    {selectedCategoryFilter === "ALL"
+                      ? "មិនទាន់មានកំណត់ត្រាចំណាយនៅឡើយទេ"
+                      : `មិនមានចំណាយក្នុងប្រភេទ «${selectedCategoryFilter}» នេះទេ`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpenseError("");
+                      if (selectedCategoryFilter !== "ALL") {
+                        setExpenseForm((prev) => ({ ...prev, category: selectedCategoryFilter }));
+                      }
+                      setIsExpenseModalOpen(true);
+                    }}
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-teal-700 hover:underline"
+                  >
+                    <Plus className="h-4 w-4" /> កត់ត្រាចំណាយថ្មី
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+                      <tr>
+                        <th className="py-3 px-4">កាលបរិច្ឆេទ</th>
+                        <th className="py-3 px-4">គណនី (Account)</th>
+                        <th className="py-3 px-4">ប្រភេទចំណាយ</th>
+                        <th className="py-3 px-4">ចំណាយទៅកាន់</th>
+                        <th className="py-3 px-4">កំណត់ចំណាំ</th>
+                        <th className="py-3 px-4 text-right">ទឹកប្រាក់ ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {filteredExpenses.map((exp) => (
+                        <tr key={exp.id} className="hover:bg-slate-50/70 transition">
+                          <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">
+                            {exp.date ? new Date(exp.date).toISOString().split("T")[0] : "-"}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-mono text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/60">
+                              {exp.account?.code || "5010"} - {exp.account?.nameKh || "ចំណាយ"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                              <Tag className="h-3 w-3 text-teal-600" />
+                              {exp.category}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-600">{exp.paidTo || "-"}</td>
+                          <td className="py-3 px-4 text-slate-400">{exp.notes || "-"}</td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-rose-600 whitespace-nowrap">
+                            {formatUSD(Number(exp.amountUsd || 0))}
+                            <span className="block text-[10px] text-slate-400 font-normal">
+                              {formatKHR(Number(exp.amountUsd || 0), exchangeRateKhr)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Add Expense Modal */}
       {isExpenseModalOpen && (
@@ -445,20 +637,66 @@ export default function AccountingPage() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">ប្រភេទចំណាយ (Category) *</label>
-                <select
-                  value={expenseForm.category}
-                  onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
-                >
-                  <option value="ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)">ថ្លៃជួលទីតាំង & អគ្គិសនី (Rent & Utilities)</option>
-                  <option value="ចំណាយអ៊ីនធឺណិត & ទឹកភ្លើង (Internet & Water)">ចំណាយអ៊ីនធឺណិត & ទឹកភ្លើង (Internet & Water)</option>
-                  <option value="សម្ភារៈការិយាល័យ & បោះពុម្ព (Office & Printing)">សម្ភារៈការិយាល័យ & បោះពុម្ព (Office & Printing)</option>
-                  <option value="ទីផ្សារ & ការផ្សាយពាណិជ្ជកម្ម (Marketing)">ទីផ្សារ & ការផ្សាយពាណិជ្ជកម្ម (Marketing)</option>
-                  <option value="ចំណាយដឹកជញ្ជូន (Logistics & Shipping)">ចំណាយដឹកជញ្ជូន (Logistics & Shipping)</option>
-                  <option value="ប្រាក់បៀវត្ស & ប្រាក់ឧបត្ថម្ភ (Salary & Allowances)">ប្រាក់បៀវត្ស & ប្រាក់ឧបត្ថម្ភ (Salary & Allowances)</option>
-                  <option value="ចំណាយផ្សេងៗ (Miscellaneous)">ចំណាយផ្សេងៗ (Miscellaneous)</option>
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">ប្រភេទចំណាយ (Category) *</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingCategoryInline(!isAddingCategoryInline);
+                      setInlineCategoryInput("");
+                    }}
+                    className="text-[11px] font-bold text-teal-700 hover:text-teal-800 flex items-center gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {isAddingCategoryInline ? "ជ្រើសពីបញ្ជី" : "+ បន្ថែមប្រភេទថ្មី"}
+                  </button>
+                </div>
+
+                {isAddingCategoryInline ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="បញ្ចូលឈ្មោះប្រភេទចំណាយថ្មី..."
+                        value={inlineCategoryInput}
+                        onChange={(e) => setInlineCategoryInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (inlineCategoryInput.trim()) {
+                              handleAddCategory(inlineCategoryInput.trim(), true);
+                            }
+                          }
+                        }}
+                        className="flex-1 rounded-xl border border-teal-400 bg-teal-50/40 p-2 text-xs focus:border-teal-700 focus:outline-hidden"
+                      />
+                      <button
+                        type="button"
+                        disabled={categoryActionLoading || !inlineCategoryInput.trim()}
+                        onClick={() => handleAddCategory(inlineCategoryInput.trim(), true)}
+                        className="rounded-xl bg-teal-700 px-3 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-50 transition shrink-0"
+                      >
+                        {categoryActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "បន្ថែម"}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-teal-700">
+                      💡 នឹងរក្សាទុកក្នុង Supabase ស្វ័យប្រវត្តិ និងជ្រើសរើសប្រភេទនេះភ្លាមៗ
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={expenseForm.category}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:border-teal-700 focus:outline-hidden"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -525,6 +763,145 @@ export default function AccountingPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Expense Categories Modal */}
+      {isManageCategoriesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-teal-50 border border-teal-200/60 flex items-center justify-center text-teal-700">
+                  <Tags className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-800">
+                    គ្រប់គ្រងប្រភេទចំណាយ (Expense Categories)
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    រក្សាទុកក្នុង Supabase Database និងប្រើប្រាស់រួមគ្នាគ្រប់ឧបករណ៍
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManageCategoriesOpen(false);
+                  setCategoryMessage(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Notification message */}
+            {categoryMessage && (
+              <div
+                className={`mx-6 mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                  categoryMessage.type === "success"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50 border-rose-200 text-rose-700"
+                }`}
+              >
+                {categoryMessage.type === "success" ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <span>⚠️</span>
+                )}
+                <span>{categoryMessage.text}</span>
+              </div>
+            )}
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Add form */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  បន្ថែមប្រភេទចំណាយថ្មី (Add New Category)
+                </label>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newCategoryName.trim()) {
+                      handleAddCategory(newCategoryName.trim());
+                    }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="ឧ. ជួសជុលម៉ាស៊ីនត្រជាក់ (AC Repair) / សាំងឡាន..."
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-teal-700 focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    disabled={categoryActionLoading || !newCategoryName.trim()}
+                    className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-50 transition shrink-0"
+                  >
+                    {categoryActionLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}
+                    បន្ថែម
+                  </button>
+                </form>
+              </div>
+
+              {/* Categories list */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-700">
+                    បញ្ជីប្រភេទចំណាយបច្ចុប្បន្ន ({categories.length})
+                  </span>
+                  <span className="text-[10px] text-slate-400">ចុចលើរូបធុងសំរាមដើម្បីលុប</span>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/50 p-2">
+                  {categories.map((cat, idx) => (
+                    <div
+                      key={cat}
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-white transition group text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-slate-400 w-5">{idx + 1}.</span>
+                        <Tag className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                        <span className="font-bold text-slate-800">{cat}</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={categoryActionLoading}
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="opacity-60 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        title="លុបប្រភេទចំណាយនេះ"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end bg-slate-50/70 border-t border-slate-100 px-6 py-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManageCategoriesOpen(false);
+                  setCategoryMessage(null);
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+              >
+                បិទ (Close)
+              </button>
+            </div>
           </div>
         </div>
       )}
