@@ -168,6 +168,13 @@ export default function Sidebar({
       permission: "hrm:view",
     },
     {
+      label: t.reports || "របាយការណ៍",
+      href: "/reports",
+      icon: FileBarChart,
+      badge: null,
+      permission: "sales:view",
+    },
+    {
       label: t.auditLogs,
       href: "/audit-logs",
       icon: ShieldAlert,
