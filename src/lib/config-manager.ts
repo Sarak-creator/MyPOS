@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizeDatabaseUrl, prisma } from "@/lib/prisma";
+import { POSDisplayConfig, DEFAULT_POS_DISPLAY_CONFIG } from "@/types/product";
 
 export interface DatabaseConnectionConfig {
   DATABASE_URL: string;
@@ -569,6 +570,36 @@ export class ConfigManager {
       ...config,
     };
     return this.set("APPEARANCE_CONFIG", merged, "APPEARANCE", "System theme mode and color palette");
+  }
+
+  /**
+   * Get POS Display & Card Layout Configuration from Supabase
+   */
+  static async getPosDisplayConfig(forceRefresh = false): Promise<POSDisplayConfig> {
+    const saved = await this.get<Partial<POSDisplayConfig>>("POS_DISPLAY_CONFIG", {}, forceRefresh);
+
+    return {
+      layout: saved?.layout || DEFAULT_POS_DISPLAY_CONFIG.layout,
+      showImages: saved?.showImages ?? DEFAULT_POS_DISPLAY_CONFIG.showImages,
+      showBarcode: saved?.showBarcode ?? DEFAULT_POS_DISPLAY_CONFIG.showBarcode,
+      defaultCurrency: saved?.defaultCurrency || DEFAULT_POS_DISPLAY_CONFIG.defaultCurrency,
+      showDualPrice: saved?.showDualPrice ?? DEFAULT_POS_DISPLAY_CONFIG.showDualPrice,
+      itemsPerRow: saved?.itemsPerRow || DEFAULT_POS_DISPLAY_CONFIG.itemsPerRow,
+      enableHapticFeedback: saved?.enableHapticFeedback ?? DEFAULT_POS_DISPLAY_CONFIG.enableHapticFeedback,
+      enableClickSound: saved?.enableClickSound ?? DEFAULT_POS_DISPLAY_CONFIG.enableClickSound,
+    };
+  }
+
+  /**
+   * Save POS Display & Card Layout Configuration to Supabase
+   */
+  static async savePosDisplayConfig(config: Partial<POSDisplayConfig>): Promise<boolean> {
+    const existing = await this.getPosDisplayConfig();
+    const merged: POSDisplayConfig = {
+      ...existing,
+      ...config,
+    };
+    return this.set("POS_DISPLAY_CONFIG", merged, "POS", "POS dynamic card layout and catalog display configuration");
   }
 
   /**

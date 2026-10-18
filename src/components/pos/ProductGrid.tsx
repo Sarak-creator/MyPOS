@@ -15,6 +15,10 @@ import {
   Image as ImageIcon,
   Camera,
   CheckCircle2,
+  LayoutGrid,
+  SquareMenu,
+  Rows3,
+  Sliders,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -23,22 +27,12 @@ import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner";
 import { playScanErrorBeep } from "@/lib/scannerAudio";
 import { subscribeToStockSync, StockSyncEvent } from "@/lib/stockSync";
+import ProductCard from "@/components/pos/ProductCard";
+import ProductGridContainer from "@/components/pos/ProductGridContainer";
+import { usePOSSettings } from "@/context/POSSettingsContext";
+import { CardLayoutType, ProductItem } from "@/types/product";
 
-export interface ProductItem {
-  id: string;
-  productId: string;
-  sku: string;
-  barcode?: string;
-  nameKh: string;
-  nameEn: string;
-  priceUsd: number;
-  costPriceUsd: number;
-  categorySlug: string;
-  stockQty: number;
-  type: "STANDARD_ITEM" | "SERIAL_IMEI_ITEM" | "VARIANT_ITEM" | "SERVICE_LABOR" | "SPARE_PART";
-  imageUrl?: string;
-  imeiList?: string[];
-}
+export type { ProductItem };
 
 export interface ProductGridProps {
   onOpenPayment?: () => void;
@@ -49,12 +43,14 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
   const {
     language,
     addItem,
+    updateQuantity,
     items,
     exchangeRateKhr,
     scannerMode,
     scannerAutoAddToCart,
     scannerSoundFeedback,
   } = usePOSStore();
+  const { config, setLayout, setIsSelectorOpen } = usePOSSettings();
   const t = translations[language];
 
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -111,7 +107,7 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
       if (event.type === "SALE" && event.quantities) {
         setProducts((prev) =>
           prev.map((p) => {
-            const deducted = event.quantities?.[p.id] || event.quantities?.[p.productId];
+            const deducted = event.quantities?.[p.id] || (p.productId ? event.quantities?.[p.productId] : 0);
             if (deducted && deducted > 0) {
               return {
                 ...p,
@@ -127,7 +123,7 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
       if ((event.type === "RESTOCK" || event.type === "REFUND") && event.quantities) {
         setProducts((prev) =>
           prev.map((p) => {
-            const added = event.quantities?.[p.id] || event.quantities?.[p.productId];
+            const added = event.quantities?.[p.id] || (p.productId ? event.quantities?.[p.productId] : 0);
             if (added && added > 0) {
               return {
                 ...p,
@@ -196,7 +192,7 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
     const matchesSearch =
       query === "" ||
       p.nameKh.toLowerCase().includes(query) ||
-      p.nameEn.toLowerCase().includes(query) ||
+      (p.nameEn ? p.nameEn.toLowerCase().includes(query) : false) ||
       p.sku.toLowerCase().includes(query) ||
       (p.barcode && p.barcode.includes(query));
 
@@ -299,14 +295,14 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
 
     addItem({
       id: p.id,
-      productId: p.id,
+      productId: p.productId || p.id,
       nameKh: p.nameKh,
-      nameEn: p.nameEn,
+      nameEn: p.nameEn || p.nameKh,
       sku: p.sku,
       barcode: p.barcode,
       priceUsd: p.priceUsd,
-      costPriceUsd: p.costPriceUsd,
-      type: p.type,
+      costPriceUsd: p.costPriceUsd || 0,
+      type: p.type || "STANDARD_ITEM",
       selectedImei,
       stockQty: p.stockQty,
     });
@@ -384,29 +380,101 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
         )}
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {categories.map((cat) => {
-          const Icon = cat.icon;
-          const isSelected = selectedCategory === cat.slug;
-          return (
-            <button
-              key={cat.slug}
-              onClick={() => setSelectedCategory(cat.slug)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-2xs ${
-                isSelected
-                  ? "bg-teal-700 text-white shadow-teal-900/20"
-                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <Icon className={`h-4 w-4 ${isSelected ? "text-white" : "text-slate-500"}`} />
-              <span>{cat.label}</span>
-            </button>
-          );
-        })}
+      {/* Category Tabs & Layout Mode Switcher Toolbar */}
+      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 shrink-0">
+          {categories.map((cat) => {
+            const Icon = cat.icon;
+            const isSelected = selectedCategory === cat.slug;
+            return (
+              <button
+                key={cat.slug}
+                onClick={() => setSelectedCategory(cat.slug)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-2xs ${
+                  isSelected
+                    ? "bg-teal-700 text-white shadow-teal-900/20"
+                    : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${isSelected ? "text-white" : "text-slate-500"}`} />
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Runtime Layout Quick-Switch Buttons & Style Config Modal Trigger */}
+        <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-2xs shrink-0 ml-auto">
+          <button
+            type="button"
+            onClick={() => setLayout("classic")}
+            title="កាតបុរាណ (Classic Grid)"
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold transition ${
+              config.layout === "classic"
+                ? "bg-teal-700 text-white shadow-xs"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline text-[11px]">Classic</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLayout("compact")}
+            title="ក្រឡាតូចរហ័ស (Compact Touch Tile)"
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold transition ${
+              config.layout === "compact"
+                ? "bg-teal-700 text-white shadow-xs"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            }`}
+          >
+            <SquareMenu className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline text-[11px]">Compact</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLayout("list")}
+            title="តារាងជួរដេក (Dense Row List)"
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold transition ${
+              config.layout === "list"
+                ? "bg-teal-700 text-white shadow-xs"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            }`}
+          >
+            <Rows3 className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline text-[11px]">List</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLayout("visual")}
+            title="រូបភាពច្បាស់ (Visual 1:1 Showcase)"
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold transition ${
+              config.layout === "visual"
+                ? "bg-teal-700 text-white shadow-xs"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            }`}
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline text-[11px]">Visual</span>
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-200 mx-0.5" />
+
+          <button
+            type="button"
+            onClick={() => setIsSelectorOpen(true)}
+            title="ការកំណត់រចនាបទកាត (Card Settings)"
+            className="flex items-center gap-1 rounded-lg p-1 text-slate-500 hover:bg-teal-50 hover:text-teal-700 transition"
+          >
+            <Sliders className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Products Grid */}
+      {/* Products Catalog Container */}
       <div className="flex-1 overflow-y-auto pr-1">
         {loading ? (
           <div className="flex h-64 items-center justify-center gap-2 text-slate-400">
@@ -418,127 +486,39 @@ export default function ProductGrid({ onOpenPayment, onOpenMobileCart }: Product
             <p className="text-xs font-bold text-slate-600">{t.noProductsFound}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 min-[1440px]:grid-cols-5 min-[1680px]:grid-cols-6 min-[1920px]:grid-cols-7 min-[2200px]:grid-cols-8 min-[2560px]:grid-cols-9 min-[2880px]:grid-cols-10">
+          <ProductGridContainer layout={config.layout} itemsPerRow={config.itemsPerRow}>
             {filteredProducts.map((p) => {
-              const isOutOfStock = p.type !== "SERVICE_LABOR" && p.stockQty <= 0;
               const cartItem = items.find((i) => i.id === p.id);
-              const isMaxInCart =
-                p.type !== "SERVICE_LABOR" &&
-                !isOutOfStock &&
-                cartItem &&
-                cartItem.quantity >= p.stockQty;
-
               return (
-                <button
+                <ProductCard
                   key={p.id}
-                  onClick={() => handleSelectProduct(p)}
-                  disabled={isOutOfStock}
-                  className={`group relative flex flex-col justify-between rounded-2xl border p-3.5 text-left shadow-xs transition ${
-                    isOutOfStock
-                      ? "border-rose-200 bg-rose-50/30 opacity-70 cursor-not-allowed"
-                      : isMaxInCart
-                      ? "border-amber-300 bg-amber-50/20 hover:border-amber-400"
-                      : "border-slate-200 bg-white hover:border-teal-500 hover:shadow-md active:scale-[0.98]"
-                  }`}
-                >
-                  <div>
-                    {/* Product Image Thumbnail */}
-                    <div className="relative mb-2 w-full h-24 sm:h-28 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center border border-slate-100">
-                      {p.imageUrl ? (
-                        <img
-                          src={p.imageUrl}
-                          alt={p.nameKh}
-                          className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            target.style.display = "none";
-                            const fallback = target.nextElementSibling as HTMLElement | null;
-                            if (fallback) fallback.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className={`h-full w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 text-slate-300 ${
-                          p.imageUrl ? "hidden" : "flex"
-                        }`}
-                      >
-                        {p.categorySlug === "smartphones" ? (
-                          <Smartphone className="h-8 w-8 text-teal-600/40 group-hover:text-teal-600/70 transition-colors" />
-                        ) : p.categorySlug === "spare-parts" ? (
-                          <Cpu className="h-8 w-8 text-amber-600/40 group-hover:text-amber-600/70 transition-colors" />
-                        ) : p.categorySlug === "repair-services" ? (
-                          <Wrench className="h-8 w-8 text-purple-600/40 group-hover:text-purple-600/70 transition-colors" />
-                        ) : p.categorySlug === "accessories" ? (
-                          <Sparkles className="h-8 w-8 text-rose-600/40 group-hover:text-rose-600/70 transition-colors" />
-                        ) : (
-                          <Package className="h-8 w-8 text-slate-400/40 group-hover:text-teal-600/60 transition-colors" />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-1 mb-1.5">
-                      <span className="text-[10px] font-bold font-mono text-slate-400 truncate">
-                        {p.sku}
-                      </span>
-                      <span
-                        className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
-                          p.type === "SERVICE_LABOR"
-                            ? "bg-purple-50 text-purple-700"
-                            : isOutOfStock
-                            ? "bg-rose-100 text-rose-700 font-extrabold"
-                            : p.stockQty > 5
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        {p.type === "SERVICE_LABOR"
-                          ? t.service
-                          : isOutOfStock
-                          ? `${t.outOfStock} (0)`
-                          : `${t.stock}: ${p.stockQty}`}
-                      </span>
-                    </div>
-
-                    <h4
-                      className={`text-xs font-bold line-clamp-2 leading-snug transition ${
-                        isOutOfStock
-                          ? "text-slate-400 line-through"
-                          : "text-slate-800 group-hover:text-teal-700"
-                      }`}
-                    >
-                      {language === "km" ? p.nameKh : p.nameEn}
-                    </h4>
-
-                    {cartItem && cartItem.quantity > 0 && (
-                      <span className="mt-1 inline-block rounded bg-teal-100 px-1.5 py-0.2 text-[9px] font-extrabold text-teal-800">
-                        {t.inCart}: {cartItem.quantity}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-2">
-                    <div>
-                      <p className={`text-sm font-black font-mono ${isOutOfStock ? "text-slate-400" : "text-teal-800"}`}>
-                        {formatUSD(p.priceUsd)}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-sans">
-                        {formatKHR(p.priceUsd, exchangeRateKhr)}
-                      </p>
-                    </div>
-                    <div
-                      className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition ${
-                        isOutOfStock
-                          ? "bg-slate-100 text-slate-400"
-                          : "bg-teal-50 text-teal-700 group-hover:bg-teal-700 group-hover:text-white"
-                      }`}
-                    >
-                      {isOutOfStock ? "✕" : "+"}
-                    </div>
-                  </div>
-                </button>
+                  product={p}
+                  layout={config.layout}
+                  cartQuantity={cartItem?.quantity || 0}
+                  exchangeRateKhr={exchangeRateKhr}
+                  language={language}
+                  config={config}
+                  onSelect={handleSelectProduct}
+                  onQuantityChange={(prod, newQty) => {
+                    const currentQty = cartItem?.quantity || 0;
+                    if (newQty <= 0) {
+                      if (currentQty > 0) {
+                        updateQuantity(prod.id, -currentQty);
+                      }
+                    } else if (newQty > currentQty) {
+                      if (currentQty === 0) {
+                        handleSelectProduct(prod);
+                      } else {
+                        updateQuantity(prod.id, newQty - currentQty);
+                      }
+                    } else {
+                      updateQuantity(prod.id, newQty - currentQty);
+                    }
+                  }}
+                />
               );
             })}
-          </div>
+          </ProductGridContainer>
         )}
       </div>
 

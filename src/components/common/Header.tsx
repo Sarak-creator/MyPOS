@@ -21,11 +21,17 @@ import {
   Laptop,
   Palette,
   Check,
+  LayoutGrid,
+  SquareMenu,
+  Rows3,
+  Image as ImageIcon,
+  Sliders,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import { OfflineSyncManager } from "@/lib/offline-sync";
 import { COLOR_PALETTES, initThemeListener } from "@/lib/theme";
+import { usePOSSettings } from "@/context/POSSettingsContext";
 
 interface HeaderProps {
   currentUser?: any;
@@ -57,6 +63,11 @@ export default function Header({
     setColorPalette,
   } = usePOSStore();
   const t = translations[language];
+
+  let posSettings: any = null;
+  try {
+    posSettings = usePOSSettings();
+  } catch (e) {}
 
   const [isOnline, setIsOnline] = useState(true);
   const [offlineCount, setOfflineCount] = useState(0);
@@ -314,6 +325,29 @@ export default function Header({
           <DollarSign className="h-3.5 w-3.5 text-amber-300" />
           <span>{currency}</span>
         </button>
+
+        {/* POS Card Layout Quick Switcher Button */}
+        {posSettings && (
+          <button
+            type="button"
+            onClick={() => posSettings.setIsSelectorOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white hover:bg-white/25 transition shadow-2xs backdrop-blur-xs"
+            title="ប្តូររចនាបទកាតទំនិញ POS (Product Card Style)"
+          >
+            {posSettings.config.layout === "compact" ? (
+              <SquareMenu className="h-3.5 w-3.5 text-amber-300" />
+            ) : posSettings.config.layout === "list" ? (
+              <Rows3 className="h-3.5 w-3.5 text-cyan-200" />
+            ) : posSettings.config.layout === "visual" ? (
+              <ImageIcon className="h-3.5 w-3.5 text-rose-300" />
+            ) : (
+              <LayoutGrid className="h-3.5 w-3.5 text-emerald-300" />
+            )}
+            <span className="hidden lg:inline capitalize">
+              {posSettings.config.layout}
+            </span>
+          </button>
+        )}
 
         {/* Language Switcher */}
         <button

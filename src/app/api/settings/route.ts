@@ -57,6 +57,7 @@ export async function GET(request: Request) {
       appearanceConfig,
       telegramConfig,
       loanContractSettings,
+      posDisplayConfig,
     ] = await Promise.all([
       prisma.tenant.findUnique({
         where: { id: tenantId },
@@ -98,6 +99,7 @@ export async function GET(request: Request) {
       ConfigManager.getAppearanceConfig(forceRefresh),
       ConfigManager.getTelegramConfig(forceRefresh),
       ConfigManager.getLoanContractSettings(forceRefresh),
+      ConfigManager.getPosDisplayConfig(forceRefresh),
     ]);
 
     // Merge business profile with tenant database record
@@ -132,6 +134,7 @@ export async function GET(request: Request) {
       appearanceConfig,
       telegramConfig,
       loanContractSettings,
+      posDisplayConfig,
       // Legacy compatibility format for existing consumers
       settings: {
         exchangeRateKhr: tenant?.exchangeRate || posConfig.exchangeRateKhr,
@@ -237,6 +240,7 @@ export async function POST(request: Request) {
         scannerConfig,
         appearanceConfig,
         telegramConfig,
+        posDisplayConfig,
       } = body;
 
       const tasks: Promise<any>[] = [];
@@ -301,11 +305,30 @@ export async function POST(request: Request) {
         tasks.push(ConfigManager.saveTelegramConfig(telegramConfig));
       }
 
+      // 8. POS Display & Card Layout Config
+      if (posDisplayConfig || body.cardLayoutConfig) {
+        tasks.push(ConfigManager.savePosDisplayConfig(posDisplayConfig || body.cardLayoutConfig));
+      }
+
       await Promise.all(tasks);
 
       return NextResponse.json({
         success: true,
         message: "ការកំណត់ទាំងអស់ត្រូវបានរក្សាទុក និងធ្វើសមកាលកម្មក្នុង Supabase Database ដោយជោគជ័យ!",
+      });
+    }
+
+    // =========================================================================
+    // POS DISPLAY CONFIG ACTION
+    // =========================================================================
+    if (action === "SAVE_POS_DISPLAY_CONFIG" || action === "UPDATE_POS_DISPLAY_CONFIG") {
+      const config = body.config || body.posDisplayConfig || body;
+      await ConfigManager.savePosDisplayConfig(config);
+      const updated = await ConfigManager.getPosDisplayConfig(true);
+      return NextResponse.json({
+        success: true,
+        posDisplayConfig: updated,
+        message: "រចនាបទកាតទំនិញត្រូវបានរក្សាទុកក្នុង Supabase ដោយជោគជ័យ!",
       });
     }
 

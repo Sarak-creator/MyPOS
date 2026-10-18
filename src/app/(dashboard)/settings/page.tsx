@@ -48,6 +48,10 @@ import {
   ShoppingCart,
   Camera,
   ScanBarcode,
+  LayoutGrid,
+  SquareMenu,
+  Rows3,
+  Image as ImageIcon,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
@@ -56,6 +60,9 @@ import { COLOR_PALETTES, ColorPaletteId, ThemeMode } from "@/lib/theme";
 import { playScanSuccessBeep } from "@/lib/scannerAudio";
 import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
 import LoanContractSettingsPanel from "@/components/loans/LoanContractSettingsPanel";
+import { usePOSSettings } from "@/context/POSSettingsContext";
+import { LAYOUT_OPTIONS } from "@/types/product";
+
 
 type SettingsTab = "GENERAL" | "POS_CURRENCY" | "PAYMENTS" | "BRANCHES" | "RBAC" | "PRINTER" | "SCANNER" | "BACKUP" | "TELEGRAM" | "APPEARANCE" | "LOANS_CONTRACTS";
 
@@ -99,6 +106,7 @@ export default function SettingsPage() {
     scannerContinuousMode,
     setScannerConfig,
   } = usePOSStore();
+  const { config: posCardConfig, updateConfig: updatePosCardConfig, setIsSelectorOpen: setIsCardSelectorOpen } = usePOSSettings();
   const t = translations[language];
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("APPEARANCE");
@@ -1541,6 +1549,124 @@ export default function SettingsPage() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Section 3: POS Product Card & Catalog Layout */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <LayoutGrid className="h-4 w-4 text-teal-700" />
+                  រចនាបទកាតទំនិញ POS (Dynamic Product Card & Catalog Layout)
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  ជ្រើសរើសទម្រង់កាតទំនិញលំនាំដើមសម្រាប់ផ្ទាំងគិតលុយ POS (Classic, Compact, List, Visual)
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCardSelectorOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 px-3.5 py-1.5 text-xs font-bold text-teal-800 transition shadow-2xs shrink-0"
+              >
+                <Sliders className="h-3.5 w-3.5" />
+                <span>បើកផ្ទាំងជ្រើសរើសពេញលេញ (Visual Modal)</span>
+              </button>
+            </div>
+
+            {/* Layout Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {LAYOUT_OPTIONS.map((opt) => {
+                const isSelected = posCardConfig.layout === opt.type;
+                const IconComp =
+                  opt.iconName === "SquareMenu"
+                    ? SquareMenu
+                    : opt.iconName === "Rows3"
+                    ? Rows3
+                    : opt.iconName === "Image"
+                    ? ImageIcon
+                    : LayoutGrid;
+
+                return (
+                  <button
+                    key={opt.type}
+                    type="button"
+                    onClick={() => updatePosCardConfig({ layout: opt.type })}
+                    className={`relative flex flex-col justify-between p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-teal-600 bg-teal-50/40 shadow-sm ring-1 ring-teal-600/20"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between w-full mb-2.5">
+                        <div
+                          className={`h-9 w-9 rounded-xl flex items-center justify-center transition ${
+                            isSelected
+                              ? "bg-teal-700 text-white shadow-xs"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          <IconComp className="h-5 w-5" />
+                        </div>
+                        {isSelected && (
+                          <span className="flex items-center gap-1 text-[10px] font-black text-teal-800 bg-teal-100/90 px-2 py-0.5 rounded-full">
+                            <Check className="h-3 w-3" /> កំពុងប្រើ
+                          </span>
+                        )}
+                      </div>
+
+                      <h5 className="font-extrabold text-xs sm:text-sm text-slate-900">
+                        {opt.nameKh}
+                      </h5>
+                      <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                        {opt.descriptionKh}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t border-slate-100/80">
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md inline-block">
+                        {opt.recommendedFor}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Display Options & Switches */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-3 cursor-pointer hover:bg-slate-100/60 transition">
+                <span className="text-xs font-bold text-slate-700">បង្ហាញរូបភាពទំនិញ (Show Images)</span>
+                <input
+                  type="checkbox"
+                  disabled={posCardConfig.layout === "compact"}
+                  checked={posCardConfig.showImages && posCardConfig.layout !== "compact"}
+                  onChange={(e) => updatePosCardConfig({ showImages: e.target.checked })}
+                  className="h-4 w-4 rounded text-teal-700 focus:ring-teal-600"
+                />
+              </label>
+
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-3 cursor-pointer hover:bg-slate-100/60 transition">
+                <span className="text-xs font-bold text-slate-700">បង្ហាញបាកូដ / SKU (Show Barcode)</span>
+                <input
+                  type="checkbox"
+                  checked={posCardConfig.showBarcode}
+                  onChange={(e) => updatePosCardConfig({ showBarcode: e.target.checked })}
+                  className="h-4 w-4 rounded text-teal-700 focus:ring-teal-600"
+                />
+              </label>
+
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-3 cursor-pointer hover:bg-slate-100/60 transition">
+                <span className="text-xs font-bold text-slate-700">តម្លៃពីររូបិយប័ណ្ណ ($ & ៛)</span>
+                <input
+                  type="checkbox"
+                  checked={posCardConfig.showDualPrice}
+                  onChange={(e) => updatePosCardConfig({ showDualPrice: e.target.checked })}
+                  className="h-4 w-4 rounded text-teal-700 focus:ring-teal-600"
+                />
+              </label>
+            </div>
           </div>
         </div>
       )}

@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { canAccessRoute } from "@/lib/permissions";
 import { usePOSStore } from "@/store/posStore";
+import { POSSettingsProvider } from "@/context/POSSettingsContext";
+import CardStyleSelectorModal from "@/components/pos/CardStyleSelectorModal";
 
 export default function DashboardLayout({
   children,
@@ -139,7 +141,8 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
+    <POSSettingsProvider>
+      <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
       {/* 1. Responsive Sidebar (Auto-hidden on POS, Fixed on Desktop for other pages, Drawer when open) */}
       <Sidebar
         permissions={currentUser?.permissions}
@@ -236,6 +239,8 @@ export default function DashboardLayout({
           <span>ម៉ឺនុយ</span>
         </button>
       </nav>
+      <CardStyleSelectorModal />
     </div>
+    </POSSettingsProvider>
   );
 }
