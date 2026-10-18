@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { normalizeDatabaseUrl } from "@/lib/prisma";
+import { normalizeDatabaseUrl, prisma } from "@/lib/prisma";
 
 export interface DatabaseConnectionConfig {
   DATABASE_URL: string;
@@ -32,6 +32,12 @@ export interface KhqrConfig {
   abaMerchantId?: string;
   abaApiKey?: string;
   abaApiUrl?: string;
+  enableBakongKhqr?: boolean;
+  enableAbaKhqr?: boolean;
+  enableCashUsd?: boolean;
+  enableCashKhr?: boolean;
+  enableCustomerCredit?: boolean;
+  customKhqrRawString?: string;
 }
 
 export interface PosSystemSettings {
@@ -39,8 +45,53 @@ export interface PosSystemSettings {
   exchangeRateKhr: number;
   exchangeRateThb: number;
   defaultTaxRate: number;
+  invoicePrefix: string;
+  allowManualDiscount: boolean;
+  maxDiscountPercent: number;
+  enableSoundEffects: boolean;
+  autoPrintReceipt: boolean;
+  requireCustomerPhone: boolean;
+  lowStockThreshold: number;
+  dualDisplayPrice: boolean;
   appName: string;
   appSlogan: string;
+}
+
+export interface PrinterConfig {
+  paperSize: string; // "80mm" | "58mm"
+  autoDrawerKick: boolean;
+  printDuplicateForKitchen: boolean;
+  headerMessage: string;
+  footerMessage: string;
+}
+
+export interface ScannerConfig {
+  scannerMode: "SCANNER_DEVICE" | "CAMERA_DEVICE" | "BOTH";
+  preferredCameraId: string;
+  scannerSoundFeedback: boolean;
+  scannerAutoAddToCart: boolean;
+  scannerContinuousMode: boolean;
+}
+
+export interface AppearanceConfig {
+  themeMode: "light" | "dark" | "system";
+  colorPalette: "emerald-teal" | "ocean-blue" | "sunset-amber" | "royal-indigo" | "rose-crimson" | "midnight-slate";
+}
+
+export interface BusinessProfileConfig {
+  nameKh: string;
+  nameEn: string;
+  legalName: string;
+  vatNumber: string;
+  phone: string;
+  email: string;
+  address: string;
+  website: string;
+  telegramChannel: string;
+  facebookPage: string;
+  businessType: string;
+  baseCurrency: string;
+  logoUrl?: string;
 }
 
 export interface LoanContractSettings {
@@ -73,7 +124,7 @@ export const DEFAULT_PAWN_TERMS = `មាត្រា ១៖ ភាគី "ខ" 
 
 // In-Memory Hot Cache
 const cache = new Map<string, { value: any; expiresAt: number }>();
-const CACHE_TTL_MS = 15000; // 15 seconds TTL for fast responses while allowing fast propagation
+const CACHE_TTL_MS = 10000; // 10 seconds TTL for fast responses while ensuring quick propagation across devices
 
 function setInProcessEnv(key: string, val: string) {
   try {
@@ -97,7 +148,7 @@ export class ConfigManager {
   }
 
   /**
-   * Get a config value from Supabase with caching and env fallback
+   * Get a config value from Supabase with caching, Prisma fallback and env fallback
    */
   static async get<T = any>(key: string, defaultValue?: T, forceRefresh = false): Promise<T> {
     const now = Date.now();
@@ -109,7 +160,7 @@ export class ConfigManager {
     }
 
     try {
-      // 1. Try reading from Supabase system_configs table
+      // 1. Try reading from Supabase system_configs table via Supabase client
       const { data, error } = await supabaseAdmin
         .from("system_configs")
         .select("key, value")
@@ -131,8 +182,29 @@ export class ConfigManager {
         }
         return parsed as T;
       }
-    } catch (err) {
-      // Fallback silently if table not created or network issue
+    } catch {
+      // Fallback to Prisma below
+    }
+
+    // 1.1 Direct Prisma database fallback (connects to Supabase Postgres)
+    try {
+      const record = await prisma.systemConfig.findUnique({
+        where: { key },
+      });
+      if (record && record.value !== undefined && record.value !== null) {
+        let parsed: any = record.value;
+        if (typeof parsed === "string") {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch {
+            // keep as string
+          }
+        }
+        cache.set(key, { value: parsed, expiresAt: now + CACHE_TTL_MS });
+        return parsed as T;
+      }
+    } catch {
+      // Ignore
     }
 
     // 2. Fallback to process.env
@@ -158,9 +230,9 @@ export class ConfigManager {
   static async set(key: string, value: any, category = "GENERAL", description?: string): Promise<boolean> {
     const stringVal = typeof value === "string" ? value : JSON.stringify(value);
 
+    // 1. Upsert into Supabase system_configs table via Supabase client
     try {
-      // 1. Upsert into Supabase system_configs table
-      const { error } = await supabaseAdmin.from("system_configs").upsert(
+      await supabaseAdmin.from("system_configs").upsert(
         {
           key,
           value: stringVal,
@@ -170,12 +242,28 @@ export class ConfigManager {
         },
         { onConflict: "key" }
       );
-
-      if (error) {
-        console.warn(`[ConfigManager] Supabase set error for "${key}":`, error.message);
-      }
     } catch (err: any) {
-      console.warn(`[ConfigManager] Failed saving "${key}" to Supabase:`, err.message);
+      console.warn(`[ConfigManager] Supabase client upsert error for "${key}":`, err.message);
+    }
+
+    // 1.1 Direct Prisma fallback to ensure Postgres database is guaranteed saved
+    try {
+      await prisma.systemConfig.upsert({
+        where: { key },
+        create: {
+          key,
+          value: stringVal,
+          category,
+          description: description || null,
+        },
+        update: {
+          value: stringVal,
+          category,
+          description: description || null,
+        },
+      });
+    } catch (err: any) {
+      console.warn(`[ConfigManager] Prisma database upsert error for "${key}":`, err.message);
     }
 
     // 2. Update local in-memory cache & process.env
@@ -202,20 +290,23 @@ export class ConfigManager {
     }));
 
     try {
-      const { error } = await supabaseAdmin
+      await supabaseAdmin
         .from("system_configs")
         .upsert(rows, { onConflict: "key" });
-
-      if (error) {
-        console.warn("[ConfigManager] Supabase batch upsert warning:", error.message);
-      }
     } catch (err: any) {
       console.warn("[ConfigManager] Failed batch upserting to Supabase:", err.message);
     }
 
-    // Update memory cache
+    // Update Prisma & cache
     const now = Date.now();
     for (const [key, val] of Object.entries(entries)) {
+      const stringVal = typeof val === "string" ? val : JSON.stringify(val);
+      prisma.systemConfig.upsert({
+        where: { key },
+        create: { key, value: stringVal, category },
+        update: { value: stringVal, category },
+      }).catch(() => {});
+
       cache.set(key, { value: val, expiresAt: now + CACHE_TTL_MS });
       if (typeof val === "string") {
         setInProcessEnv(key, val);
@@ -226,11 +317,11 @@ export class ConfigManager {
   }
 
   // ============================================================================
-  // TYPED CONFIG HELPERS
+  // TYPED CONFIG HELPERS (STORED DIRECTLY IN SUPABASE DATABASE)
   // ============================================================================
 
   /**
-   * Get Active Database Connections (Database URL, Direct URL, Supabase Keys)
+   * Get Active Database Connections
    */
   static async getDatabaseConfig(forceRefresh = false): Promise<DatabaseConnectionConfig> {
     const [dbUrl, directUrl, supaUrl, supaAnon, supaService] = await Promise.all([
@@ -262,6 +353,209 @@ export class ConfigManager {
     if (config.SUPABASE_SERVICE_ROLE_KEY) entries["SUPABASE_SERVICE_ROLE_KEY"] = config.SUPABASE_SERVICE_ROLE_KEY.trim();
 
     return this.setMultiple(entries, "DATABASE");
+  }
+
+  /**
+   * Get Business Profile (Store Info & Social Links) from Supabase
+   */
+  static async getBusinessProfile(forceRefresh = false): Promise<BusinessProfileConfig> {
+    const saved = await this.get<Partial<BusinessProfileConfig>>("BUSINESS_PROFILE", {}, forceRefresh);
+
+    return {
+      nameKh: saved?.nameKh || process.env.NEXT_PUBLIC_APP_NAME || "អាណាចក្រPOS (Anachak POS)",
+      nameEn: saved?.nameEn || "Anachak Tech & Repair ERP",
+      legalName: saved?.legalName || "Anachak Technologies Co., Ltd.",
+      vatNumber: saved?.vatNumber || "K008-902348911",
+      phone: saved?.phone || "012 888 999",
+      email: saved?.email || "contact@anachakpos.com",
+      address: saved?.address || "#128, មហាវិថីព្រះមុនីវង្ស, សង្កាត់បឹងរាំង, ខណ្ឌដូនពេញ, រាជធានីភ្នំពេញ",
+      website: saved?.website || "https://anachakpos.com",
+      telegramChannel: saved?.telegramChannel || "https://t.me/anachak_pos",
+      facebookPage: saved?.facebookPage || "https://facebook.com/anachakpos",
+      businessType: saved?.businessType || "Smartphones, Laptops, Repairs & Electronics Retail",
+      baseCurrency: saved?.baseCurrency || "USD",
+      logoUrl: saved?.logoUrl || "",
+    };
+  }
+
+  /**
+   * Save Business Profile to Supabase
+   */
+  static async saveBusinessProfile(config: Partial<BusinessProfileConfig>): Promise<boolean> {
+    const existing = await this.getBusinessProfile();
+    const merged: BusinessProfileConfig = {
+      ...existing,
+      ...config,
+    };
+    return this.set("BUSINESS_PROFILE", merged, "GENERAL", "Store business profile and social contact details");
+  }
+
+  /**
+   * Get POS Exchange Rate, Tax, and Operating Settings from Supabase
+   */
+  static async getPosSettings(forceRefresh = false): Promise<PosSystemSettings> {
+    const saved = await this.get<Partial<PosSystemSettings>>("POS_SETTINGS", {}, forceRefresh);
+
+    return {
+      currency: saved?.currency || process.env.NEXT_PUBLIC_DEFAULT_CURRENCY || "USD",
+      exchangeRateKhr: saved?.exchangeRateKhr ? Number(saved.exchangeRateKhr) : Number(process.env.NEXT_PUBLIC_EXCHANGE_RATE_KHR) || 4100,
+      exchangeRateThb: saved?.exchangeRateThb ? Number(saved.exchangeRateThb) : Number(process.env.NEXT_PUBLIC_EXCHANGE_RATE_THB) || 36,
+      defaultTaxRate: saved?.defaultTaxRate !== undefined ? Number(saved.defaultTaxRate) : 0,
+      invoicePrefix: saved?.invoicePrefix || "INV-",
+      allowManualDiscount: saved?.allowManualDiscount ?? true,
+      maxDiscountPercent: saved?.maxDiscountPercent !== undefined ? Number(saved.maxDiscountPercent) : 20,
+      enableSoundEffects: saved?.enableSoundEffects ?? true,
+      autoPrintReceipt: saved?.autoPrintReceipt ?? true,
+      requireCustomerPhone: saved?.requireCustomerPhone ?? false,
+      lowStockThreshold: saved?.lowStockThreshold !== undefined ? Number(saved.lowStockThreshold) : 5,
+      dualDisplayPrice: saved?.dualDisplayPrice ?? true,
+      appName: saved?.appName || process.env.NEXT_PUBLIC_APP_NAME || "អាណាចក្រPOS",
+      appSlogan: saved?.appSlogan || process.env.NEXT_PUBLIC_APP_SLOGAN || "ប្រព័ន្ធគ្រប់គ្រងការលក់ និងសេវាកម្មជួសជុលកម្រិតសហគ្រាស",
+    };
+  }
+
+  /**
+   * Save POS Exchange Rate, Tax, and Operating Settings to Supabase
+   */
+  static async savePosSettings(config: Partial<PosSystemSettings>): Promise<boolean> {
+    const existing = await this.getPosSettings();
+    const merged: PosSystemSettings = {
+      ...existing,
+      ...config,
+      exchangeRateKhr: config.exchangeRateKhr !== undefined ? Number(config.exchangeRateKhr) : existing.exchangeRateKhr,
+      exchangeRateThb: config.exchangeRateThb !== undefined ? Number(config.exchangeRateThb) : existing.exchangeRateThb,
+      defaultTaxRate: config.defaultTaxRate !== undefined ? Number(config.defaultTaxRate) : existing.defaultTaxRate,
+      maxDiscountPercent: config.maxDiscountPercent !== undefined ? Number(config.maxDiscountPercent) : existing.maxDiscountPercent,
+      lowStockThreshold: config.lowStockThreshold !== undefined ? Number(config.lowStockThreshold) : existing.lowStockThreshold,
+    };
+    return this.set("POS_SETTINGS", merged, "POS", "POS currency, tax, and operation parameters");
+  }
+
+  /**
+   * Get KHQR / Bakong / Payments Configuration from Supabase
+   */
+  static async getKhqrConfig(forceRefresh = false): Promise<KhqrConfig> {
+    const [saved, standaloneBakongToken] = await Promise.all([
+      this.get<Partial<KhqrConfig>>("KHQR_CONFIG", {}, forceRefresh),
+      this.get<string>("BAKONG_OPEN_API_TOKEN", "", forceRefresh),
+    ]);
+
+    return {
+      merchantName: saved?.merchantName || process.env.NEXT_PUBLIC_KHQR_MERCHANT_NAME || "ANACHAK POS STORE",
+      merchantCity: saved?.merchantCity || process.env.NEXT_PUBLIC_KHQR_MERCHANT_CITY || "Phnom Penh",
+      merchantId: saved?.merchantId || process.env.NEXT_PUBLIC_KHQR_MERCHANT_ID || "012888999@aba",
+      bakongAccount: saved?.bakongAccount || process.env.NEXT_PUBLIC_BAKONG_ACCOUNT || "012888999@aba",
+      acquiringBank: saved?.acquiringBank || process.env.NEXT_PUBLIC_ACQUIRING_BANK || "ABA Bank",
+      merchantMobile: saved?.merchantMobile || process.env.NEXT_PUBLIC_MERCHANT_MOBILE || "012888999",
+      bakongToken: saved?.bakongToken || standaloneBakongToken || process.env.BAKONG_OPEN_API_TOKEN || process.env.BAKONG_API_TOKEN || "",
+      bakongApiUrl: saved?.bakongApiUrl || process.env.BAKONG_API_URL || "https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5",
+      abaMerchantId: saved?.abaMerchantId || process.env.ABA_PAYWAY_MERCHANT_ID || "",
+      abaApiKey: saved?.abaApiKey || process.env.ABA_PAYWAY_API_KEY || "",
+      abaApiUrl: saved?.abaApiUrl || process.env.ABA_PAYWAY_CHECK_URL || "https://checkout.payway.com.kh/api/payment-gateway/v1/payments/check-transaction-2",
+      enableBakongKhqr: saved?.enableBakongKhqr ?? true,
+      enableAbaKhqr: saved?.enableAbaKhqr ?? true,
+      enableCashUsd: saved?.enableCashUsd ?? true,
+      enableCashKhr: saved?.enableCashKhr ?? true,
+      enableCustomerCredit: saved?.enableCustomerCredit ?? true,
+      customKhqrRawString: saved?.customKhqrRawString || "",
+    };
+  }
+
+  /**
+   * Save KHQR / Bakong / Payments Configuration to Supabase
+   */
+  static async saveKhqrConfig(config: Partial<KhqrConfig>): Promise<boolean> {
+    const existing = await this.getKhqrConfig();
+    const merged: KhqrConfig = {
+      ...existing,
+      ...config,
+    };
+    if (config.bakongToken !== undefined) {
+      await this.set("BAKONG_OPEN_API_TOKEN", config.bakongToken.trim(), "PAYMENT", "Bakong Open API Bearer Token");
+    }
+    return this.set("KHQR_CONFIG", merged, "PAYMENT", "Bakong KHQR payment configurations");
+  }
+
+  /**
+   * Get Printer Configuration from Supabase
+   */
+  static async getPrinterConfig(forceRefresh = false): Promise<PrinterConfig> {
+    const saved = await this.get<Partial<PrinterConfig>>("PRINTER_CONFIG", {}, forceRefresh);
+
+    return {
+      paperSize: saved?.paperSize || "80mm",
+      autoDrawerKick: saved?.autoDrawerKick ?? true,
+      printDuplicateForKitchen: saved?.printDuplicateForKitchen ?? false,
+      headerMessage:
+        saved?.headerMessage ||
+        "សូមស្វាគមន៍មកកាន់ អាណាចក្រPOS\nឯកទេសលក់ទូរស័ព្ទ កុំព្យូទ័រ និងសេវាជួសជុលរហ័ស",
+      footerMessage:
+        saved?.footerMessage ||
+        "ទំនិញទិញរួចមិនអាចប្តូរប្រាក់វិញបានទេ\nធានាជួសជុលរយៈពេល ៣០ ថ្ងៃ • សូមអរគុណ!",
+    };
+  }
+
+  /**
+   * Save Printer Configuration to Supabase
+   */
+  static async savePrinterConfig(config: Partial<PrinterConfig>): Promise<boolean> {
+    const existing = await this.getPrinterConfig();
+    const merged: PrinterConfig = {
+      ...existing,
+      ...config,
+    };
+    return this.set("PRINTER_CONFIG", merged, "HARDWARE", "Thermal receipt printer configuration");
+  }
+
+  /**
+   * Get Scanner Configuration from Supabase
+   */
+  static async getScannerConfig(forceRefresh = false): Promise<ScannerConfig> {
+    const saved = await this.get<Partial<ScannerConfig>>("SCANNER_CONFIG", {}, forceRefresh);
+
+    return {
+      scannerMode: saved?.scannerMode || "SCANNER_DEVICE",
+      preferredCameraId: saved?.preferredCameraId || "",
+      scannerSoundFeedback: saved?.scannerSoundFeedback ?? true,
+      scannerAutoAddToCart: saved?.scannerAutoAddToCart ?? true,
+      scannerContinuousMode: saved?.scannerContinuousMode ?? false,
+    };
+  }
+
+  /**
+   * Save Scanner Configuration to Supabase
+   */
+  static async saveScannerConfig(config: Partial<ScannerConfig>): Promise<boolean> {
+    const existing = await this.getScannerConfig();
+    const merged: ScannerConfig = {
+      ...existing,
+      ...config,
+    };
+    return this.set("SCANNER_CONFIG", merged, "HARDWARE", "Barcode and QR scanner configuration");
+  }
+
+  /**
+   * Get Appearance & Theme Configuration from Supabase
+   */
+  static async getAppearanceConfig(forceRefresh = false): Promise<AppearanceConfig> {
+    const saved = await this.get<Partial<AppearanceConfig>>("APPEARANCE_CONFIG", {}, forceRefresh);
+
+    return {
+      themeMode: saved?.themeMode || "light",
+      colorPalette: saved?.colorPalette || "emerald-teal",
+    };
+  }
+
+  /**
+   * Save Appearance & Theme Configuration to Supabase
+   */
+  static async saveAppearanceConfig(config: Partial<AppearanceConfig>): Promise<boolean> {
+    const existing = await this.getAppearanceConfig();
+    const merged: AppearanceConfig = {
+      ...existing,
+      ...config,
+    };
+    return this.set("APPEARANCE_CONFIG", merged, "APPEARANCE", "System theme mode and color palette");
   }
 
   /**
@@ -308,74 +602,7 @@ export class ConfigManager {
   }
 
   /**
-   * Get KHQR / Bakong Payment Config
-   */
-  static async getKhqrConfig(forceRefresh = false): Promise<KhqrConfig> {
-    const [saved, standaloneBakongToken] = await Promise.all([
-      this.get<Partial<KhqrConfig>>("KHQR_CONFIG", {}, forceRefresh),
-      this.get<string>("BAKONG_OPEN_API_TOKEN", "", forceRefresh),
-    ]);
-
-    return {
-      merchantName: saved?.merchantName || process.env.NEXT_PUBLIC_KHQR_MERCHANT_NAME || "YOUR MERCHANT NAME",
-      merchantCity: saved?.merchantCity || process.env.NEXT_PUBLIC_KHQR_MERCHANT_CITY || "Phnom Penh",
-      merchantId: saved?.merchantId || process.env.NEXT_PUBLIC_KHQR_MERCHANT_ID || "85514965629",
-      bakongAccount: saved?.bakongAccount || process.env.NEXT_PUBLIC_BAKONG_ACCOUNT || "khqr@aclb",
-      acquiringBank: saved?.acquiringBank || process.env.NEXT_PUBLIC_ACQUIRING_BANK || "ACLEDA",
-      merchantMobile: saved?.merchantMobile || process.env.NEXT_PUBLIC_MERCHANT_MOBILE || "0963760229",
-      bakongToken: saved?.bakongToken || standaloneBakongToken || process.env.BAKONG_OPEN_API_TOKEN || process.env.BAKONG_API_TOKEN || "",
-      bakongApiUrl: saved?.bakongApiUrl || process.env.BAKONG_API_URL || "https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5",
-      abaMerchantId: saved?.abaMerchantId || process.env.ABA_PAYWAY_MERCHANT_ID || "",
-      abaApiKey: saved?.abaApiKey || process.env.ABA_PAYWAY_API_KEY || "",
-      abaApiUrl: saved?.abaApiUrl || process.env.ABA_PAYWAY_CHECK_URL || "https://checkout.payway.com.kh/api/payment-gateway/v1/payments/check-transaction-2",
-    };
-  }
-
-  /**
-   * Save KHQR / Bakong Payment Config
-   */
-  static async saveKhqrConfig(config: Partial<KhqrConfig>): Promise<boolean> {
-    const existing = await this.getKhqrConfig();
-    const merged: KhqrConfig = {
-      ...existing,
-      ...config,
-    };
-    if (config.bakongToken !== undefined) {
-      await this.set("BAKONG_OPEN_API_TOKEN", config.bakongToken.trim(), "PAYMENT", "Bakong Open API Bearer Token");
-    }
-    return this.set("KHQR_CONFIG", merged, "PAYMENT", "Bakong KHQR payment configurations");
-  }
-
-  /**
-   * Get POS Exchange Rate and Currency Settings
-   */
-  static async getPosSettings(forceRefresh = false): Promise<PosSystemSettings> {
-    const saved = await this.get<Partial<PosSystemSettings>>("POS_SETTINGS", {}, forceRefresh);
-
-    return {
-      currency: saved?.currency || process.env.NEXT_PUBLIC_DEFAULT_CURRENCY || "USD",
-      exchangeRateKhr: saved?.exchangeRateKhr || Number(process.env.NEXT_PUBLIC_EXCHANGE_RATE_KHR) || 4100,
-      exchangeRateThb: saved?.exchangeRateThb || Number(process.env.NEXT_PUBLIC_EXCHANGE_RATE_THB) || 36,
-      defaultTaxRate: saved?.defaultTaxRate ?? 0,
-      appName: saved?.appName || process.env.NEXT_PUBLIC_APP_NAME || "អាណាចក្រPOS",
-      appSlogan: saved?.appSlogan || process.env.NEXT_PUBLIC_APP_SLOGAN || "ប្រព័ន្ធគ្រប់គ្រងការលក់ និងសេវាកម្មជួសជុលកម្រិតសហគ្រាស",
-    };
-  }
-
-  /**
-   * Save POS Exchange Rate and Currency Settings
-   */
-  static async savePosSettings(config: Partial<PosSystemSettings>): Promise<boolean> {
-    const existing = await this.getPosSettings();
-    const merged: PosSystemSettings = {
-      ...existing,
-      ...config,
-    };
-    return this.set("POS_SETTINGS", merged, "GENERAL", "POS currency and exchange rate settings");
-  }
-
-  /**
-   * Get Loan, Installment, and Pawn Contract Settings
+   * Get Loan, Installment, and Pawn Contract Settings from Supabase
    */
   static async getLoanContractSettings(forceRefresh = false): Promise<LoanContractSettings> {
     const saved = await this.get<Partial<LoanContractSettings>>("LOAN_CONTRACT_SETTINGS", {}, forceRefresh);
@@ -399,7 +626,7 @@ export class ConfigManager {
   }
 
   /**
-   * Save Loan, Installment, and Pawn Contract Settings
+   * Save Loan, Installment, and Pawn Contract Settings to Supabase
    */
   static async saveLoanContractSettings(config: Partial<LoanContractSettings>): Promise<boolean> {
     const existing = await this.getLoanContractSettings();
@@ -410,4 +637,3 @@ export class ConfigManager {
     return this.set("LOAN_CONTRACT_SETTINGS", merged, "LOANS", "Installment, Pawn contract terms and interest rate settings");
   }
 }
-

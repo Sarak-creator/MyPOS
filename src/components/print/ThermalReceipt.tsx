@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { formatUSD, formatKHR, formatDateTime } from "@/lib/utils";
-import { CartItem, CustomerOption } from "@/store/posStore";
+import { CartItem, CustomerOption, usePOSStore } from "@/store/posStore";
 
 export interface ReceiptData {
   invoiceNumber: string;
@@ -33,6 +33,7 @@ interface ThermalReceiptProps {
 
 export default function ThermalReceipt({ data }: ThermalReceiptProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const { printerHeaderMessage, printerFooterMessage, printerPaperSize } = usePOSStore();
 
   useEffect(() => {
     if (data.khqrPayload) {
@@ -42,10 +43,14 @@ export default function ThermalReceipt({ data }: ThermalReceiptProps) {
     }
   }, [data.khqrPayload]);
 
+  const is58mm = printerPaperSize === "58mm";
+
   return (
     <div
       id="printable-receipt"
-      className="bg-white text-slate-900 font-mono text-[11px] leading-tight p-4 max-w-[80mm] mx-auto border border-slate-200 shadow-sm"
+      className={`bg-white text-slate-900 font-mono text-[11px] leading-tight p-4 mx-auto border border-slate-200 shadow-sm ${
+        is58mm ? "max-w-[58mm]" : "max-w-[80mm]"
+      }`}
     >
       {/* Store Header */}
       <div className="text-center pb-2 border-b border-dashed border-slate-300">
@@ -55,6 +60,11 @@ export default function ThermalReceipt({ data }: ThermalReceiptProps) {
           <p className="text-[9px] text-slate-500">{data.branchAddress}</p>
         )}
         <p className="text-[9px] text-slate-500 font-sans">ទូរស័ព្ទ: {data.branchPhone || "012 888 999"}</p>
+        {printerHeaderMessage && (
+          <p className="text-[9px] text-slate-600 font-sans whitespace-pre-line mt-1">
+            {printerHeaderMessage}
+          </p>
+        )}
         <p className="text-xs font-bold mt-1 text-slate-800">វិក្កយបត្រ / INVOICE</p>
       </div>
 
@@ -175,8 +185,14 @@ export default function ThermalReceipt({ data }: ThermalReceiptProps) {
 
       {/* Footer message */}
       <div className="pt-2 text-center text-[10px] text-slate-500 font-sans">
-        <p className="font-semibold text-slate-700">សូមអរគុណ! សូមអញ្ជើញមកម្តងទៀត</p>
-        <p className="text-[9px] text-slate-400">ទំនិញទិញរួចមិនអាចប្តូរប្រាក់វិញបានទេ</p>
+        {printerFooterMessage ? (
+          <p className="whitespace-pre-line text-slate-700 font-medium">{printerFooterMessage}</p>
+        ) : (
+          <>
+            <p className="font-semibold text-slate-700">សូមអរគុណ! សូមអញ្ជើញមកម្តងទៀត</p>
+            <p className="text-[9px] text-slate-400">ទំនិញទិញរួចមិនអាចប្តូរប្រាក់វិញបានទេ</p>
+          </>
+        )}
       </div>
     </div>
   );

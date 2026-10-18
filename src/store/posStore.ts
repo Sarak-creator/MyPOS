@@ -111,6 +111,39 @@ interface POSState {
   bakongOpenApiToken?: string;
   customKhqrRawString?: string;
 
+  // POS Operation Settings
+  invoicePrefix: string;
+  allowManualDiscount: boolean;
+  maxDiscountPercent: number;
+  enableSoundEffects: boolean;
+  autoPrintReceipt: boolean;
+  requireCustomerPhone: boolean;
+  lowStockThreshold: number;
+  dualDisplayPrice: boolean;
+
+  // Thermal Printer Settings
+  printerPaperSize: string;
+  printerHeaderMessage: string;
+  printerFooterMessage: string;
+  setPrinterConfig: (config: {
+    paperSize?: string;
+    headerMessage?: string;
+    footerMessage?: string;
+  }) => void;
+  setPosConfig: (config: Partial<{
+    invoicePrefix: string;
+    allowManualDiscount: boolean;
+    maxDiscountPercent: number;
+    enableSoundEffects: boolean;
+    autoPrintReceipt: boolean;
+    requireCustomerPhone: boolean;
+    lowStockThreshold: number;
+    dualDisplayPrice: boolean;
+    currency: "USD" | "KHR";
+    exchangeRateKhr: number;
+    taxRatePercent: number;
+  }>) => void;
+
   // Telegram Bot Configuration
   telegramBotToken?: string;
   telegramChatId?: string;
@@ -191,54 +224,114 @@ export const usePOSStore = create<POSState>()(
       enableCashKhr: true,
       enableCustomerCredit: true,
 
+      // POS Operation Defaults
+      invoicePrefix: "INV-",
+      allowManualDiscount: true,
+      maxDiscountPercent: 20,
+      enableSoundEffects: true,
+      autoPrintReceipt: true,
+      requireCustomerPhone: false,
+      lowStockThreshold: 5,
+      dualDisplayPrice: true,
+
+      // Printer Defaults
+      printerPaperSize: "80mm",
+      printerHeaderMessage: "សូមស្វាគមន៍មកកាន់ អាណាចក្រPOS\nឯកទេសលក់ទូរស័ព្ទ កុំព្យូទ័រ និងសេវាជួសជុលរហ័ស",
+      printerFooterMessage: "ទំនិញទិញរួចមិនអាចប្តូរប្រាក់វិញបានទេ\nធានាជួសជុលរយៈពេល ៣០ ថ្ងៃ • សូមអរគុណ!",
+
+      setPrinterConfig: (cfg) =>
+        set((state) => ({
+          printerPaperSize: cfg.paperSize !== undefined ? cfg.paperSize : state.printerPaperSize,
+          printerHeaderMessage: cfg.headerMessage !== undefined ? cfg.headerMessage : state.printerHeaderMessage,
+          printerFooterMessage: cfg.footerMessage !== undefined ? cfg.footerMessage : state.printerFooterMessage,
+        })),
+
+      setPosConfig: (cfg) =>
+        set((state) => ({
+          ...state,
+          ...cfg,
+        })),
+
       currentUser: null,
       setCurrentUser: (currentUser) => set({ currentUser }),
 
       syncSettingsFromSupabase: async (branchId?: string) => {
         try {
-          const url = branchId ? `/api/settings?branchId=${encodeURIComponent(branchId)}` : "/api/settings";
-          const res = await fetch(url);
+          const url = branchId
+            ? `/api/settings?branchId=${encodeURIComponent(branchId)}&refresh=true`
+            : "/api/settings?refresh=true";
+          const res = await fetch(url, { cache: "no-store" });
           const data = await res.json();
-          if (data.success && data.settings) {
-            const s = data.settings;
-            set({
-              exchangeRateKhr: Number(s.exchangeRateKhr) || 4100,
-              taxRatePercent: Number(s.vatRatePercent) || 0,
-              bakongMerchantId: s.bakongMerchantId || "",
-              bakongMerchantName: s.bakongMerchantName || "",
-              bakongMerchantCity: s.bakongMerchantCity || "",
-              merchantID: s.merchantID || "",
-              acquiringBank: s.acquiringBank || "",
-              merchantCategoryCode: s.merchantCategoryCode || "",
-              terminalLabel: s.terminalLabel,
-              bakongOpenApiToken: s.bakongOpenApiToken,
-              customKhqrRawString: s.customKhqrRawString || "",
-              enableBakongKhqr: s.enableBakongKhqr ?? false,
-              enableAbaKhqr: s.enableAbaKhqr ?? false,
-              enableCashUsd: s.enableCashUsd ?? true,
-              enableCashKhr: s.enableCashKhr ?? true,
-              enableCustomerCredit: s.enableCustomerCredit ?? true,
-            });
-          }
+          if (data.success) {
+            const s = data.settings || {};
+            const p = data.posConfig || {};
+            const pay = data.paymentConfig || data.khqrConfig || {};
+            const pr = data.printerConfig || {};
+            const sc = data.scannerConfig || {};
+            const ap = data.appearanceConfig || {};
+            const tg = data.telegramConfig || {};
 
-          // Sync Telegram settings from server
-          try {
-            const tgRes = await fetch("/api/telegram");
-            const tgData = await tgRes.json();
-            if (tgData.success) {
-              set({
-                telegramBotToken: tgData.botToken || "",
-                telegramChatId: tgData.chatId || "",
-                telegramNotifyOnSale: tgData.notifyOnSale ?? false,
-                telegramNotifyOnLowStock: tgData.notifyOnLowStock ?? false,
-                telegramNotifyOnRepair: tgData.notifyOnRepair ?? false,
-                telegramNotifyOnInstallment: tgData.notifyOnInstallmentDue ?? false,
-                telegramInstallmentReminderDays: tgData.installmentReminderDays ?? 3,
-              });
+            set({
+              currency: p.currency || s.currency || "USD",
+              exchangeRateKhr: Number(p.exchangeRateKhr || s.exchangeRateKhr) || 4100,
+              taxRatePercent: Number(p.defaultTaxRate !== undefined ? p.defaultTaxRate : s.vatRatePercent) || 0,
+              invoicePrefix: p.invoicePrefix || s.invoicePrefix || "INV-",
+              allowManualDiscount: p.allowManualDiscount ?? s.allowManualDiscount ?? true,
+              maxDiscountPercent: Number(p.maxDiscountPercent || s.maxDiscountPercent) || 20,
+              enableSoundEffects: p.enableSoundEffects ?? s.enableSoundEffects ?? true,
+              autoPrintReceipt: p.autoPrintReceipt ?? s.autoPrintReceipt ?? true,
+              requireCustomerPhone: p.requireCustomerPhone ?? s.requireCustomerPhone ?? false,
+              lowStockThreshold: Number(p.lowStockThreshold || s.lowStockThreshold) || 5,
+              dualDisplayPrice: p.dualDisplayPrice ?? s.dualDisplayPrice ?? true,
+
+              // Payment / KHQR
+              bakongMerchantId: pay.bakongAccount || pay.merchantId || s.bakongMerchantId || "",
+              bakongMerchantName: pay.merchantName || s.bakongMerchantName || "",
+              bakongMerchantCity: pay.merchantCity || s.bakongMerchantCity || "",
+              merchantID: pay.merchantId || s.merchantID || "",
+              acquiringBank: pay.acquiringBank || s.acquiringBank || "",
+              mobileNumber: pay.merchantMobile || s.mobileNumber || "",
+              bakongOpenApiToken: pay.bakongToken || s.bakongOpenApiToken || "",
+              customKhqrRawString: pay.customKhqrRawString || s.customKhqrRawString || "",
+              enableBakongKhqr: pay.enableBakongKhqr ?? s.enableBakongKhqr ?? true,
+              enableAbaKhqr: pay.enableAbaKhqr ?? s.enableAbaKhqr ?? true,
+              enableCashUsd: pay.enableCashUsd ?? s.enableCashUsd ?? true,
+              enableCashKhr: pay.enableCashKhr ?? s.enableCashKhr ?? true,
+              enableCustomerCredit: pay.enableCustomerCredit ?? s.enableCustomerCredit ?? true,
+
+              // Scanner
+              scannerMode: sc.scannerMode || s.scannerMode || "SCANNER_DEVICE",
+              preferredCameraId: sc.preferredCameraId || s.preferredCameraId || "",
+              scannerSoundFeedback: sc.scannerSoundFeedback ?? s.scannerSoundFeedback ?? true,
+              scannerAutoAddToCart: sc.scannerAutoAddToCart ?? s.scannerAutoAddToCart ?? true,
+              scannerContinuousMode: sc.scannerContinuousMode ?? s.scannerContinuousMode ?? false,
+
+              // Printer
+              printerPaperSize: pr.paperSize || s.paperSize || "80mm",
+              printerHeaderMessage: pr.headerMessage || s.receiptHeaderMessage || "",
+              printerFooterMessage: pr.footerMessage || s.receiptFooterMessage || "",
+
+              // Appearance
+              themeMode: ap.themeMode || s.themeMode || get().themeMode,
+              colorPalette: ap.colorPalette || s.colorPalette || get().colorPalette,
+
+              // Telegram
+              telegramBotToken: tg.botToken || s.botToken || "",
+              telegramChatId: tg.chatId || s.chatId || "",
+              telegramNotifyOnSale: tg.notifyOnSale ?? s.notifyOnSale ?? false,
+              telegramNotifyOnLowStock: tg.notifyOnLowStock ?? s.notifyOnLowStock ?? false,
+              telegramNotifyOnRepair: tg.notifyOnRepair ?? s.notifyOnRepair ?? false,
+              telegramNotifyOnInstallment: tg.notifyOnInstallmentDue ?? s.notifyOnInstallmentDue ?? false,
+              telegramInstallmentReminderDays: tg.installmentReminderDays ?? s.installmentReminderDays ?? 3,
+            });
+
+            // Apply theme dynamically
+            if (ap.themeMode || ap.colorPalette) {
+              applyTheme(ap.themeMode || get().themeMode, ap.colorPalette || get().colorPalette);
             }
-          } catch {}
+          }
         } catch (err) {
-          console.error("Error syncing POS settings:", err);
+          console.error("Error syncing POS settings from Supabase:", err);
         }
       },
 
@@ -487,6 +580,19 @@ export const usePOSStore = create<POSState>()(
         terminalLabel: state.terminalLabel,
         bakongOpenApiToken: state.bakongOpenApiToken,
         customKhqrRawString: state.customKhqrRawString,
+        // POS Operation Settings
+        invoicePrefix: state.invoicePrefix,
+        allowManualDiscount: state.allowManualDiscount,
+        maxDiscountPercent: state.maxDiscountPercent,
+        enableSoundEffects: state.enableSoundEffects,
+        autoPrintReceipt: state.autoPrintReceipt,
+        requireCustomerPhone: state.requireCustomerPhone,
+        lowStockThreshold: state.lowStockThreshold,
+        dualDisplayPrice: state.dualDisplayPrice,
+        // Thermal Printer Configuration
+        printerPaperSize: state.printerPaperSize,
+        printerHeaderMessage: state.printerHeaderMessage,
+        printerFooterMessage: state.printerFooterMessage,
       }),
     }
   )

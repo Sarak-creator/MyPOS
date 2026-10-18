@@ -547,20 +547,75 @@ export default function SettingsPage() {
       setLoading(true);
       const res = await fetch("/api/settings");
       const data = await res.json();
-      if (data.success && data.tenant) {
-        setBusinessProfile((prev) => ({
-          ...prev,
-          nameKh: data.tenant.name || prev.nameKh,
-          legalName: data.tenant.legalName || prev.legalName,
-          vatNumber: data.tenant.vatNumber || prev.vatNumber,
-          phone: data.tenant.phone || prev.phone,
-          email: data.tenant.email || prev.email,
-          address: data.tenant.address || prev.address,
-        }));
-        setBranches(data.branches || []);
-        setUsers(data.users || []);
+      if (data.success) {
+        // 1. Business Profile / Tenant
+        if (data.tenant || data.businessProfile) {
+          const profile = data.businessProfile || {};
+          const tenant = data.tenant || {};
+          setBusinessProfile((prev) => ({
+            ...prev,
+            nameKh: profile.nameKh || tenant.name || prev.nameKh,
+            nameEn: profile.nameEn || prev.nameEn,
+            legalName: profile.legalName || tenant.legalName || prev.legalName,
+            vatNumber: profile.vatNumber || tenant.vatNumber || prev.vatNumber,
+            phone: profile.phone || tenant.phone || prev.phone,
+            email: profile.email || tenant.email || prev.email,
+            address: profile.address || tenant.address || prev.address,
+            website: profile.website || prev.website,
+            telegramChannel: profile.telegramChannel || prev.telegramChannel,
+            facebookPage: profile.facebookPage || prev.facebookPage,
+            businessType: profile.businessType || prev.businessType,
+            baseCurrency: profile.baseCurrency || tenant.currency || prev.baseCurrency,
+          }));
+        }
 
-        if (data.settings) {
+        // 2. POS Currency & Rules
+        if (data.posConfig) {
+          setPosConfig((prev) => ({
+            ...prev,
+            exchangeRate: data.posConfig.exchangeRateKhr ?? prev.exchangeRate,
+            exchangeRateThb: data.posConfig.exchangeRateThb ?? prev.exchangeRateThb,
+            defaultTaxRate: data.posConfig.taxRatePercent ?? prev.defaultTaxRate,
+            invoicePrefix: data.posConfig.invoicePrefix ?? prev.invoicePrefix,
+            allowManualDiscount: data.posConfig.allowManualDiscount ?? prev.allowManualDiscount,
+            maxDiscountPercent: data.posConfig.maxDiscountPercent ?? prev.maxDiscountPercent,
+            enableSoundEffects: data.posConfig.enableSoundEffects ?? prev.enableSoundEffects,
+            autoPrintReceipt: data.posConfig.autoPrintReceipt ?? prev.autoPrintReceipt,
+            requireCustomerPhone: data.posConfig.requireCustomerPhone ?? prev.requireCustomerPhone,
+            lowStockThreshold: data.posConfig.lowStockThreshold ?? prev.lowStockThreshold,
+            dualDisplayPrice: data.posConfig.dualDisplayPrice ?? prev.dualDisplayPrice,
+          }));
+        } else if (data.settings) {
+          setPosConfig((prev) => ({
+            ...prev,
+            exchangeRate: data.settings.exchangeRateKhr ?? prev.exchangeRate,
+            defaultTaxRate: data.settings.taxRatePercent ?? prev.defaultTaxRate,
+          }));
+        }
+
+        // 3. Payment & KHQR Configuration
+        if (data.paymentConfig) {
+          setPaymentConfig((prev) => ({
+            ...prev,
+            bakongMerchantId: data.paymentConfig.bakongMerchantId ?? prev.bakongMerchantId,
+            bakongMerchantName: data.paymentConfig.bakongMerchantName ?? prev.bakongMerchantName,
+            bakongMerchantCity: data.paymentConfig.bakongMerchantCity ?? prev.bakongMerchantCity,
+            merchantID: data.paymentConfig.merchantID ?? prev.merchantID,
+            acquiringBank: data.paymentConfig.acquiringBank ?? prev.acquiringBank,
+            mobileNumber: data.paymentConfig.mobileNumber ?? prev.mobileNumber,
+            bakongToken: data.paymentConfig.bakongOpenApiToken ?? prev.bakongToken,
+            abaMerchantId: data.paymentConfig.abaMerchantId ?? prev.abaMerchantId,
+            abaApiKey: data.paymentConfig.abaApiKey ?? prev.abaApiKey,
+            enableBakongKhqr: data.paymentConfig.enableBakongKhqr ?? prev.enableBakongKhqr,
+            enableAbaKhqr: data.paymentConfig.enableAbaKhqr ?? prev.enableAbaKhqr,
+            enableCashUsd: data.paymentConfig.enableCashUsd ?? prev.enableCashUsd,
+            enableCashKhr: data.paymentConfig.enableCashKhr ?? prev.enableCashKhr,
+            enableCustomerCredit: data.paymentConfig.enableCustomerCredit ?? prev.enableCustomerCredit,
+          }));
+          if (data.paymentConfig.customKhqrRawString) {
+            setRawKhqrInput(data.paymentConfig.customKhqrRawString);
+          }
+        } else if (data.settings) {
           setPaymentConfig((prev) => ({
             ...prev,
             bakongMerchantId: data.settings.bakongMerchantId || prev.bakongMerchantId,
@@ -574,9 +629,64 @@ export default function SettingsPage() {
             abaApiKey: data.settings.abaApiKey || prev.abaApiKey,
           }));
         }
+
+        // 4. Thermal Printer Configuration
+        if (data.printerConfig) {
+          setPrinterConfig((prev) => ({
+            ...prev,
+            paperSize: data.printerConfig.paperSize ?? prev.paperSize,
+            autoDrawerKick: data.printerConfig.autoDrawerKick ?? prev.autoDrawerKick,
+            printDuplicateForKitchen: data.printerConfig.printDuplicateForKitchen ?? prev.printDuplicateForKitchen,
+            headerMessage: data.printerConfig.headerMessage ?? prev.headerMessage,
+            footerMessage: data.printerConfig.footerMessage ?? prev.footerMessage,
+          }));
+        }
+
+        // 5. Barcode & QR Scanner Configuration
+        if (data.scannerConfig) {
+          setScannerConfig({
+            scannerMode: data.scannerConfig.scannerMode,
+            preferredCameraId: data.scannerConfig.preferredCameraId,
+            scannerSoundFeedback: data.scannerConfig.scannerSoundFeedback,
+            scannerAutoAddToCart: data.scannerConfig.scannerAutoAddToCart,
+            scannerContinuousMode: data.scannerConfig.scannerContinuousMode,
+          });
+        }
+
+        // 6. Appearance & Theme Configuration
+        if (data.appearanceConfig) {
+          if (data.appearanceConfig.themeMode) {
+            setThemeMode(data.appearanceConfig.themeMode);
+          }
+          if (data.appearanceConfig.colorPalette) {
+            setColorPalette(data.appearanceConfig.colorPalette);
+          }
+        }
+
+        // 7. Telegram Bot Alerts
+        if (data.telegramConfig) {
+          setTelegramForm((prev) => ({
+            ...prev,
+            botToken: data.telegramConfig.botToken || prev.botToken,
+            chatId: data.telegramConfig.chatId || prev.chatId,
+            notifyOnSale: data.telegramConfig.notifyOnSale ?? prev.notifyOnSale,
+            notifyOnLowStock: data.telegramConfig.notifyOnLowStock ?? prev.notifyOnLowStock,
+            notifyOnRepair: data.telegramConfig.notifyOnRepair ?? prev.notifyOnRepair,
+            notifyDailyReport: data.telegramConfig.notifyDailyReport ?? prev.notifyDailyReport,
+            notifyOnInstallmentDue: data.telegramConfig.notifyOnInstallmentDue ?? prev.notifyOnInstallmentDue,
+            installmentReminderDays: data.telegramConfig.installmentReminderDays ?? prev.installmentReminderDays,
+          }));
+        }
+
+        // 8. Branches & Users
+        setBranches(data.branches || []);
+        setUsers(data.users || []);
+
+        // Also trigger full store synchronization
+        await usePOSStore.getState().syncSettingsFromSupabase();
       }
     } catch (err) {
-      console.error("Failed to load settings:", err);
+      console.error("Failed to load settings from Supabase:", err);
     } finally {
       setLoading(false);
     }
@@ -589,13 +699,18 @@ export default function SettingsPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      // 1. Save to global store (Exchange rate, Tax, and KHQR settings)
-      setExchangeRateKhr(Number(posConfig.exchangeRate));
-      setTaxRatePercent(Number(posConfig.defaultTaxRate));
+      // 1. Save to local Zustand store
+      setExchangeRateKhr(Number(posConfig.exchangeRate) || 4100);
+      setTaxRatePercent(Number(posConfig.defaultTaxRate) || 0);
       setStorePaymentConfig({
         bakongMerchantId: paymentConfig.bakongMerchantId.trim(),
         bakongMerchantName: paymentConfig.bakongMerchantName.trim(),
         bakongMerchantCity: paymentConfig.bakongMerchantCity.trim(),
+        merchantID: paymentConfig.merchantID,
+        acquiringBank: paymentConfig.acquiringBank,
+        mobileNumber: paymentConfig.mobileNumber,
+        bakongOpenApiToken: paymentConfig.bakongToken?.trim() || "",
+        customKhqrRawString: rawKhqrInput.trim(),
         enableBakongKhqr: paymentConfig.enableBakongKhqr,
         enableAbaKhqr: paymentConfig.enableAbaKhqr,
         enableCashUsd: paymentConfig.enableCashUsd,
@@ -603,46 +718,93 @@ export default function SettingsPage() {
         enableCustomerCredit: paymentConfig.enableCustomerCredit,
       });
 
-      // 2. Persist to Supabase Central Store & Database
+      // 2. Persist ALL settings domains directly to Supabase Database
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "UPDATE_TENANT",
-          name: businessProfile.nameKh,
-          legalName: businessProfile.legalName,
-          vatNumber: businessProfile.vatNumber,
-          phone: businessProfile.phone,
-          email: businessProfile.email,
-          address: businessProfile.address,
-          currency: "USD",
-          exchangeRate: Number(posConfig.exchangeRate) || 4100,
-          defaultTaxRate: Number(posConfig.defaultTaxRate) || 0,
+          action: "UPDATE_ALL_SETTINGS",
+          businessProfile: {
+            nameKh: businessProfile.nameKh,
+            nameEn: businessProfile.nameEn,
+            legalName: businessProfile.legalName,
+            vatNumber: businessProfile.vatNumber,
+            phone: businessProfile.phone,
+            email: businessProfile.email,
+            address: businessProfile.address,
+            website: businessProfile.website,
+            telegramChannel: businessProfile.telegramChannel,
+            facebookPage: businessProfile.facebookPage,
+            businessType: businessProfile.businessType,
+            baseCurrency: businessProfile.baseCurrency || "USD",
+          },
+          posConfig: {
+            exchangeRateKhr: Number(posConfig.exchangeRate) || 4100,
+            exchangeRateThb: Number(posConfig.exchangeRateThb) || 36,
+            taxRatePercent: Number(posConfig.defaultTaxRate) || 0,
+            invoicePrefix: posConfig.invoicePrefix || "INV-",
+            allowManualDiscount: posConfig.allowManualDiscount,
+            maxDiscountPercent: Number(posConfig.maxDiscountPercent) || 20,
+            enableSoundEffects: posConfig.enableSoundEffects,
+            autoPrintReceipt: posConfig.autoPrintReceipt,
+            requireCustomerPhone: posConfig.requireCustomerPhone,
+            lowStockThreshold: Number(posConfig.lowStockThreshold) || 5,
+            dualDisplayPrice: posConfig.dualDisplayPrice,
+          },
+          paymentConfig: {
+            bakongMerchantId: paymentConfig.bakongMerchantId.trim(),
+            bakongMerchantName: paymentConfig.bakongMerchantName.trim(),
+            bakongMerchantCity: paymentConfig.bakongMerchantCity.trim(),
+            merchantID: paymentConfig.merchantID,
+            acquiringBank: paymentConfig.acquiringBank,
+            mobileNumber: paymentConfig.mobileNumber,
+            bakongOpenApiToken: paymentConfig.bakongToken?.trim() || "",
+            abaMerchantId: paymentConfig.abaMerchantId?.trim() || "",
+            abaApiKey: paymentConfig.abaApiKey?.trim() || "",
+            customKhqrRawString: rawKhqrInput.trim(),
+            enableBakongKhqr: paymentConfig.enableBakongKhqr,
+            enableAbaKhqr: paymentConfig.enableAbaKhqr,
+            enableCashUsd: paymentConfig.enableCashUsd,
+            enableCashKhr: paymentConfig.enableCashKhr,
+            enableCustomerCredit: paymentConfig.enableCustomerCredit,
+          },
+          printerConfig,
+          scannerConfig: {
+            scannerMode,
+            preferredCameraId,
+            scannerSoundFeedback,
+            scannerAutoAddToCart,
+            scannerContinuousMode,
+          },
+          appearanceConfig: {
+            themeMode,
+            colorPalette,
+          },
+          telegramConfig: {
+            botToken: telegramForm.botToken.trim(),
+            chatId: telegramForm.chatId.trim(),
+            notifyOnSale: telegramForm.notifyOnSale,
+            notifyOnLowStock: telegramForm.notifyOnLowStock,
+            notifyOnRepair: telegramForm.notifyOnRepair,
+            notifyDailyReport: telegramForm.notifyDailyReport,
+            notifyOnInstallmentDue: telegramForm.notifyOnInstallmentDue,
+            installmentReminderDays: telegramForm.installmentReminderDays,
+          },
         }),
       });
-
-      // Also sync KHQR settings to Supabase
-      await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "UPDATE_KHQR",
-          merchantName: paymentConfig.bakongMerchantName.trim(),
-          merchantCity: paymentConfig.bakongMerchantCity.trim(),
-          merchantId: paymentConfig.merchantID || paymentConfig.bakongMerchantId.trim(),
-          bakongAccount: paymentConfig.bakongMerchantId.trim(),
-          acquiringBank: paymentConfig.acquiringBank.trim(),
-          merchantMobile: paymentConfig.mobileNumber.trim(),
-        }),
-      }).catch(() => {});
 
       const data = await res.json();
       if (data.success) {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3500);
+        // Refresh local store from Supabase
+        await usePOSStore.getState().syncSettingsFromSupabase();
+      } else {
+        alert("បរាជ័យក្នុងការរក្សាទុកទៅកាន់ Supabase Database: " + (data.error || ""));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save settings:", err);
+      alert("កំហុសក្នុងការរក្សាទុក: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -683,7 +845,7 @@ export default function SettingsPage() {
   const handleSaveKHQR = async () => {
     try {
       setSaving(true);
-      setStorePaymentConfig({
+      const payload = {
         bakongMerchantId: paymentConfig.bakongMerchantId.trim(),
         bakongMerchantName: paymentConfig.bakongMerchantName.trim(),
         bakongMerchantCity: paymentConfig.bakongMerchantCity.trim(),
@@ -691,29 +853,25 @@ export default function SettingsPage() {
         acquiringBank: paymentConfig.acquiringBank,
         mobileNumber: paymentConfig.mobileNumber,
         bakongOpenApiToken: paymentConfig.bakongToken?.trim() || "",
+        abaMerchantId: paymentConfig.abaMerchantId?.trim() || "",
+        abaApiKey: paymentConfig.abaApiKey?.trim() || "",
         customKhqrRawString: rawKhqrInput.trim(),
         enableBakongKhqr: paymentConfig.enableBakongKhqr,
         enableAbaKhqr: paymentConfig.enableAbaKhqr,
         enableCashUsd: paymentConfig.enableCashUsd,
         enableCashKhr: paymentConfig.enableCashKhr,
         enableCustomerCredit: paymentConfig.enableCustomerCredit,
-      });
+      };
 
-      // Save to database & central server store
+      setStorePaymentConfig(payload);
+
+      // Save to Supabase Central Database
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "UPDATE_KHQR",
-          merchantName: paymentConfig.bakongMerchantName.trim(),
-          merchantCity: paymentConfig.bakongMerchantCity.trim(),
-          merchantId: paymentConfig.merchantID || paymentConfig.bakongMerchantId.trim(),
-          bakongAccount: paymentConfig.bakongMerchantId.trim(),
-          acquiringBank: paymentConfig.acquiringBank.trim(),
-          merchantMobile: paymentConfig.mobileNumber.trim(),
-          bakongToken: paymentConfig.bakongToken?.trim() || "",
-          abaMerchantId: paymentConfig.abaMerchantId?.trim() || "",
-          abaApiKey: paymentConfig.abaApiKey?.trim() || "",
+          action: "UPDATE_PAYMENTS",
+          paymentConfig: payload,
         }),
       });
 
@@ -721,9 +879,104 @@ export default function SettingsPage() {
       if (data.success) {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3500);
+        await usePOSStore.getState().syncSettingsFromSupabase();
       }
     } catch (err: any) {
-      alert("Failed to save KHQR config: " + err.message);
+      alert("Failed to save KHQR config to Supabase: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePrinter = async () => {
+    try {
+      setSaving(true);
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_PRINTER",
+          printerConfig,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3500);
+        await usePOSStore.getState().syncSettingsFromSupabase();
+      }
+    } catch (err: any) {
+      alert("បរាជ័យក្នុងការរក្សាទុក Printer: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveScanner = async (overrideScanner?: {
+    scannerMode?: "SCANNER_DEVICE" | "CAMERA_DEVICE" | "BOTH";
+    preferredCameraId?: string;
+    scannerSoundFeedback?: boolean;
+    scannerAutoAddToCart?: boolean;
+    scannerContinuousMode?: boolean;
+  }) => {
+    try {
+      setSaving(true);
+      const payload = {
+        scannerMode,
+        preferredCameraId,
+        scannerSoundFeedback,
+        scannerAutoAddToCart,
+        scannerContinuousMode,
+        ...overrideScanner,
+      };
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_SCANNER",
+          scannerConfig: payload,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3500);
+        await usePOSStore.getState().syncSettingsFromSupabase();
+      }
+    } catch (err: any) {
+      console.error("Failed to save scanner to Supabase:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAppearance = async (newTheme?: ThemeMode, newPalette?: ColorPaletteId) => {
+    const nextTheme = newTheme || themeMode;
+    const nextPalette = newPalette || colorPalette;
+    if (newTheme) setThemeMode(newTheme);
+    if (newPalette) setColorPalette(newPalette);
+
+    try {
+      setSaving(true);
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_APPEARANCE",
+          appearanceConfig: {
+            themeMode: nextTheme,
+            colorPalette: nextPalette,
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3500);
+        await usePOSStore.getState().syncSettingsFromSupabase();
+      }
+    } catch (err) {
+      console.error("Failed to save appearance to Supabase:", err);
     } finally {
       setSaving(false);
     }
@@ -1274,6 +1527,20 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+
+            {canEditSettings && (
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleSaveAppearance()}
+                  disabled={saving}
+                  className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-2.5 text-xs shadow-md shadow-teal-900/20 transition active:scale-95 disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  រក្សាទុកការកំណត់រូបរាង (Save to Cloud)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1618,6 +1885,20 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+
+            {canEditSettings && (
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleSaveScanner()}
+                  disabled={saving}
+                  className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-2.5 text-xs shadow-md shadow-teal-900/20 transition active:scale-95 disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  រក្សាទុកការកំណត់ឧបករណ៍ស្កេន (Save to Cloud)
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Test Camera Modal if opened */}
@@ -2323,6 +2604,20 @@ export default function SettingsPage() {
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-slate-800 focus:border-teal-500 focus:outline-hidden disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
+
+              {canEditSettings && (
+                <div className="sm:col-span-2 pt-2 border-t border-slate-100 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-2.5 text-xs shadow-md shadow-teal-900/20 transition active:scale-95 disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    រក្សាទុកព័ត៌មានហាង (Save Profile)
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -2496,6 +2791,20 @@ export default function SettingsPage() {
                   className="h-4 w-4 accent-teal-700 rounded disabled:cursor-not-allowed"
                 />
               </label>
+
+              {canEditSettings && (
+                <div className="pt-3 border-t border-slate-100 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-2.5 text-xs shadow-md shadow-teal-900/20 transition active:scale-95 disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    រក្សាទុក POS & អត្រាប្តូរប្រាក់ (Save to Cloud)
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2780,14 +3089,26 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap items-center gap-3">
                 <button
+                  type="button"
                   disabled={!canEditSettings}
                   onClick={() => alert("🖨️ បានបញ្ជូនទំព័រតេស្តសាកល្បងទៅកាន់ម៉ាស៊ីនបោះពុម្ពរួចរាល់!")}
-                  className="rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 text-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2.5 text-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   បោះពុម្ពតេស្តសាកល្បង (Test Print)
                 </button>
+                {canEditSettings && (
+                  <button
+                    type="button"
+                    onClick={handleSavePrinter}
+                    disabled={saving}
+                    className="flex items-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-2.5 text-xs shadow-md shadow-teal-900/20 transition active:scale-95 disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    រក្សាទុកការកំណត់ម៉ាស៊ីនព្រីន (Save to Cloud)
+                  </button>
+                )}
               </div>
             </div>
           </div>

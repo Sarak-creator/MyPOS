@@ -59,6 +59,17 @@ export default function DashboardLayout({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [pathname, router]);
 
+  // Sync all application settings from Supabase on mount and on window focus (cross-device parity)
+  useEffect(() => {
+    usePOSStore.getState().syncSettingsFromSupabase();
+
+    const handleFocus = () => {
+      usePOSStore.getState().syncSettingsFromSupabase();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, []);
+
   const handleToggleSidebar = () => {
     if (isPos) {
       setIsSidebarOpen((prev) => !prev);
