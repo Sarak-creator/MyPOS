@@ -34,13 +34,10 @@ import {
   Image as ImageIcon,
   Camera,
   ScanBarcode,
-  TrendingUp,
-  TrendingDown,
 } from "lucide-react";
 import { usePOSStore } from "@/store/posStore";
 import { translations } from "@/lib/i18n";
 import BarcodeScannerModal from "@/components/pos/BarcodeScannerModal";
-import QuickStockAdjustModal from "@/components/inventory/QuickStockAdjustModal";
 import { broadcastStockChange, subscribeToStockSync } from "@/lib/stockSync";
 
 interface InventoryItem {
@@ -189,11 +186,6 @@ export default function InventoryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
-  // Quick Stock Adjust / ReStock Modal State
-  const [adjustModalItem, setAdjustModalItem] = useState<InventoryItem | null>(null);
-  const [adjustModalMode, setAdjustModalMode] = useState<"RESTOCK" | "DEDUCT">("RESTOCK");
-  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
-  const [stockToast, setStockToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
 
   // Product Form State
   const [formData, setFormData] = useState({
@@ -874,13 +866,6 @@ export default function InventoryPage() {
         </button>
       </div>
 
-      {/* Real-time Stock Sync Notification Banner */}
-      {stockToast && (
-        <div className="flex items-center gap-2 rounded-2xl bg-emerald-600 text-white px-4 py-2.5 text-xs font-bold shadow-lg animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>{stockToast.message}</span>
-        </div>
-      )}
 
       {/* 1. STOCK ITEMS TABLE TAB */}
       {activeTab === "ITEMS" && (
@@ -1007,57 +992,18 @@ export default function InventoryPage() {
                         ${Number(item.salePriceUsd || 0).toFixed(2)}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <span
-                            className={`rounded-md px-2.5 py-0.5 text-xs font-bold font-mono ${
-                              item.stockQty <= item.minStock
-                                ? "bg-red-50 text-red-700 border border-red-200"
-                                : "bg-emerald-50 text-emerald-700"
-                            }`}
-                          >
-                            {item.stockQty} {item.unit || "Pcs"}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAdjustModalItem(item);
-                                setAdjustModalMode("RESTOCK");
-                                setIsAdjustModalOpen(true);
-                              }}
-                              className="inline-flex items-center gap-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[10px] font-extrabold border border-emerald-200/60 transition active:scale-95 cursor-pointer shadow-2xs"
-                              title="បញ្ចូលស្តុកភ្លាមៗ Real-time"
-                            >
-                              <span>+ReStock</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAdjustModalItem(item);
-                                setAdjustModalMode("DEDUCT");
-                                setIsAdjustModalOpen(true);
-                              }}
-                              className="inline-flex items-center gap-0.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-800 px-1.5 py-0.5 text-[10px] font-extrabold border border-rose-200/60 transition active:scale-95 cursor-pointer shadow-2xs"
-                              title="កាត់ស្តុកចេញភ្លាមៗ Real-time"
-                            >
-                              <span>-កាត់Stock</span>
-                            </button>
-                          </div>
-                        </div>
+                        <span
+                          className={`rounded-md px-2.5 py-0.5 text-xs font-bold font-mono inline-block ${
+                            item.stockQty <= item.minStock
+                              ? "bg-red-50 text-red-700 border border-red-200"
+                              : "bg-emerald-50 text-emerald-700"
+                          }`}
+                        >
+                          {item.stockQty} {item.unit || "Pcs"}
+                        </span>
                       </td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              setAdjustModalItem(item);
-                              setAdjustModalMode("RESTOCK");
-                              setIsAdjustModalOpen(true);
-                            }}
-                            className="rounded-lg p-1.5 text-emerald-700 hover:bg-emerald-50 transition"
-                            title="⚡ បញ្ចូលស្តុក / កាត់ស្តុក Real-time"
-                          >
-                            <TrendingUp className="h-4 w-4" />
-                          </button>
                           <button
                             onClick={() => openEditModal(item)}
                             className="rounded-lg p-1.5 text-slate-400 hover:bg-teal-50 hover:text-teal-700 transition"
@@ -2489,33 +2435,7 @@ export default function InventoryPage() {
         title="ស្កេនបាកូដទំនិញ (Scan Product Barcode)"
       />
 
-      {/* Real-time Quick Stock Adjust & ReStock Modal */}
-      <QuickStockAdjustModal
-        isOpen={isAdjustModalOpen}
-        item={adjustModalItem}
-        initialMode={adjustModalMode}
-        onClose={() => {
-          setIsAdjustModalOpen(false);
-          setAdjustModalItem(null);
-        }}
-        onSuccess={(result) => {
-          // Instantly update products array locally with zero page reload
-          setProducts((prev) =>
-            prev.map((p) =>
-              p.id === result.productId ? { ...p, stockQty: result.newStockQty } : p
-            )
-          );
-          setStockToast({
-            message:
-              result.type === "RESTOCK"
-                ? `✓ បានបញ្ចូលស្តុក ${result.productName} (+${result.delta}) ដោយជោគជ័យ!`
-                : `✓ បានកាត់ស្តុក ${result.productName} (${result.delta}) ដោយជោគជ័យ!`,
-            type: "success",
-          });
-          setTimeout(() => setStockToast(null), 3500);
-          fetchProducts(true);
-        }}
-      />
+
     </div>
   );
 }
