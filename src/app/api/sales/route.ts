@@ -131,6 +131,9 @@ export async function GET(request: Request) {
               product: {
                 select: { id: true, nameKh: true, nameEn: true, sku: true, barcode: true, category: true },
               },
+              stockItem: {
+                select: { id: true, serialOrImei: true },
+              },
             },
           },
           payments: true,

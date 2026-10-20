@@ -148,6 +148,42 @@ export default function SalesPage() {
   const receiptData: ReceiptData | null = useMemo(() => {
     if (!selectedOrder) return null;
     const payment = selectedOrder.payments?.[0];
+    const rawItems = selectedOrder.items || selectedOrder.orderItems || [];
+    const formattedItems = rawItems.map((item: any) => {
+      const nameKh = item.product?.nameKh || item.nameKh || item.productNameKh || "ទំនិញ";
+      const nameEn = item.product?.nameEn || item.nameEn || item.productNameEn || "Item";
+      const price = Number(item.unitPriceUsd ?? item.priceUsd ?? 0);
+      const qty = Number(item.quantity ?? 1);
+      const discount = Number(item.discountAmount ?? 0);
+      const imei = item.stockItem?.serialOrImei || item.selectedImei || item.serialOrImei;
+
+      return {
+        id: item.id || item.productId,
+        productId: item.productId,
+        nameKh,
+        nameEn,
+        productNameKh: nameKh,
+        productNameEn: nameEn,
+        sku: item.product?.sku || item.sku || "",
+        priceUsd: price,
+        costPriceUsd: Number(item.unitCostUsd ?? item.costPriceUsd ?? 0),
+        quantity: qty,
+        discountAmount: discount,
+        type: item.product?.type || item.type || "STANDARD_ITEM",
+        selectedImei: imei,
+      };
+    });
+
+    const formattedDate = selectedOrder.createdAt
+      ? new Date(selectedOrder.createdAt).toLocaleDateString("km-KH", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : undefined;
+
     return {
       invoiceNumber: selectedOrder.invoiceNumber,
       branchName: selectedOrder.branch?.name || "សាខាកណ្តាល ភ្នំពេញ",
@@ -165,25 +201,18 @@ export default function SalesPage() {
             creditLimitUsd: Number(selectedOrder.customer.creditLimitUsd || 0),
           }
         : null,
-      items: selectedOrder.items?.map((item: any) => ({
-        id: item.id,
-        productId: item.productId,
-        productNameKh: item.product?.nameKh || "ទំនិញ",
-        productNameEn: item.product?.nameEn || "Item",
-        priceUsd: Number(item.unitPriceUsd),
-        quantity: item.quantity,
-        discountAmount: Number(item.discountAmount || 0),
-      })) || [],
-      subtotalUsd: Number(selectedOrder.subtotalUsd),
-      discountUsd: Number(selectedOrder.discountAmount),
-      taxUsd: Number(selectedOrder.taxAmountUsd),
-      totalUsd: Number(selectedOrder.totalUsd),
-      totalKhr: Number(selectedOrder.totalKhr),
+      items: formattedItems,
+      subtotalUsd: Number(selectedOrder.subtotalUsd || 0),
+      discountUsd: Number(selectedOrder.discountAmount || 0),
+      taxUsd: Number(selectedOrder.taxAmountUsd || 0),
+      totalUsd: Number(selectedOrder.totalUsd || 0),
+      totalKhr: Number(selectedOrder.totalKhr || 0),
       exchangeRateKhr: Number(selectedOrder.exchangeRateKhr || exchangeRateKhr),
       paymentMethod: payment?.method || "CASH_USD",
-      tenderedUsd: payment?.tenderedUsd ? Number(payment.tenderedUsd) : Number(selectedOrder.totalUsd),
+      tenderedUsd: payment?.tenderedUsd ? Number(payment.tenderedUsd) : Number(selectedOrder.totalUsd || 0),
       changeUsd: payment?.changeUsd ? Number(payment.changeUsd) : 0,
       khqrPayload: selectedOrder.khqrQrString,
+      date: formattedDate,
     };
   }, [selectedOrder, exchangeRateKhr]);
 
@@ -217,7 +246,7 @@ export default function SalesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${showReceiptModal ? "print:hidden" : ""}`}>
       {/* Header Banner */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -627,9 +656,9 @@ export default function SalesPage() {
 
       {/* RECEIPT / PRINT MODAL */}
       {showReceiptModal && receiptData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 bg-slate-50/70">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 print:p-0 print:static print:bg-white print:backdrop-blur-none print:z-auto">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 print:border-none print:shadow-none print:max-w-none print:w-full print:rounded-none">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 bg-slate-50/70 print:hidden">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <Receipt className="h-4 w-4 text-teal-700" />
                 វិក្កយបត្រ #{receiptData.invoiceNumber}
@@ -643,12 +672,12 @@ export default function SalesPage() {
             </div>
 
             {/* Receipt Content */}
-            <div className="p-4 max-h-[70vh] overflow-y-auto bg-slate-100/50">
+            <div className="p-4 max-h-[70vh] overflow-y-auto bg-slate-100/50 print:p-0 print:max-h-none print:overflow-visible print:bg-white">
               <ThermalReceipt data={receiptData} />
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3 bg-white">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3 bg-white print:hidden">
               <button
                 onClick={() => setShowReceiptModal(false)}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"

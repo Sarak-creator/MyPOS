@@ -99,25 +99,44 @@ export default function ThermalReceipt({ data }: ThermalReceiptProps) {
         </div>
 
         <div className="divide-y divide-slate-100 py-1 space-y-1">
-          {data.items.map((item, idx) => {
-            const lineTotal = item.priceUsd * item.quantity - item.discountAmount;
-            return (
-              <div key={idx} className="grid grid-cols-12 pt-1 text-[10px]">
-                <div className="col-span-6 pr-1 font-sans">
-                  <p className="font-medium text-slate-800 leading-tight">{item.nameKh}</p>
-                  {item.selectedImei && (
-                    <p className="text-[9px] text-slate-500">IMEI: {item.selectedImei}</p>
-                  )}
+          {data.items && data.items.length > 0 ? (
+            data.items.map((item: any, idx: number) => {
+              const price = Number(item.priceUsd ?? item.unitPriceUsd ?? 0);
+              const qty = Number(item.quantity ?? 1);
+              const discount = Number(item.discountAmount ?? 0);
+              const lineTotal = price * qty - discount;
+              const itemName =
+                item.nameKh ||
+                item.productNameKh ||
+                item.product?.nameKh ||
+                item.nameEn ||
+                item.productNameEn ||
+                item.product?.nameEn ||
+                "ទំនិញ";
+              const imei = item.selectedImei || item.stockItem?.serialOrImei || item.serialOrImei;
+
+              return (
+                <div key={idx} className="grid grid-cols-12 pt-1 text-[10px]">
+                  <div className="col-span-6 pr-1 font-sans">
+                    <p className="font-medium text-slate-800 leading-tight">{itemName}</p>
+                    {imei && (
+                      <p className="text-[9px] text-slate-500">IMEI: {imei}</p>
+                    )}
+                  </div>
+                  <div className="col-span-2 text-center font-mono">
+                    {qty} x {price.toFixed(2)}
+                  </div>
+                  <div className="col-span-4 text-right font-mono font-semibold">
+                    ${lineTotal.toFixed(2)}
+                  </div>
                 </div>
-                <div className="col-span-2 text-center font-mono">
-                  {item.quantity} x {item.priceUsd.toFixed(2)}
-                </div>
-                <div className="col-span-4 text-right font-mono font-semibold">
-                  ${lineTotal.toFixed(2)}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div className="py-2 text-center text-slate-400 italic text-[10px]">
+              គ្មានទំនិញ (No items)
+            </div>
+          )}
         </div>
       </div>
 
